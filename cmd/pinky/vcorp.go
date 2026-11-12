@@ -119,7 +119,7 @@ func vcorpPair(file string, args []string) error {
 	if err := vcorplink.Save(file, c); err != nil {
 		return err
 	}
-	fmt.Printf("paired with %s as %s; start the link with: pinky vcorp run\n", c.Account, c.DeviceID)
+	fmt.Printf("paired with %s as %s; Pinky links to the platform while it runs\n", c.Account, c.DeviceID)
 	return nil
 }
 
