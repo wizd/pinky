@@ -42,6 +42,9 @@ type HelloReply struct {
 	Error   string `json:"error,omitempty"`
 	Version string `json:"version,omitempty"`
 	Trusted bool   `json:"trusted,omitempty"`
+	// Features names what this gateway does beyond the protocol, such as
+	// keeping the VCorp link itself ("vcorp").
+	Features []string `json:"features,omitempty"`
 }
 
 // What can host a gateway (Server.Kind).
@@ -115,7 +118,9 @@ type Server struct {
 	// person is there.
 	Trusted bool
 	Version string
-	Log     *slog.Logger
+	// Features go in the hello reply (HelloReply.Features).
+	Features []string
+	Log      *slog.Logger
 	// Quit, when set, ends the process that hosts the gateway: `pinky quit`
 	// calls it over the socket. Windows has no signal to end a daemon, and
 	// scripts use it to end the app.
@@ -218,7 +223,7 @@ func (s *Server) handle(ctx context.Context, c net.Conn) {
 			s.Log.Debug("mcp session ended", "err", err)
 		}
 	case RoleControl:
-		if err := writeJSON(c, HelloReply{OK: true, Version: s.Version, Trusted: s.Trusted}); err != nil {
+		if err := writeJSON(c, HelloReply{OK: true, Version: s.Version, Trusted: s.Trusted, Features: s.Features}); err != nil {
 			return
 		}
 		s.control(ctx, c, br)

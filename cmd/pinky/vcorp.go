@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -155,6 +156,15 @@ func vcorpRun(dirs api.Dirs, file string, args []string) error {
 		defer g.Close()
 		host = &vcorplink.GatewayHost{G: g, MCP: mcp.New(g, version)}
 	} else {
+		// A Pinky that keeps the link itself already connects: a second
+		// connection would push it off the platform.
+		if ctl, err := api.DialControl(dirs); err == nil {
+			own := slices.Contains(ctl.Reply.Features, vcorplink.Feature)
+			ctl.Close()
+			if own {
+				return errors.New("the Pinky app already links to the platform while it runs; nothing to start (see pinky vcorp status)")
+			}
+		}
 		tok, err := api.EnsureToken(dirs.TokenFile())
 		if err != nil {
 			return err
@@ -173,6 +183,20 @@ func vcorpRun(dirs api.Dirs, file string, args []string) error {
 		return nil
 	}
 	return err
+}
+
+// StartVcorp keeps this gateway linked to the VCorp account it is paired
+// with (`pinky vcorp pair`), in the background until ctx ends. Fake phones
+// are never offered to the platform.
+func (r *runningGateway) StartVcorp(ctx context.Context) {
+	if r.fake {
+		return
+	}
+	file := vcorplink.File(r.Dirs.Config)
+	host := &vcorplink.GatewayHost{G: r.G, MCP: r.MCP}
+	go vcorplink.Supervise(ctx, file, func(c *vcorplink.Config) *vcorplink.Link {
+		return &vcorplink.Link{Cfg: c, Host: host, Version: version, Platform: hostPlatform(), Log: r.log}
+	}, r.log)
 }
 
 func hostPlatform() string {

@@ -22,6 +22,7 @@ import (
 	"github.com/DIYgod/pinky/internal/policy"
 	"github.com/DIYgod/pinky/internal/telemetry"
 	"github.com/DIYgod/pinky/internal/update"
+	"github.com/DIYgod/pinky/internal/vcorplink"
 	"github.com/DIYgod/pinky/ui"
 )
 
@@ -78,6 +79,10 @@ func runDaemon(args []string) error {
 		}()
 		defer func() { astop(); <-adone }()
 	}
+	// Cloud tasks of a paired VCorp account reach the phones (vcorp.go).
+	vctx, vstop := context.WithCancel(context.Background())
+	defer vstop()
+	rg.StartVcorp(vctx)
 	if *httpAddr != "" {
 		if err := rg.Remote.Set(true, *httpAddr); err != nil {
 			return err
@@ -144,9 +149,10 @@ type runningGateway struct {
 	// MCP serves agents, over the socket and HTTP.
 	MCP *mcp.Server
 
-	ln  net.Listener
-	srv *api.Server
-	log *slog.Logger
+	ln   net.Listener
+	srv  *api.Server
+	log  *slog.Logger
+	fake bool
 }
 
 // startGateway takes the per-user socket, loads the rules and starts the
@@ -205,9 +211,12 @@ func startGateway(c gatewayConfig) (*runningGateway, error) {
 	}
 	m := mcp.New(g, version)
 	srv := &api.Server{Gateway: g, MCP: m, Token: tok, Trusted: c.Fake, Version: version, Log: log}
+	if !c.Fake {
+		srv.Features = append(srv.Features, vcorplink.Feature)
+	}
 	log.Info("gateway ready", "socket", dirs.Socket(), "data", dataDir, "devices", len(g.Devices()), "fake", c.Fake, "pid", os.Getpid())
 	return &runningGateway{Dirs: dirs, DataDir: dataDir, Policy: pol, G: g, Remote: newRemoteAgents(m, tok, log), MCP: m,
-		ln: ln, srv: srv, log: log}, nil
+		ln: ln, srv: srv, log: log, fake: c.Fake}, nil
 }
 
 // Serve answers agents and clients on the socket until ctx ends.

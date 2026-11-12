@@ -134,6 +134,8 @@ func runApp(args []string) error {
 			c.Log.Error("agent socket stopped", "err", err)
 		}
 	}()
+	// Cloud tasks of a paired VCorp account reach the phones (vcorp.go).
+	rg.StartVcorp(ctx)
 
 	// Agents' copies of Pinky's skill follow this version.
 	go refreshSkills(c.Log)
