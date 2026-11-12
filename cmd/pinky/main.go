@@ -59,6 +59,8 @@ func main() {
 		err = runDecide(args)
 	case "token":
 		err = runToken(args)
+	case "vcorp":
+		err = runVcorp(args)
 	case "quit":
 		err = runQuit(args)
 	case "update":
