@@ -708,6 +708,7 @@ func (a *app) settingsAgents(c *mg.Context) {
 	a.askSettings(c)
 	a.connectAgents(c)
 	a.remoteAgents(c)
+	a.vcorpAgents(c)
 }
 
 // keepChoices are the retention limits Settings offers, with the current

@@ -64,6 +64,9 @@ type Link struct {
 	Version  string // Pinky's version
 	Platform string // windows, macos, linux
 	Log      *slog.Logger
+	// OnState hears when the link signs in to the platform (connected) and
+	// when it drops, with why; nil hears nothing. Settings shows it.
+	OnState func(connected bool, err error)
 
 	wmu sync.Mutex
 	ws  *websocket.Conn
@@ -121,6 +124,7 @@ func (l *Link) Run(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		l.state(false, err)
 		if errors.Is(err, ErrRevoked) {
 			return err
 		}
@@ -196,6 +200,7 @@ func (l *Link) once(ctx context.Context) error {
 			}
 		case "welcome":
 			welcomed = true
+			l.state(true, nil)
 			l.Log.Info("vcorp: connected", "account", m.Account, "origin", l.Cfg.Origin)
 			go l.watchPhones(cctx)
 		case "ping":
@@ -209,6 +214,12 @@ func (l *Link) once(ctx context.Context) error {
 		case "revoked":
 			return ErrRevoked
 		}
+	}
+}
+
+func (l *Link) state(connected bool, err error) {
+	if l.OnState != nil {
+		l.OnState(connected, err)
 	}
 }
 

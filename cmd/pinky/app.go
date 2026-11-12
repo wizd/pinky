@@ -181,6 +181,8 @@ func runApp(args []string) error {
 		// For phones that refuse installs over USB.
 		CompanionAPK:  bundledCompanion,
 		RemoteTailnet: remoteTailnet,
+		// Settings › Agents › VCorp pairs with a VCorp account.
+		Vcorp: newVcorpUI(rg),
 		// What's new in the app's language.
 		ChangelogTranslations: pinky.ChangelogTranslations,
 		// The window is up: an update that just swapped this version in

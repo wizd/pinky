@@ -10506,6 +10506,114 @@
   "@updateWhereUnsigned": {
     "description": "Why this Pinky cannot update itself: it is a local build. Shown only in other languages; in English internal/update's own words show."
   },
+  "vcorpAccount": "Account",
+  "@vcorpAccount": {
+    "description": "Settings › Agents › VCorp: the row of the VCorp account Pinky is paired with; its description is the platform's address."
+  },
+  "vcorpAddress": "Platform address",
+  "@vcorpAddress": {
+    "description": "Settings › Agents › VCorp: the label of the field for the platform's address, as https://maker.vcorp.ai."
+  },
+  "vcorpCode": "Pairing code",
+  "@vcorpCode": {
+    "description": "Settings › Agents › VCorp: the label of the field for the pairing code the platform gives."
+  },
+  "vcorpCodePlaceholder": "Code",
+  "@vcorpCodePlaceholder": {
+    "description": "Settings › Agents › VCorp: the placeholder of the pairing code field."
+  },
+  "vcorpConfirmDesc": "On {origin}. Its cloud tasks will be able to use your phones through Pinky; you still approve them here as any agent.",
+  "@vcorpConfirmDesc": {
+    "description": "Settings › Agents › VCorp: under vcorpConfirmTitle, before pairing. origin is the platform's address, as https://maker.vcorp.ai."
+  },
+  "vcorpConfirmTitle": "Pair with {account}?",
+  "@vcorpConfirmTitle": {
+    "description": "Settings › Agents › VCorp: the question before pairing, once the code is checked. account is the VCorp account the code belongs to, an email or a name."
+  },
+  "vcorpConnecting": "Connecting…",
+  "@vcorpConnecting": {
+    "description": "Settings › Agents › VCorp: the link's state while Pinky connects to the platform."
+  },
+  "vcorpConnectingDesc": "Pinky is connecting to the platform.",
+  "@vcorpConnectingDesc": {
+    "description": "Settings › Agents › VCorp: the description of the link's row while it connects."
+  },
+  "vcorpDownDesc": "Not connected, trying again: {error}",
+  "@vcorpDownDesc": {
+    "description": "Settings › Agents › VCorp: the description of the link's row after it dropped. error is why, in English, from the network or the platform."
+  },
+  "vcorpErrClaim": "Couldn't check the code: {error}",
+  "@vcorpErrClaim": {
+    "description": "Settings › Agents › VCorp: under the form when the platform did not accept the code or could not be reached. error is why, in English."
+  },
+  "vcorpErrPair": "Couldn't pair: {error}",
+  "@vcorpErrPair": {
+    "description": "Settings › Agents › VCorp: when pairing failed. error is why, in English."
+  },
+  "vcorpErrUnpair": "Couldn't unpair: {error}",
+  "@vcorpErrUnpair": {
+    "description": "Settings › Agents › VCorp: when the pairing file could not be removed. error is why, in English."
+  },
+  "vcorpIntro": "Pair Pinky with your VCorp Super Agent account, and its cloud tasks can use the phones here. Pinky stays connected while it runs.",
+  "@vcorpIntro": {
+    "description": "Settings › Agents › VCorp: the line under the heading. VCorp Super Agent is a product name: keep it."
+  },
+  "vcorpLink": "Connection",
+  "@vcorpLink": {
+    "description": "Settings › Agents › VCorp: the row that shows whether Pinky is connected to the platform."
+  },
+  "vcorpLinked": "Connected",
+  "@vcorpLinked": {
+    "description": "Settings › Agents › VCorp: the link's state while Pinky is connected to the platform."
+  },
+  "vcorpLinkedDesc": "Cloud tasks can ask to use your phones.",
+  "@vcorpLinkedDesc": {
+    "description": "Settings › Agents › VCorp: the description of the link's row while connected."
+  },
+  "vcorpNext": "Next",
+  "@vcorpNext": {
+    "description": "Settings › Agents › VCorp: the button that checks the pairing code and shows its account before pairing."
+  },
+  "vcorpPair": "Pair",
+  "@vcorpPair": {
+    "description": "Settings › Agents › VCorp: the button that pairs, after the account is shown."
+  },
+  "vcorpPairDesc": "On the platform, click Manage browsers, then Get pairing code, and enter it here.",
+  "@vcorpPairDesc": {
+    "description": "Settings › Agents › VCorp: how to get a code. Manage browsers and Get pairing code are the platform's buttons: in Chinese they read 管理浏览器 and 获取配对码."
+  },
+  "vcorpPairTitle": "Pair with an account",
+  "@vcorpPairTitle": {
+    "description": "Settings › Agents › VCorp: the title of the pairing form, while Pinky is not paired."
+  },
+  "vcorpPairedToast": "Paired with {account}",
+  "@vcorpPairedToast": {
+    "description": "Settings › Agents › VCorp: the toast once paired. account is the VCorp account."
+  },
+  "vcorpTitle": "VCorp",
+  "@vcorpTitle": {
+    "description": "Settings › Agents › VCorp: the heading of the part that pairs Pinky with VCorp Super Agent. VCorp is a product name: keep it."
+  },
+  "vcorpUnpair": "Unpair",
+  "@vcorpUnpair": {
+    "description": "Settings › Agents › VCorp: the button that unpairs; it asks once more."
+  },
+  "vcorpUnpairConfirm": "Unpair now",
+  "@vcorpUnpairConfirm": {
+    "description": "Settings › Agents › VCorp: the red button that confirms unpairing."
+  },
+  "vcorpUnpairDesc": "Cloud tasks can no longer reach your phones. Remove it on the platform's device page too.",
+  "@vcorpUnpairDesc": {
+    "description": "Settings › Agents › VCorp: the description of the Unpair row."
+  },
+  "vcorpUnpairTitle": "Unpair this computer",
+  "@vcorpUnpairTitle": {
+    "description": "Settings › Agents › VCorp: the title of the Unpair row."
+  },
+  "vcorpUnpairedToast": "Unpaired",
+  "@vcorpUnpairedToast": {
+    "description": "Settings › Agents › VCorp: the toast once unpaired."
+  },
   "wiFiAlsoAway": "Stopping it also stops Use away from home.",
   "@wiFiAlsoAway": {
     "description": "After wiFiOnDesc when the phone is used away from home too. Use away from home is awayTitle."

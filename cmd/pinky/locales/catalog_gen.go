@@ -28219,6 +28219,432 @@ func (msgs Messages) UpdateWhereUnsigned() string {
 	return Catalog.Format(msgs.locale, "updateWhereUnsigned", nil)
 }
 
+// VcorpAccount says "Account"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the row of the VCorp account Pinky is
+// paired with; its description is the platform's address.
+func VcorpAccount() string { return In(i18n.Locale()).VcorpAccount() }
+
+// VcorpAccount says "Account"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the row of the VCorp account Pinky is
+// paired with; its description is the platform's address.
+func (msgs Messages) VcorpAccount() string {
+	return Catalog.Format(msgs.locale, "vcorpAccount", nil)
+}
+
+// VcorpAddress says "Platform address"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the label of the field for the platform's
+// address, as https://maker.vcorp.ai.
+func VcorpAddress() string { return In(i18n.Locale()).VcorpAddress() }
+
+// VcorpAddress says "Platform address"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the label of the field for the platform's
+// address, as https://maker.vcorp.ai.
+func (msgs Messages) VcorpAddress() string {
+	return Catalog.Format(msgs.locale, "vcorpAddress", nil)
+}
+
+// VcorpCode says "Pairing code"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the label of the field for the pairing
+// code the platform gives.
+func VcorpCode() string { return In(i18n.Locale()).VcorpCode() }
+
+// VcorpCode says "Pairing code"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the label of the field for the pairing
+// code the platform gives.
+func (msgs Messages) VcorpCode() string {
+	return Catalog.Format(msgs.locale, "vcorpCode", nil)
+}
+
+// VcorpCodePlaceholder says "Code"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the placeholder of the pairing code field.
+func VcorpCodePlaceholder() string { return In(i18n.Locale()).VcorpCodePlaceholder() }
+
+// VcorpCodePlaceholder says "Code"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the placeholder of the pairing code field.
+func (msgs Messages) VcorpCodePlaceholder() string {
+	return Catalog.Format(msgs.locale, "vcorpCodePlaceholder", nil)
+}
+
+// VcorpConfirmDesc says "On {origin}. Its cloud tasks will be able to use your phones through Pinky; you still approve them here as any agent."
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: under vcorpConfirmTitle, before pairing.
+// origin is the platform's address, as https://maker.vcorp.ai.
+func VcorpConfirmDesc(origin string) string { return In(i18n.Locale()).VcorpConfirmDesc(origin) }
+
+// VcorpConfirmDesc says "On {origin}. Its cloud tasks will be able to use your phones through Pinky; you still approve them here as any agent."
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: under vcorpConfirmTitle, before pairing.
+// origin is the platform's address, as https://maker.vcorp.ai.
+func (msgs Messages) VcorpConfirmDesc(origin string) string {
+	return Catalog.Format(msgs.locale, "vcorpConfirmDesc", map[string]any{"origin": origin})
+}
+
+// VcorpConfirmTitle says "Pair with {account}?"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the question before pairing, once the code
+// is checked. account is the VCorp account the code belongs to, an email or
+// a name.
+func VcorpConfirmTitle(account string) string { return In(i18n.Locale()).VcorpConfirmTitle(account) }
+
+// VcorpConfirmTitle says "Pair with {account}?"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the question before pairing, once the code
+// is checked. account is the VCorp account the code belongs to, an email or
+// a name.
+func (msgs Messages) VcorpConfirmTitle(account string) string {
+	return Catalog.Format(msgs.locale, "vcorpConfirmTitle", map[string]any{"account": account})
+}
+
+// VcorpConnecting says "Connecting…"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the link's state while Pinky connects to
+// the platform.
+func VcorpConnecting() string { return In(i18n.Locale()).VcorpConnecting() }
+
+// VcorpConnecting says "Connecting…"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the link's state while Pinky connects to
+// the platform.
+func (msgs Messages) VcorpConnecting() string {
+	return Catalog.Format(msgs.locale, "vcorpConnecting", nil)
+}
+
+// VcorpConnectingDesc says "Pinky is connecting to the platform."
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the description of the link's row while it
+// connects.
+func VcorpConnectingDesc() string { return In(i18n.Locale()).VcorpConnectingDesc() }
+
+// VcorpConnectingDesc says "Pinky is connecting to the platform."
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the description of the link's row while it
+// connects.
+func (msgs Messages) VcorpConnectingDesc() string {
+	return Catalog.Format(msgs.locale, "vcorpConnectingDesc", nil)
+}
+
+// VcorpDownDesc says "Not connected, trying again: {error}"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the description of the link's row after it
+// dropped. error is why, in English, from the network or the platform.
+func VcorpDownDesc(error string) string { return In(i18n.Locale()).VcorpDownDesc(error) }
+
+// VcorpDownDesc says "Not connected, trying again: {error}"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the description of the link's row after it
+// dropped. error is why, in English, from the network or the platform.
+func (msgs Messages) VcorpDownDesc(error string) string {
+	return Catalog.Format(msgs.locale, "vcorpDownDesc", map[string]any{"error": error})
+}
+
+// VcorpErrClaim says "Couldn't check the code: {error}"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: under the form when the platform did not
+// accept the code or could not be reached. error is why, in English.
+func VcorpErrClaim(error string) string { return In(i18n.Locale()).VcorpErrClaim(error) }
+
+// VcorpErrClaim says "Couldn't check the code: {error}"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: under the form when the platform did not
+// accept the code or could not be reached. error is why, in English.
+func (msgs Messages) VcorpErrClaim(error string) string {
+	return Catalog.Format(msgs.locale, "vcorpErrClaim", map[string]any{"error": error})
+}
+
+// VcorpErrPair says "Couldn't pair: {error}"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: when pairing failed. error is why, in
+// English.
+func VcorpErrPair(error string) string { return In(i18n.Locale()).VcorpErrPair(error) }
+
+// VcorpErrPair says "Couldn't pair: {error}"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: when pairing failed. error is why, in
+// English.
+func (msgs Messages) VcorpErrPair(error string) string {
+	return Catalog.Format(msgs.locale, "vcorpErrPair", map[string]any{"error": error})
+}
+
+// VcorpErrUnpair says "Couldn't unpair: {error}"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: when the pairing file could not be
+// removed. error is why, in English.
+func VcorpErrUnpair(error string) string { return In(i18n.Locale()).VcorpErrUnpair(error) }
+
+// VcorpErrUnpair says "Couldn't unpair: {error}"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: when the pairing file could not be
+// removed. error is why, in English.
+func (msgs Messages) VcorpErrUnpair(error string) string {
+	return Catalog.Format(msgs.locale, "vcorpErrUnpair", map[string]any{"error": error})
+}
+
+// VcorpIntro says "Pair Pinky with your VCorp Super Agent account, and its cloud tasks can use the phones here. Pinky stays connected wh…"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the line under the heading. VCorp Super
+// Agent is a product name: keep it.
+func VcorpIntro() string { return In(i18n.Locale()).VcorpIntro() }
+
+// VcorpIntro says "Pair Pinky with your VCorp Super Agent account, and its cloud tasks can use the phones here. Pinky stays connected wh…"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the line under the heading. VCorp Super
+// Agent is a product name: keep it.
+func (msgs Messages) VcorpIntro() string {
+	return Catalog.Format(msgs.locale, "vcorpIntro", nil)
+}
+
+// VcorpLink says "Connection"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the row that shows whether Pinky is
+// connected to the platform.
+func VcorpLink() string { return In(i18n.Locale()).VcorpLink() }
+
+// VcorpLink says "Connection"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the row that shows whether Pinky is
+// connected to the platform.
+func (msgs Messages) VcorpLink() string {
+	return Catalog.Format(msgs.locale, "vcorpLink", nil)
+}
+
+// VcorpLinked says "Connected"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the link's state while Pinky is connected
+// to the platform.
+func VcorpLinked() string { return In(i18n.Locale()).VcorpLinked() }
+
+// VcorpLinked says "Connected"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the link's state while Pinky is connected
+// to the platform.
+func (msgs Messages) VcorpLinked() string {
+	return Catalog.Format(msgs.locale, "vcorpLinked", nil)
+}
+
+// VcorpLinkedDesc says "Cloud tasks can ask to use your phones."
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the description of the link's row while
+// connected.
+func VcorpLinkedDesc() string { return In(i18n.Locale()).VcorpLinkedDesc() }
+
+// VcorpLinkedDesc says "Cloud tasks can ask to use your phones."
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the description of the link's row while
+// connected.
+func (msgs Messages) VcorpLinkedDesc() string {
+	return Catalog.Format(msgs.locale, "vcorpLinkedDesc", nil)
+}
+
+// VcorpNext says "Next"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the button that checks the pairing code
+// and shows its account before pairing.
+func VcorpNext() string { return In(i18n.Locale()).VcorpNext() }
+
+// VcorpNext says "Next"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the button that checks the pairing code
+// and shows its account before pairing.
+func (msgs Messages) VcorpNext() string {
+	return Catalog.Format(msgs.locale, "vcorpNext", nil)
+}
+
+// VcorpPair says "Pair"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the button that pairs, after the account
+// is shown.
+func VcorpPair() string { return In(i18n.Locale()).VcorpPair() }
+
+// VcorpPair says "Pair"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the button that pairs, after the account
+// is shown.
+func (msgs Messages) VcorpPair() string {
+	return Catalog.Format(msgs.locale, "vcorpPair", nil)
+}
+
+// VcorpPairDesc says "On the platform, click Manage browsers, then Get pairing code, and enter it here."
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: how to get a code. Manage browsers and Get
+// pairing code are the platform's buttons: in Chinese they read
+// 管理浏览器 and 获取配对码.
+func VcorpPairDesc() string { return In(i18n.Locale()).VcorpPairDesc() }
+
+// VcorpPairDesc says "On the platform, click Manage browsers, then Get pairing code, and enter it here."
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: how to get a code. Manage browsers and Get
+// pairing code are the platform's buttons: in Chinese they read
+// 管理浏览器 and 获取配对码.
+func (msgs Messages) VcorpPairDesc() string {
+	return Catalog.Format(msgs.locale, "vcorpPairDesc", nil)
+}
+
+// VcorpPairTitle says "Pair with an account"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the title of the pairing form, while Pinky
+// is not paired.
+func VcorpPairTitle() string { return In(i18n.Locale()).VcorpPairTitle() }
+
+// VcorpPairTitle says "Pair with an account"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the title of the pairing form, while Pinky
+// is not paired.
+func (msgs Messages) VcorpPairTitle() string {
+	return Catalog.Format(msgs.locale, "vcorpPairTitle", nil)
+}
+
+// VcorpPairedToast says "Paired with {account}"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the toast once paired. account is the
+// VCorp account.
+func VcorpPairedToast(account string) string { return In(i18n.Locale()).VcorpPairedToast(account) }
+
+// VcorpPairedToast says "Paired with {account}"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the toast once paired. account is the
+// VCorp account.
+func (msgs Messages) VcorpPairedToast(account string) string {
+	return Catalog.Format(msgs.locale, "vcorpPairedToast", map[string]any{"account": account})
+}
+
+// VcorpTitle says "VCorp"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the heading of the part that pairs Pinky
+// with VCorp Super Agent. VCorp is a product name: keep it.
+func VcorpTitle() string { return In(i18n.Locale()).VcorpTitle() }
+
+// VcorpTitle says "VCorp"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the heading of the part that pairs Pinky
+// with VCorp Super Agent. VCorp is a product name: keep it.
+func (msgs Messages) VcorpTitle() string {
+	return Catalog.Format(msgs.locale, "vcorpTitle", nil)
+}
+
+// VcorpUnpair says "Unpair"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the button that unpairs; it asks once
+// more.
+func VcorpUnpair() string { return In(i18n.Locale()).VcorpUnpair() }
+
+// VcorpUnpair says "Unpair"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the button that unpairs; it asks once
+// more.
+func (msgs Messages) VcorpUnpair() string {
+	return Catalog.Format(msgs.locale, "vcorpUnpair", nil)
+}
+
+// VcorpUnpairConfirm says "Unpair now"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the red button that confirms unpairing.
+func VcorpUnpairConfirm() string { return In(i18n.Locale()).VcorpUnpairConfirm() }
+
+// VcorpUnpairConfirm says "Unpair now"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the red button that confirms unpairing.
+func (msgs Messages) VcorpUnpairConfirm() string {
+	return Catalog.Format(msgs.locale, "vcorpUnpairConfirm", nil)
+}
+
+// VcorpUnpairDesc says "Cloud tasks can no longer reach your phones. Remove it on the platform's device page too."
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the description of the Unpair row.
+func VcorpUnpairDesc() string { return In(i18n.Locale()).VcorpUnpairDesc() }
+
+// VcorpUnpairDesc says "Cloud tasks can no longer reach your phones. Remove it on the platform's device page too."
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the description of the Unpair row.
+func (msgs Messages) VcorpUnpairDesc() string {
+	return Catalog.Format(msgs.locale, "vcorpUnpairDesc", nil)
+}
+
+// VcorpUnpairTitle says "Unpair this computer"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the title of the Unpair row.
+func VcorpUnpairTitle() string { return In(i18n.Locale()).VcorpUnpairTitle() }
+
+// VcorpUnpairTitle says "Unpair this computer"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the title of the Unpair row.
+func (msgs Messages) VcorpUnpairTitle() string {
+	return Catalog.Format(msgs.locale, "vcorpUnpairTitle", nil)
+}
+
+// VcorpUnpairedToast says "Unpaired"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: the toast once unpaired.
+func VcorpUnpairedToast() string { return In(i18n.Locale()).VcorpUnpairedToast() }
+
+// VcorpUnpairedToast says "Unpaired"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: the toast once unpaired.
+func (msgs Messages) VcorpUnpairedToast() string {
+	return Catalog.Format(msgs.locale, "vcorpUnpairedToast", nil)
+}
+
 // WiFiAlsoAway says "Stopping it also stops Use away from home."
 // in the language the app shows.
 //

@@ -116,6 +116,9 @@ type Options struct {
 	// at the top of Tasks and its part of Settings › Agents. nil leaves
 	// them out.
 	Pilot Pilot
+	// Vcorp pairs Pinky with a VCorp Super Agent account, whose cloud tasks
+	// then use the phones (Settings › Agents › VCorp); nil leaves it out.
+	Vcorp Vcorp
 }
 
 // Pilot runs Pinky's own agent, one task a phone at a time, as
@@ -337,6 +340,7 @@ type app struct {
 	helper    helperState    // iPhones: installing the helper from the window (helper.go)
 	rec       recState       // task recordings in Activity
 	remote    remoteState    // Settings › Agents › Remote agents
+	vcorp     vcorpState     // Settings › Agents › VCorp
 	setup     setupState     // Settings › Agents › Connect an agent, and the sidebar's card
 	upd       updateState    // new versions of Pinky and the companion app
 	tn        tailnetState   // phones away from this computer's network, through Tailscale

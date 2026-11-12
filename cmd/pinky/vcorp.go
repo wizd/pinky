@@ -25,6 +25,7 @@ import (
 	"github.com/DIYgod/pinky/internal/mcp"
 	"github.com/DIYgod/pinky/internal/policy"
 	"github.com/DIYgod/pinky/internal/vcorplink"
+	"github.com/DIYgod/pinky/ui"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -195,9 +196,82 @@ func (r *runningGateway) StartVcorp(ctx context.Context) {
 	file := vcorplink.File(r.Dirs.Config)
 	host := &vcorplink.GatewayHost{G: r.G, MCP: r.MCP}
 	go vcorplink.Supervise(ctx, file, func(c *vcorplink.Config) *vcorplink.Link {
-		return &vcorplink.Link{Cfg: c, Host: host, Version: version, Platform: hostPlatform(), Log: r.log}
+		r.vcorp.set(c.DeviceID, false, nil)
+		id := c.DeviceID
+		return &vcorplink.Link{Cfg: c, Host: host, Version: version, Platform: hostPlatform(), Log: r.log,
+			OnState: func(connected bool, err error) { r.vcorp.set(id, connected, err) }}
 	}, r.log)
 }
+
+// vcorpState is what the link last said of itself, for the pairing it was
+// made for.
+type vcorpState struct {
+	mu        sync.Mutex
+	device    string
+	connected bool
+	err       string
+}
+
+func (s *vcorpState) set(device string, connected bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.device, s.connected, s.err = device, connected, ""
+	if err != nil {
+		s.err = err.Error()
+	}
+}
+
+func (s *vcorpState) get(device string) (connected bool, err string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.device != device {
+		return false, ""
+	}
+	return s.connected, s.err
+}
+
+// vcorpUI pairs from Settings › Agents › VCorp (ui.Vcorp), as `pinky vcorp
+// pair` does; the gateway's supervisor then links by itself.
+type vcorpUI struct {
+	rg   *runningGateway
+	file string
+}
+
+func newVcorpUI(rg *runningGateway) ui.Vcorp {
+	if rg.fake {
+		return nil
+	}
+	return &vcorpUI{rg: rg, file: vcorplink.File(rg.Dirs.Config)}
+}
+
+func (v *vcorpUI) Status() ui.VcorpStatus {
+	c, err := vcorplink.Load(v.file)
+	if err != nil {
+		return ui.VcorpStatus{}
+	}
+	connected, why := v.rg.vcorp.get(c.DeviceID)
+	return ui.VcorpStatus{Paired: true, Account: c.Account, Origin: c.Origin, Name: c.Name, Connected: connected, Err: why}
+}
+
+func (v *vcorpUI) Claim(ctx context.Context, origin, code string) (string, string, error) {
+	o, err := vcorplink.NormOrigin(origin)
+	if err != nil {
+		return "", "", err
+	}
+	account, err := vcorplink.Claim(ctx, o, strings.TrimSpace(code))
+	return account, o, err
+}
+
+func (v *vcorpUI) Pair(ctx context.Context, origin, code string) error {
+	host, _ := os.Hostname()
+	c, err := vcorplink.Pair(ctx, origin, strings.TrimSpace(code), "Pinky · "+host)
+	if err != nil {
+		return err
+	}
+	return vcorplink.Save(v.file, c)
+}
+
+func (v *vcorpUI) Unpair() error { return vcorplink.Remove(v.file) }
 
 func hostPlatform() string {
 	switch runtime.GOOS {
