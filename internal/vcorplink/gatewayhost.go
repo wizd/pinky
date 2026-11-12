@@ -21,7 +21,7 @@ func (h *GatewayHost) Phones(context.Context) ([]Phone, error) {
 	devs := h.G.Devices()
 	out := make([]Phone, 0, len(devs))
 	for _, d := range devs {
-		out = append(out, Phone{ID: d.Info.ID, Name: d.Info.Name, Platform: string(d.Info.Platform),
+		out = append(out, Phone{ID: d.Info.ID, Name: d.Info.Name, Platform: string(d.Info.Platform), Model: d.Info.Model,
 			Online: d.Info.State == driver.StateOnline && !d.Paused})
 	}
 	return out, nil

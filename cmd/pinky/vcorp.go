@@ -310,7 +310,7 @@ func (h *socketHost) Phones(ctx context.Context) ([]vcorplink.Phone, error) {
 	}
 	out := make([]vcorplink.Phone, 0, len(devs))
 	for _, d := range devs {
-		out = append(out, vcorplink.Phone{ID: d.Info.ID, Name: d.Info.Name, Platform: string(d.Info.Platform),
+		out = append(out, vcorplink.Phone{ID: d.Info.ID, Name: d.Info.Name, Platform: string(d.Info.Platform), Model: d.Info.Model,
 			Online: d.Info.State == driver.StateOnline && !d.Paused})
 	}
 	return out, nil

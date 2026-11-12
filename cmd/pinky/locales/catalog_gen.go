@@ -28507,20 +28507,20 @@ func (msgs Messages) VcorpPair() string {
 	return Catalog.Format(msgs.locale, "vcorpPair", nil)
 }
 
-// VcorpPairDesc says "On the platform, click Manage browsers, then Get pairing code, and enter it here."
+// VcorpPairDesc says "On the platform, click Manage devices, then Get pairing code, and enter it here."
 // in the language the app shows.
 //
-// Settings › Agents › VCorp: how to get a code. Manage browsers and Get
+// Settings › Agents › VCorp: how to get a code. Manage devices and Get
 // pairing code are the platform's buttons: in Chinese they read
-// 管理浏览器 and 获取配对码.
+// 管理设备 and 获取配对码.
 func VcorpPairDesc() string { return In(i18n.Locale()).VcorpPairDesc() }
 
-// VcorpPairDesc says "On the platform, click Manage browsers, then Get pairing code, and enter it here."
+// VcorpPairDesc says "On the platform, click Manage devices, then Get pairing code, and enter it here."
 // in the language of msgs.
 //
-// Settings › Agents › VCorp: how to get a code. Manage browsers and Get
+// Settings › Agents › VCorp: how to get a code. Manage devices and Get
 // pairing code are the platform's buttons: in Chinese they read
-// 管理浏览器 and 获取配对码.
+// 管理设备 and 获取配对码.
 func (msgs Messages) VcorpPairDesc() string {
 	return Catalog.Format(msgs.locale, "vcorpPairDesc", nil)
 }

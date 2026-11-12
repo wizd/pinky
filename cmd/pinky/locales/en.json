@@ -10578,9 +10578,9 @@
   "@vcorpPair": {
     "description": "Settings › Agents › VCorp: the button that pairs, after the account is shown."
   },
-  "vcorpPairDesc": "On the platform, click Manage browsers, then Get pairing code, and enter it here.",
+  "vcorpPairDesc": "On the platform, click Manage devices, then Get pairing code, and enter it here.",
   "@vcorpPairDesc": {
-    "description": "Settings › Agents › VCorp: how to get a code. Manage browsers and Get pairing code are the platform's buttons: in Chinese they read 管理浏览器 and 获取配对码."
+    "description": "Settings › Agents › VCorp: how to get a code. Manage devices and Get pairing code are the platform's buttons: in Chinese they read 管理设备 and 获取配对码."
   },
   "vcorpPairTitle": "Pair with an account",
   "@vcorpPairTitle": {

@@ -1741,7 +1741,7 @@
   "vcorpLinkedDesc": "クラウドタスクがスマートフォンの使用をリクエストできます。",
   "vcorpNext": "次へ",
   "vcorpPair": "ペアリング",
-  "vcorpPairDesc": "プラットフォームで「ブラウザを管理」→「ペアリングコードを取得」をクリックし、ここに入力してください。",
+  "vcorpPairDesc": "プラットフォームで「デバイスを管理」→「ペアリングコードを取得」をクリックし、ここに入力してください。",
   "vcorpPairTitle": "アカウントとペアリング",
   "vcorpPairedToast": "{account} とペアリングしました",
   "vcorpTitle": "VCorp",

@@ -1741,7 +1741,7 @@
   "vcorpLinkedDesc": "云端任务可以申请使用你的手机。",
   "vcorpNext": "下一步",
   "vcorpPair": "配对",
-  "vcorpPairDesc": "在平台上点「管理浏览器」→「获取配对码」，然后填到这里。",
+  "vcorpPairDesc": "在平台上点「管理设备」→「获取配对码」，然后填到这里。",
   "vcorpPairTitle": "与账号配对",
   "vcorpPairedToast": "已与 {account} 配对",
   "vcorpTitle": "VCorp",

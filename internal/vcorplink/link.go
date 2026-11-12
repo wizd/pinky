@@ -23,6 +23,7 @@ type Phone struct {
 	ID       string // the gateway's id (UDID, adb serial); never sent
 	Name     string
 	Platform string // ios, android
+	Model    string // "iPhone 15 Pro", "Pixel 9", "SM-S9280": the platform shows the maker from it
 	Online   bool
 }
 
@@ -101,6 +102,7 @@ type wirePhone struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Platform string `json:"platform"`
+	Model    string `json:"model,omitempty"`
 	Online   bool   `json:"online"`
 }
 
@@ -267,7 +269,7 @@ func (l *Link) listPhones(ctx context.Context) ([]wirePhone, error) {
 	for _, p := range phones {
 		id := PhoneID(l.Cfg.DeviceID, p.ID)
 		m[id] = p
-		out = append(out, wirePhone{Kind: "mobile", ID: id, Name: p.Name, Platform: p.Platform, Online: p.Online})
+		out = append(out, wirePhone{Kind: "mobile", ID: id, Name: p.Name, Platform: p.Platform, Model: p.Model, Online: p.Online})
 	}
 	slices.SortFunc(out, func(a, b wirePhone) int { return strings.Compare(a.ID, b.ID) })
 	l.mu.Lock()
