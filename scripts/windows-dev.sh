@@ -12,12 +12,41 @@ cd "$(dirname "$0")/.."
 
 top=build/ffmpeg-windows
 dst=cmd/pinky/resources/windows-amd64
+cfg=cmd/pinky/mygo.json
+cfgsave=$(mktemp)
+cp "$cfg" "$cfgsave"
 
 cleanup() {
 	rm -rf "$dst"
 	rmdir cmd/pinky/resources 2>/dev/null || true
+	cp "$cfgsave" "$cfg"
+	rm -f "$cfgsave"
 }
 trap cleanup EXIT
+
+# The build's version: the last release it contains, the branch, how many
+# commits past that release and the commit, such as
+# 2026.1113.17-vcorp-dev.7.9b6fe46 (with .dirty for uncommitted changes).
+# It is not only numbers, so the build never updates itself to a release,
+# and it says dev, so it never fetches a release's iPhone kit either.
+# Telemetry skips only 0.0.0-dev, so the build also empties its endpoint:
+# a developer's own runs are not usage.
+desc=$(git describe --tags --match 'v[0-9]*' --long --dirty 2>/dev/null || true)
+if [ -n "$desc" ]; then
+	branch=$(git rev-parse --abbrev-ref HEAD | tr -c 'A-Za-z0-9\n' '-')
+	base=${desc#v}
+	base=${base%%-*}
+	rest=${desc#v"$base"-}
+	count=${rest%%-*}
+	sha=$(git rev-parse --short HEAD)
+	version="$base-$branch-dev.$count.$sha"
+	case $desc in *-dirty) version="$version.dirty" ;; esac
+else
+	version=0.0.0-dev
+fi
+sed "s/^\( *\"version\": *\"\)[^\"]*\"/\1$version\"/" "$cfgsave" >"$cfg"
+echo "Pinky $version"
+export MYGO_LDFLAGS="-X main.version=$version -X github.com/DIYgod/pinky/internal/telemetry.Endpoint="
 
 if [ -d "$top/bin" ]; then
 	mkdir -p "$dst"
