@@ -206,8 +206,8 @@ func (req DeviceRequest) check() (want []switchSet, resets []string, res *Result
 }
 
 func noSwitches(name string) string {
-	return name + " has no switches Pinky can set: phone_device works on Android phones and emulators, iOS Simulators, and iPhones and iPads through the WebDriverAgent helper. " +
-		"On an iPhone or iPad left on Automatic in Settings › Phones, a change moves the task to the helper by itself when it is installed."
+	return name + " has no switches Pinky can set: phone_device works on Android phones and emulators, iOS Simulators, and iPhones and iPads through Pinky on the iPhone. " +
+		"On an iPhone or iPad left on Automatic in Settings › Phones, a change moves the task to Pinky on the iPhone by itself when it is installed."
 }
 
 // readSwitches reads every switch.

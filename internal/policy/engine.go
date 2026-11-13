@@ -186,7 +186,7 @@ func (e *Engine) Evaluate(in Input) Verdict {
 	if in.Op == OpLaunch {
 		app = in.Launch
 	}
-	if IsStandalone(app) && !(in.Op == OpKey && in.Key == "home") {
+	if IsPinkyScreen(app) && !(in.Op == OpKey && in.Key == "home") {
 		return Verdict{Decision: Deny, Rule: RulePinkyApps,
 			Reason: "Agents cannot open or act on Pinky's own screen: it holds the person's approvals and Stop."}
 	}
@@ -194,9 +194,12 @@ func (e *Engine) Evaluate(in Input) Verdict {
 	kinds := detect(in, cats)
 	system := contains(cats, CatSystem)
 
-	if in.Op == OpType && IsCredentialField(in.Target) {
-		return Verdict{Decision: Deny, Rule: RuleCredentials, Kinds: kinds,
-			Reason: "Pinky never types into password or one-time-code fields; call phone_handoff so the person can fill it."}
+	if in.Op == OpType && IsCredentialField(in.Target) && !(in.Virtual && e.file.VirtualCredentials) {
+		reason := "Pinky never types into password or one-time-code fields; call phone_handoff so the person can fill it."
+		if in.Virtual {
+			reason += " On a virtual phone the person may allow it in Pinky's Settings › Safety."
+		}
+		return Verdict{Decision: Deny, Rule: RuleCredentials, Kinds: kinds, Reason: reason}
 	}
 	if in.Op == OpLaunch && in.LaunchURL {
 		if why, refused := LinkRefused(in.Link); refused {

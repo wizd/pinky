@@ -137,7 +137,14 @@ func TestConvertInputsAndRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := strings.Join(lines(convertTree(tree, 1080, 1920)), "\n")
+	els := convertTree(tree, 1080, 1920)
+	got := strings.Join(lines(els), "\n")
+	// Only typed text is content: not a hint, never a password.
+	for i, want := range []string{"", "hello world", ""} {
+		if els[i].Content != want {
+			t.Errorf("%q: content %q, want %q", els[i].Label, els[i].Content, want)
+		}
+	}
 	want := strings.Join([]string{
 		`[0] input "Search" @540,150 focused editable`,    // empty field: its hint
 		`[0] input "hello world" @540,270 editable`,       // content, whitespace collapsed
@@ -151,6 +158,40 @@ func TestConvertInputsAndRoles(t *testing.T) {
 	}, "\n")
 	if got != want {
 		t.Errorf("elements:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+// TestConvertInputsWithoutHints: a dump of Android 15 or earlier has no hint
+// attribute, and an empty field's text is its hint. Nothing there counts as
+// typed text, or the policy would take the hint of an empty one-time-code
+// field for something the person wrote and let an agent type into it.
+func TestConvertInputsWithoutHints(t *testing.T) {
+	const dump = `<hierarchy rotation="0">
+<node text="" class="android.widget.FrameLayout" package="org.example.shop" content-desc="" clickable="false" enabled="true" bounds="[0,0][1080,1920]">
+ <node text="Verification code" resource-id="org.example.shop:id/input_1" class="android.widget.EditText" package="org.example.shop" content-desc="" clickable="true" focusable="true" focused="true" enabled="true" bounds="[40,100][1040,200]" />
+ <node text="hello  world" resource-id="org.example.shop:id/note" class="android.widget.EditText" package="org.example.shop" content-desc="" clickable="true" focusable="true" enabled="true" bounds="[40,220][1040,320]" />
+ <node text="Verification code" hint="Verification code" resource-id="org.example.shop:id/input_2" class="android.widget.EditText" package="org.example.shop" content-desc="" clickable="true" focusable="true" enabled="true" bounds="[40,340][1040,440]" />
+ <node text="12" hint="Verification code" resource-id="org.example.shop:id/input_3" class="android.widget.EditText" package="org.example.shop" content-desc="" clickable="true" focusable="true" enabled="true" bounds="[40,460][1040,560]" />
+</node>
+</hierarchy>`
+	tree, err := parseUIDump([]byte(dump))
+	if err != nil {
+		t.Fatal(err)
+	}
+	els := convertTree(tree, 1080, 1920)
+	want := []struct{ label, content string }{
+		{"Verification code", ""}, // no hint attribute: maybe the hint
+		{"hello world", ""},       // no hint attribute: maybe typed, not known
+		{"Verification code", ""}, // the hint, and the dump says so
+		{"12", "12"},              // typed, and the dump says so
+	}
+	if len(els) != len(want) {
+		t.Fatalf("%d elements, want %d: %q", len(els), len(want), lines(els))
+	}
+	for i, w := range want {
+		if els[i].Label != w.label || els[i].Content != w.content {
+			t.Errorf("field %d: label %q, content %q, want %q, %q", i, els[i].Label, els[i].Content, w.label, w.content)
+		}
 	}
 }
 

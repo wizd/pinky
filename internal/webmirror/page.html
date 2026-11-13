@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>{{index .Text "title"}}</title>
+<style>
+/* Pinky's own palette (ui/style.go), light and dark. */
+:root {
+  --bg: #ffffff; --bg2: #f7f7f8; --bg3: #efeff2; --sel: #e7e7ed;
+  --ink: #1d1d22; --ink2: #5b5b64; --ink3: #6c6c75;
+  --line: #ebebef; --line2: #d9d9e0;
+  --accent: #5450d6; --green: #2f9e5a;
+  --amber: #975800; --amber-dot: #df8601; --amber-tint: #fff7ed; --amber-line: #f4dcbc;
+  --red: #c32c18; --red-tint: #fef0ed; --red-line: #f0c6bd;
+  --phone: #131317;
+  --shadow: 0 1px 2px rgba(20,20,30,.06), 0 12px 32px rgba(20,20,30,.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1f; --bg2: #161619; --bg3: #2b2b30; --sel: #323238;
+    --ink: #ededf2; --ink2: #b3b3bc; --ink3: #a3a3ad;
+    --line: #2e2e34; --line2: #404047;
+    --accent: #9895ff; --green: #4cc38a;
+    --amber: #f7a74e; --amber-dot: #f7a74e; --amber-tint: #322a23; --amber-line: #5a4530;
+    --red: #f87a60; --red-tint: #3a1e19; --red-line: #723b31;
+    --phone: #050506;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.5);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg2); color: var(--ink);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+button, select { font: inherit; color: inherit; }
+svg { display: block; }
+
+header { flex: none; display: flex; align-items: center; gap: 10px; height: 52px;
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+  background: var(--bg); border-bottom: 1px solid var(--line); }
+.who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber-dot); flex: none; transition: background .2s; }
+.dot.live { background: var(--green); }
+.dot.bad { background: var(--red); }
+#name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick { position: relative; min-width: 0; }
+.pick select { appearance: none; -webkit-appearance: none; max-width: 52vw; height: 32px; padding: 0 30px 0 10px;
+  border: 1px solid var(--line2); border-radius: 8px; background: var(--bg); font-weight: 600; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick select:hover { background: var(--bg3); }
+.pick svg { position: absolute; right: 8px; top: 8px; width: 16px; height: 16px; color: var(--ink3); pointer-events: none; }
+.pick[hidden] { display: none; }
+.spacer { flex: 1; }
+#state { display: none; align-items: center; gap: 6px; min-width: 0; height: 28px; padding: 0 10px; border-radius: 999px;
+  background: var(--amber-tint); border: 1px solid var(--amber-line); color: var(--amber); font-size: 12.5px; font-weight: 500; }
+#state.on { display: inline-flex; }
+#state span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.icon-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+  border: 1px solid transparent; border-radius: 8px; background: none; color: var(--ink2); cursor: pointer; }
+.icon-btn:hover { background: var(--bg3); color: var(--ink); }
+.icon-btn svg { width: 18px; height: 18px; }
+
+main { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+.phone { display: none; background: var(--phone); box-shadow: var(--shadow); }
+.phone.on { display: block; }
+canvas { display: block; background: #000; }
+canvas.control { touch-action: none; cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+.keys { flex: none; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.keys[hidden] { display: none; }
+.keys button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 36px; border: 0; border-radius: 999px;
+  background: none; color: var(--ink2); cursor: pointer; }
+.keys button:hover { background: var(--bg3); color: var(--ink); }
+.keys button:active { background: var(--sel); }
+.keys svg { width: 20px; height: 20px; }
+
+#msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none; }
+#msg:empty { display: none; }
+.card { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 380px; padding: 20px 24px; border-radius: 14px;
+  background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow); text-align: center; color: var(--ink2); }
+.card.bad { border-color: var(--red-line); }
+.card.bad svg { color: var(--red); }
+.card svg { width: 22px; height: 22px; color: var(--ink3); }
+.spin { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line2); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="who">
+    <span class="dot" id="dot"></span>
+    <span id="name"></span>
+    <label class="pick" id="pick" hidden>
+      <select id="phones" aria-label="{{index .Text "phone"}}"></select>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+    </label>
+  </div>
+  <div class="spacer"></div>
+  <div id="state" role="status"><span></span></div>
+  <button type="button" class="icon-btn" id="fs" hidden aria-label="{{index .Text "fullScreen"}}" title="{{index .Text "fullScreen"}}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/></svg>
+  </button>
+</header>
+<main id="stage">
+  <div class="phone" id="phone"><canvas id="screen"></canvas></div>
+  <div class="keys" id="keys" hidden>
+    <button type="button" id="back" aria-label="{{index .Text "back"}}" title="{{index .Text "back"}}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 5 7 12l10 7z"/></svg>
+    </button>
+    <button type="button" id="home" aria-label="{{index .Text "home"}}" title="{{index .Text "home"}}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7"/></svg>
+    </button>
+  </div>
+  <div id="msg" role="status" aria-live="polite"></div>
+</main>
+<script>
+"use strict";
+const T = {{.Text}} || {};
+const t = (k, vars) => {
+  let s = T[k] || k;
+  for (const [n, v] of Object.entries(vars || {})) s = s.split("{" + n + "}").join(v);
+  return s;
+};
+
+const stage = document.getElementById("stage");
+const phoneEl = document.getElementById("phone");
+const canvas = document.getElementById("screen");
+const ctx2d = canvas.getContext("2d");
+const msgEl = document.getElementById("msg");
+const dot = document.getElementById("dot");
+const nameEl = document.getElementById("name");
+const pick = document.getElementById("pick");
+const phones = document.getElementById("phones");
+const stateEl = document.getElementById("state");
+const keysEl = document.getElementById("keys");
+const fsBtn = document.getElementById("fs");
+
+const ALERT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
+
+// say shows a message over the stage: waiting (a spinner), bad (an alert),
+// or nothing; state colours the dot.
+function say(text, state) {
+  msgEl.innerHTML = "";
+  if (text) {
+    const card = document.createElement("div");
+    card.className = "card" + (state === "bad" ? " bad" : "");
+    if (state === "bad") card.insertAdjacentHTML("beforeend", ALERT);
+    else { const s = document.createElement("div"); s.className = "spin"; card.appendChild(s); }
+    const p = document.createElement("div");
+    p.textContent = text;
+    card.appendChild(p);
+    msgEl.appendChild(card);
+  }
+  dot.className = "dot" + (state ? " " + state : "");
+}
+
+function setState(text) {
+  stateEl.firstElementChild.textContent = text;
+  stateEl.classList.toggle("on", !!text);
+}
+
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+// The token comes after the "#" of the link Pinky gives, which browsers
+// never send to a server. It moves to this tab's session storage and out
+// of the address bar, so it stays out of the history and of a copied URL.
+function takeToken() {
+  let fromLink = "";
+  try { fromLink = decodeURIComponent(location.hash.slice(1)); } catch (e) {} // a mangled link: no key
+
+  let saved = "";
+  try {
+    if (fromLink) sessionStorage.setItem("pinky-mirror-key", fromLink);
+    saved = sessionStorage.getItem("pinky-mirror-key") || "";
+  } catch (e) {}
+  if (location.hash) {
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  }
+  return fromLink || saved;
+}
+const token = takeToken();
+
+let ws = null;
+let decoder = null;
+let config = null;      // the VideoDecoder configuration in use
+let needKey = true;
+let turn = 0;
+let retry = null;
+let stopped = false;
+let device = store("pinky-mirror-device") || "";
+let control = false;    // this page's token can use the phone
+let corner = 0.137;     // the screen's corner radius, as a share of its shorter side
+
+function fail(text) {
+  stopped = true;
+  setControl(false);
+  say(text, "bad");
+}
+
+function start() {
+  if (!token) return fail(t("noToken"));
+  if (!window.isSecureContext) return fail(t("insecure"));
+  if (!("VideoDecoder" in window)) return fail(t("noWebCodecs"));
+  connect();
+}
+
+function later(ms) {
+  if (stopped || retry) return;
+  retry = setTimeout(() => { retry = null; connect(); }, ms);
+}
+
+function connect() {
+  closeDecoder();
+  say(t("connecting"), "");
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(proto + "//" + location.host + "/ws");
+  ws.binaryType = "arraybuffer";
+  const sock = ws;
+  sock.onopen = () => {
+    sock.send(JSON.stringify({ token, device }));
+    // The server cuts off a page it has not heard from in 90 s.
+    const ping = setInterval(() => {
+      if (sock.readyState === WebSocket.OPEN) sock.send('{"type":"ping"}');
+      else clearInterval(ping);
+    }, 20000);
+  };
+  sock.onmessage = (ev) => {
+    if (sock !== ws) return;
+    if (typeof ev.data === "string") onText(JSON.parse(ev.data));
+    else onPicture(ev.data);
+  };
+  sock.onclose = () => {
+    if (sock !== ws) return;
+    ws = null;
+    // The server lifts a finger left down; start the next connection clean.
+    finger = null;
+    if (wheel) { clearTimeout(wheel.timer); wheel = null; }
+    setControl(false);
+    setState("");
+    if (!stopped) {
+      if (!msgEl.textContent || dot.classList.contains("live")) say(t("reconnecting"), "");
+      later(2000);
+    }
+  };
+}
+
+function onText(m) {
+  switch (m.type) {
+  case "devices":
+    showPhones(m.devices || [], m.device || "");
+    setControl(!!m.control);
+    break;
+  case "state":
+    setState(m.status === "in_control" ? t("inControl") : "");
+    break;
+  case "config":
+    configure(m);
+    break;
+  case "ended":
+    say(t("ended"), "");
+    break;
+  case "error":
+    if (m.error === "token") return fail(t("badToken"));
+    if (m.error === "control_off") return fail(t("controlOff"));
+    if (m.error === "tailnet_user") return fail(t("tailnetUser"));
+    if (m.error === "no_phone") { say(t("noPhone"), ""); later(3000); return; }
+    say(t("streamFailed", { detail: m.detail || "" }), "bad");
+    later(3000);
+    break;
+  }
+}
+
+function showPhones(list, current) {
+  device = current;
+  if (current) store("pinky-mirror-device", current);
+  const cur = list.find((d) => d.id === current);
+  nameEl.textContent = cur ? cur.name : "";
+  if (cur) document.title = cur.name + " · Pinky";
+  // The screen's corners, as Pinky's window draws them (ui/bezel.go).
+  corner = !cur || cur.platform !== "ios" ? 0.137 : (cur.model || "").startsWith("iPad") ? 0.045 : 0.15;
+  phones.innerHTML = "";
+  for (const d of list) {
+    const o = document.createElement("option");
+    o.value = d.id;
+    o.textContent = d.name;
+    o.selected = d.id === current;
+    phones.appendChild(o);
+  }
+  pick.hidden = list.length < 2;
+  nameEl.hidden = !pick.hidden;
+  layout();
+}
+
+phones.addEventListener("change", () => {
+  device = phones.value;
+  store("pinky-mirror-device", device);
+  phoneEl.classList.remove("on");
+  if (ws) { const s = ws; ws = null; s.close(); }
+  connect();
+});
+
+// layout fits the phone, in its bezel, into the stage, under which the
+// keys sit while this page can use the phone.
+function layout() {
+  if (!canvas.width || !canvas.height) return;
+  const cs = getComputedStyle(stage);
+  const keysH = keysEl.hidden ? 0 : keysEl.offsetHeight + parseFloat(cs.rowGap || "0");
+  const availW = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - keysH;
+  const aspect = canvas.width / canvas.height;
+  let w = availW, h = w / aspect;
+  if (h > availH) { h = availH; w = h * aspect; }
+  const pad = Math.max(5, Math.round(Math.min(w, h) * 0.028));
+  const sw = Math.max(1, Math.floor(w - 2 * pad)), sh = Math.max(1, Math.floor(sw / aspect));
+  const inner = Math.max(4, Math.min(sw, sh) * corner);
+  canvas.style.width = sw + "px";
+  canvas.style.height = sh + "px";
+  canvas.style.borderRadius = inner + "px";
+  phoneEl.style.padding = pad + "px";
+  phoneEl.style.borderRadius = (inner + pad - 1) + "px";
+}
+new ResizeObserver(layout).observe(stage);
+
+// Full screen, where the browser has it (not on iPhone).
+if (document.fullscreenEnabled) {
+  fsBtn.hidden = false;
+  fsBtn.addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  });
+}
+
+function b64(s) {
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function configure(m) {
+  const cfg = {
+    codec: m.codec,
+    description: b64(m.description),
+    codedWidth: m.width,
+    codedHeight: m.height,
+    optimizeForLatency: true,
+  };
+  let ok = false;
+  try {
+    ok = (await VideoDecoder.isConfigSupported(cfg)).supported;
+  } catch (e) {
+    ok = false;
+  }
+  if (!ok) {
+    const kind = m.codec.startsWith("avc") ? "H.264" : "HEVC (H.265)";
+    return fail(t("unsupported", { codec: kind }));
+  }
+  config = cfg;
+  newDecoder();
+}
+
+function newDecoder() {
+  closeDecoder();
+  if (!config) return;
+  decoder = new VideoDecoder({ output: draw, error: onDecodeError });
+  decoder.configure(config);
+  needKey = true;
+}
+
+function closeDecoder() {
+  if (decoder && decoder.state !== "closed") {
+    try { decoder.close(); } catch (e) {}
+  }
+  decoder = null;
+}
+
+function askKeyFrame() {
+  needKey = true;
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "keyframe" }));
+}
+
+function onDecodeError() {
+  newDecoder();
+  askKeyFrame();
+}
+
+// A picture: a flags byte (bit 0 a key frame, bits 1–2 the quarter turns
+// clockwise that put it upright), its time in microseconds (8 bytes, big
+// endian), then its NAL units, each after a four-byte length.
+function onPicture(buf) {
+  if (!decoder || decoder.state !== "configured") return;
+  const v = new DataView(buf);
+  const flags = v.getUint8(0);
+  const key = (flags & 1) === 1;
+  turn = (flags >> 1) & 3;
+  const ts = Number(v.getBigUint64(1));
+  if (needKey && !key) return;
+  if (!key && decoder.decodeQueueSize > 6) {
+    // This browser decodes slower than the phone sends: skip ahead.
+    askKeyFrame();
+    return;
+  }
+  needKey = false;
+  try {
+    decoder.decode(new EncodedVideoChunk({ type: key ? "key" : "delta", timestamp: ts, data: new Uint8Array(buf, 9) }));
+  } catch (e) {
+    onDecodeError();
+  }
+}
+
+function draw(frame) {
+  const w = frame.displayWidth, h = frame.displayHeight;
+  const side = turn % 2 === 1;
+  const cw = side ? h : w, ch = side ? w : h;
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw;
+    canvas.height = ch;
+    layout();
+  }
+  ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+  if (turn === 1) ctx2d.setTransform(0, 1, -1, 0, cw, 0);
+  else if (turn === 2) ctx2d.setTransform(-1, 0, 0, -1, cw, ch);
+  else if (turn === 3) ctx2d.setTransform(0, -1, 1, 0, 0, ch);
+  ctx2d.drawImage(frame, 0, 0, w, h);
+  frame.close();
+  if (!phoneEl.classList.contains("on")) { phoneEl.classList.add("on"); layout(); }
+  if (!dot.classList.contains("live")) say("", "live");
+}
+
+// Using the phone, when this page's token may: one finger (the pointer's
+// primary button, a touch, or the wheel as a finger dragging the content),
+// Back (also the right button) and Home. Points go as fractions of the
+// upright picture shown, with the turn it was shown at; the server maps
+// them to the phone. A finger still down when the pointer leaves, the tab
+// hides or the page closes is lifted here, and by the server too.
+function setControl(on) {
+  control = on;
+  keysEl.hidden = !on;
+  canvas.classList.toggle("control", on);
+  layout();
+}
+
+function send(m) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
+}
+
+function at(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+}
+
+function touch(a, p) { send({ type: "touch", a, x: p.x, y: p.y, turn }); }
+
+let finger = null;      // the pointer holding the finger down
+let last = null;        // where the finger is
+let moveTo = null;      // a move waiting for the next animation frame
+let frame = 0;
+
+function moveLater(p) {
+  last = p;
+  moveTo = p;
+  if (!frame) frame = requestAnimationFrame(() => {
+    frame = 0;
+    if (moveTo) { touch("move", moveTo); moveTo = null; }
+  });
+}
+
+function lift() {
+  if (finger === null) return;
+  if (moveTo) { touch("move", moveTo); moveTo = null; }
+  touch("up", last);
+  finger = null;
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  if (!control || finger !== null || wheel || e.button !== 0) return;
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  finger = e.pointerId;
+  last = at(e);
+  touch("down", last);
+});
+canvas.addEventListener("pointermove", (e) => {
+  if (e.pointerId === finger) moveLater(at(e));
+});
+for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+  canvas.addEventListener(type, (e) => {
+    if (e.pointerId !== finger) return;
+    if (type === "pointerup") last = at(e);
+    lift();
+  });
+}
+canvas.addEventListener("contextmenu", (e) => {
+  if (!control) return;
+  e.preventDefault();
+  send({ type: "key", key: "back" });
+});
+document.getElementById("back").addEventListener("click", () => send({ type: "key", key: "back" }));
+document.getElementById("home").addEventListener("click", () => send({ type: "key", key: "home" }));
+
+// The wheel moves a finger against the scroll, down where the pointer is
+// and up 140 ms after the last notch; near the picture's edge it lifts and
+// puts the finger down again where it started.
+let wheel = null;
+canvas.addEventListener("wheel", (e) => {
+  if (!control || finger !== null) return;
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? r.height : 1;
+  if (!wheel) {
+    const p = at(e);
+    wheel = { start: p, at: { x: p.x, y: p.y }, timer: 0 };
+    touch("down", wheel.at);
+  }
+  wheel.at = { x: wheel.at.x - e.deltaX * unit / r.width, y: wheel.at.y - e.deltaY * unit / r.height };
+  if (wheel.at.x < 0.03 || wheel.at.x > 0.97 || wheel.at.y < 0.03 || wheel.at.y > 0.97) {
+    const edge = { x: Math.min(0.97, Math.max(0.03, wheel.at.x)), y: Math.min(0.97, Math.max(0.03, wheel.at.y)) };
+    touch("move", edge);
+    touch("up", edge);
+    wheel.at = { x: wheel.start.x, y: wheel.start.y };
+    touch("down", wheel.at);
+  } else {
+    touch("move", wheel.at);
+  }
+  clearTimeout(wheel.timer);
+  wheel.timer = setTimeout(endWheel, 140);
+}, { passive: false });
+
+function endWheel() {
+  if (!wheel) return;
+  clearTimeout(wheel.timer);
+  touch("up", wheel.at);
+  wheel = null;
+}
+
+function liftAll() { lift(); endWheel(); }
+window.addEventListener("blur", liftAll);
+document.addEventListener("visibilitychange", () => { if (document.hidden) liftAll(); });
+window.addEventListener("pagehide", liftAll);
+
+// A link with another key opens in the same page: start again with it.
+window.addEventListener("hashchange", () => { if (location.hash.length > 1) location.reload(); });
+
+start();
+</script>
+</body>
+</html>

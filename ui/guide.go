@@ -36,7 +36,7 @@ func guideRowHint(c *mg.Context, n int, title, hint string, state guideState, bo
 		switch state {
 		case guideDone:
 			mark.Background(p.green).Label(locales.AddPhoneDone()).Children(func() {
-				mg.Icon(c, icCheck).FontSize(14).TextColor(p.white)
+				mg.Icon(c, icCheck).FontSize(iconSmall).TextColor(p.white)
 			})
 		case guideNow:
 			mark.Border(2, p.accent).Children(func() {
@@ -84,7 +84,7 @@ func guideProblem(c *mg.Context, title, detail string) {
 	p := pal(c)
 	mg.Column(c).Padding(10, 12).Radius(10).Background(p.amberTint).Border(1, p.amberLine).Gap(4).Role(mg.RoleStatus).Children(func() {
 		mg.Row(c).Gap(8).AlignItems(mg.Start).Children(func() {
-			mg.Icon(c, icAlert).FontSize(15).TextColor(p.amberDot).Shrink(0)
+			mg.Icon(c, icAlert).FontSize(iconBody).TextColor(p.amberDot).Shrink(0)
 			mg.Text(c, title).FontSize(fsBody).FontWeight(fwSemibold).Grow(1).MinWidth(0)
 		})
 		if detail != "" {

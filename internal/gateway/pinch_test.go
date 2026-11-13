@@ -150,8 +150,8 @@ func TestPinch(t *testing.T) {
 	if n.Point != a || n.Point2 != b || n.To != a1 || n.To2 != b1 {
 		t.Errorf("card: fingers %v→%v and %v→%v, want %v→%v and %v→%v", n.Point, n.To, n.Point2, n.To2, a, a1, b, b1)
 	}
-	if !strings.HasPrefix(n.Title, "Zoomed in") || !strings.HasSuffix(n.Title, "?") {
-		t.Errorf("title %q", n.Title)
+	if !strings.HasPrefix(n.Title, "Zoom in") || !strings.HasSuffix(n.Title, "?") {
+		t.Errorf("title %q, want it to ask “Zoom in …?”", n.Title)
 	}
 
 	s.Release(ctx, ReleaseRequest{})

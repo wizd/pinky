@@ -514,7 +514,7 @@ func debuggable(out, pkg string) bool {
 }
 
 // appUID finds an app's package and its user id: the package's, in the
-// clone's user for an app clone. Pinky Companion is never read, and an app
+// clone's user for an app clone. Pinky on the phone is never read, and an app
 // that shares its user id with others is not: their lines could not be
 // told apart.
 func (d *Device) appUID(ctx context.Context, app driver.App) (pkg string, uid int, err error) {

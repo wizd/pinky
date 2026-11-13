@@ -61,6 +61,11 @@ type device struct {
 	// that moved the phone tells the agent the real reason (taskconn.go).
 	openErr error
 	lease   *lease
+	// leaseGen counts leases started and ended on the device, and
+	// leaseEnded is when the last one ended: the approvals page refuses an
+	// answer from this phone's browser across any lease (webapproval).
+	leaseGen   uint64
+	leaseEnded time.Time
 	// person is true while the person is in control (took over). It belongs
 	// to the device, not the lease: only HandBack clears it, so an agent
 	// cannot get control back by starting another task.
@@ -71,6 +76,9 @@ type device struct {
 	// agent works on the phone. workSent: dev was told at all.
 	working, workSent bool
 	locked            bool
+	// busy is who holds the phone while the agent's task waits for it:
+	// Pinky on the phone, or another computer (onphone.go).
+	busy *driver.BusyError
 	// settleDue is when the wait after the last input would have ended
 	// had it run its whole SettleMax: set before the input goes out,
 	// cleared once the screen is seen to settle. The next action waits for
@@ -270,6 +278,10 @@ type lease struct {
 	changes []change
 	// recorded is set once the task's recording started (video.go).
 	recorded bool
+	// readLists holds where each partial phone_read_list stopped, under
+	// the opaque id its continuation carries (read_list.go). They go with
+	// the lease, so a continuation never outlives its task or phone.
+	readLists map[string]*readCursor
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -293,6 +305,9 @@ type task struct {
 	approvals  int
 	next       int  // the next step index
 	readOnly   bool // the agent asked for read-only (TaskView.ReadOnly)
+	// continued says the task ran before and runs again for Pinky's own
+	// agent (AgentInfo.Continue).
+	continued bool
 }
 
 // maxTaskSteps bounds the steps a running task keeps in memory; history

@@ -38,6 +38,9 @@ type DisplayOptions struct {
 	SystemDecorations bool
 	// MaxSize and MaxFPS tune the display's video stream.
 	MaxSize, MaxFPS int
+	// Input is how taps, swipes and keys reach the display: InputAuto,
+	// InputScrcpy or InputCompanion (displayinput.go).
+	Input string
 }
 
 // Background is a scrcpy virtual display on the phone, so an agent can
@@ -54,6 +57,10 @@ type Background struct {
 	l       *live
 	display int
 	w, h    int // the display's size in its natural orientation
+	// viaCompanion: taps, swipes, drags, pinches, back and enter go
+	// through the companion's accessibility service, not scrcpy
+	// (displayinput.go).
+	viaCompanion bool
 
 	mu       sync.Mutex
 	tapPoint screen.Point // the last tap, for typing into the field under it
@@ -137,11 +144,15 @@ func (d *Device) OpenDisplay(ctx context.Context, opt DisplayOptions) (*Backgrou
 			return nil, err
 		}
 	}
+	via, err := d.displayInput(ctx, opt.Input)
+	if err != nil {
+		return nil, err
+	}
 	// The display's size, which agents' coordinates use: the video may be
 	// smaller, when MaxSize asks or when the server scales it down for an
 	// encoder that cannot take the full size (an emulator's H.265 encoder
 	// sends 230x512 for a 1080x2400 display).
-	b := &Background{d: d, closed: make(chan struct{}), w: opt.Width, h: opt.Height}
+	b := &Background{d: d, closed: make(chan struct{}), w: opt.Width, h: opt.Height, viaCompanion: via}
 	if b.w == 0 || b.h == 0 {
 		natW, natH, err := d.naturalSize(ctx)
 		if err != nil {
@@ -180,7 +191,7 @@ func (d *Device) OpenDisplay(ctx context.Context, opt DisplayOptions) (*Backgrou
 			return nil, err
 		}
 	}
-	err := b.start(ctx, sopt)
+	err = b.start(ctx, sopt)
 	if why := encoderFailure(err); why != "" && sopt.VideoCodec == "h265" {
 		// The H.265 encoder failed before the stream began.
 		d.mu.Lock()
@@ -404,12 +415,19 @@ func (b *Background) ReadsText() bool { return ocrSupported() == nil }
 // observeTree reads the display's tree through the companion. The tree is
 // nil for a display that shows nothing yet.
 func (b *Background) observeTree(ctx context.Context) (*screen.Screen, *companion.Tree, error) {
-	b.d.used()
+	if err := b.d.acting(ctx); err != nil {
+		return nil, nil, err
+	}
 	if err := b.ready(ctx); err != nil {
 		return nil, nil, err
 	}
 	c := b.d.companionClientFor(ctx, forBackground)
 	if c == nil {
+		if b.d.companionManual() {
+			// The gateway passes this on to the agent, which can tell the
+			// person.
+			return nil, nil, fmt.Errorf("android: observing a virtual display needs the companion app, and %s: %w", companionManualWords, driver.ErrUnsupported)
+		}
 		return nil, nil, fmt.Errorf("android: observing a virtual display needs the companion app: %w", driver.ErrUnsupported)
 	}
 	t, err := c.Dump(ctx, companion.DumpOptions{Display: b.display})
@@ -468,7 +486,9 @@ func (b *Background) Screenshot(ctx context.Context) (image.Image, error) {
 
 // Tap implements driver.Device.
 func (b *Background) Tap(ctx context.Context, p screen.Point, opt driver.TapOptions) error {
-	b.d.used()
+	if err := b.d.acting(ctx); err != nil {
+		return err
+	}
 	if err := b.ready(ctx); err != nil {
 		return err
 	}
@@ -476,7 +496,15 @@ func (b *Background) Tap(ctx context.Context, p screen.Point, opt driver.TapOpti
 	if opt.LongPress {
 		hold = b.d.longPressHold(ctx)
 	}
-	err := b.l.input(func() error { return b.l.tap(ctx, p, hold) })
+	c, err := b.inputClient(ctx)
+	if err != nil {
+		return err
+	}
+	if c != nil {
+		err = b.gestureVia(ctx, c, companion.Stroke{Points: []screen.Point{p}, Duration: hold})
+	} else {
+		err = b.l.input(func() error { return b.l.tap(ctx, p, hold) })
+	}
 	if err == nil {
 		b.mu.Lock()
 		b.tapPoint, b.tapAt = p, time.Now()
@@ -497,9 +525,21 @@ func (b *Background) recentTap() (screen.Point, bool) {
 
 // Swipe implements driver.Device.
 func (b *Background) Swipe(ctx context.Context, from, to screen.Point, dur time.Duration) error {
-	b.d.used()
+	if err := b.d.acting(ctx); err != nil {
+		return err
+	}
 	if err := b.ready(ctx); err != nil {
 		return err
+	}
+	c, err := b.inputClient(ctx)
+	if err != nil {
+		return err
+	}
+	if c != nil {
+		if dur <= 0 {
+			dur = defaultSwipe
+		}
+		return b.gestureVia(ctx, c, companion.Stroke{Points: []screen.Point{from, to}, Duration: dur})
 	}
 	return b.l.input(func() error { return b.l.swipe(ctx, from, to, dur) })
 }
@@ -511,6 +551,13 @@ func (b *Background) Touch(ctx context.Context, a driver.TouchAction, p screen.P
 			return err
 		}
 	}
+	c, err := b.inputClient(ctx)
+	if err != nil {
+		return err
+	}
+	if c != nil {
+		return b.touchVia(ctx, c, a, p)
+	}
 	return b.l.input(func() error { return b.l.touch(ctx, a, p) })
 }
 
@@ -519,12 +566,17 @@ func (b *Background) Touch(ctx context.Context, a driver.TouchAction, p screen.P
 // on this display, as on the main one, and is read back; otherwise as key
 // events or a paste (Device.Type).
 func (b *Background) Type(ctx context.Context, text string, opt driver.TypeOptions) error {
-	b.d.used()
+	if err := b.d.acting(ctx); err != nil {
+		return err
+	}
 	b.d.setInputNote("")
 	if err := b.ready(ctx); err != nil {
 		return err
 	}
-	enter := func() error { return b.l.input(func() error { return b.l.key(keycodeEnter, 0) }) }
+	// Enter keeps the note the typing left, such as a field Pinky could not
+	// read back; only a note that the key itself may not have arrived
+	// replaces it (keyVia).
+	enter := func() error { return b.key(ctx, driver.KeyEnter) }
 	c := b.d.companionClientFor(ctx, forBackground)
 	var refused error
 	if c != nil && b.d.comp.displays() {
@@ -552,12 +604,26 @@ func (b *Background) Type(ctx context.Context, text string, opt driver.TypeOptio
 
 // Key implements driver.Device.
 func (b *Background) Key(ctx context.Context, k driver.Key) error {
+	b.d.setInputNote("")
+	return b.key(ctx, k)
+}
+
+// key presses k on the display. Unlike Key it keeps the input note, so
+// that Type's enter does not drop what the typing noted.
+func (b *Background) key(ctx context.Context, k driver.Key) error {
 	code, ok := keycodes[k]
 	if !ok {
 		return fmt.Errorf("android: key %q: %w", k, driver.ErrUnsupported)
 	}
 	if err := b.ready(ctx); err != nil {
 		return err
+	}
+	c, err := b.inputClient(ctx)
+	if err != nil {
+		return err
+	}
+	if c != nil {
+		return b.keyVia(ctx, c, k, code)
 	}
 	return b.l.input(func() error { return b.l.key(code, 0) })
 }

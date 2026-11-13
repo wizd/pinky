@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"strings"
-
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/i18n"
 	mg "github.com/egoist/mygo/ui"
@@ -13,47 +11,8 @@ import (
 // The client's words are in the catalogs of cmd/pinky/locales, one
 // function per message (see docs/notes/client.md, "i18n"). These helpers
 // name the policy's rules and join lists in the language the app shows;
-// gwtext.go says the gateway's English steps, approvals and status lines
+// internal/gwtext says the gateway's English steps, approvals and status lines
 // in it.
-
-// ruleNames are the rules of the policy presets and the built-in ones, as
-// approvals and steps name them.
-var ruleNames = map[string]func() string{
-	"Payments":           locales.RulePayments,
-	"Messages":           locales.RuleMessages,
-	"Commits":            locales.RuleCommits,
-	"Installs and links": locales.RuleInstallsLinks,
-	"Calls":              locales.RuleCalls,
-	"Settings changes":   locales.RuleSettingsChanges,
-	"Phone settings":     locales.RuleSettingsPhone,
-	"Every action":       locales.RuleEveryAction,
-	"Blocked by you":     locales.RuleBlockedByYou,
-	"credentials":        locales.RuleCredentials,
-	"Read-only":          locales.RuleReadOnly,
-	"Task apps":          locales.RuleTaskApps,
-	"Agent scope":        locales.RuleAgentScope,
-	"Finance apps":       locales.RuleFinanceApps,
-	"Password managers":  locales.RulePasswordManagers,
-	"Unsafe links":       locales.RuleUnsafeLinks,
-	"Files":              locales.RuleFiles,
-	"Recordings":         locales.RuleRecordings,
-	"App logs":           locales.RuleAppLogs,
-	"Agent request":      locales.RuleAgentRequest,
-
-	"Installing from the computer": locales.RuleInstallFromComputer,
-	"Uninstalling apps":            locales.RuleUninstallApps,
-	"Pinky's own apps":             locales.RulePinkyApps,
-	"System apps":                  locales.RuleSystemApps,
-}
-
-// ruleName names a rule as the person reads it: "Payments". A rule of the
-// person's own rules file keeps its name.
-func ruleName(rule string) string {
-	if f := ruleNames[rule]; f != nil {
-		return f()
-	}
-	return rule
-}
 
 // ruleActions are what the presets' rules cover, for "Always allow …".
 var ruleActions = map[string]func() string{
@@ -77,19 +36,6 @@ func ruleAction(rule string) string {
 		return f()
 	}
 	return locales.RuleActionOther(lowerFirst(rule))
-}
-
-// joinAnd joins names for a sentence: "Dinely, Chatter and Calendar".
-func joinAnd(s []string) string {
-	switch len(s) {
-	case 0:
-		return ""
-	case 1:
-		return s[0]
-	case 2:
-		return locales.ListPair(s[0], s[1])
-	}
-	return locales.ListMany(strings.Join(s[:len(s)-1], locales.ListSeparator()), s[len(s)-1])
 }
 
 // The language the app shows is MyGo's: the one of the catalogs' languages

@@ -55,14 +55,17 @@ func (d *Device) unwatch() {
 	d.mu.Unlock()
 }
 
-// idleLoop stops the stream once it is idle, until the device closes.
+// idleLoop stops the stream once it is idle, and rests the device once it
+// stayed so (rest.go), until the device closes.
 func (d *Device) idleLoop() {
 	t := time.NewTicker(idleCheck)
 	defer t.Stop()
 	for {
 		select {
 		case <-t.C:
-			d.stopIfIdle(time.Now())
+			now := time.Now()
+			d.stopIfIdle(now)
+			d.restIfIdle(now) // rest.go
 		case <-d.done:
 			return
 		}

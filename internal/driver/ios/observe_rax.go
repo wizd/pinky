@@ -48,8 +48,18 @@ const (
 )
 
 // raxRecheckFailures is how long a phone whose remoteAXService failed is
-// left on the inspector path before Observe tries the service again.
+// left on the inspector path before Observe tries the service again. On the
+// phone itself (tunnelOnly) there is no inspector to be left on: every read
+// tries again.
 const raxRecheckFailures = 30 * time.Second
+
+// tunnelOnly reports whether the device was opened over the tunnel alone
+// (OpenOverTunnel): Pinky runs on the phone itself, with no usbmuxd and so
+// no inspector.
+func (d *Device) tunnelOnly() bool {
+	l := d.cur()
+	return l != nil && l.tunnelOnly
+}
 
 // raxLimits bound one walk over remoteAXService.
 var raxLimits = walkLimits{MaxElements: 400, Budget: 4 * time.Second}
@@ -74,19 +84,23 @@ func (d *Device) walkLimits() walkLimits {
 
 // raxReady returns the remote accessibility session, connecting on first
 // use. A phone that refused it is asked again only after a while, so every
-// Observe on it does not pay for a failed connection.
+// Observe on it does not pay for a failed connection, except on the phone
+// itself (tunnelOnly), where nothing else can read the screen: there every
+// call asks again, and waits longer for the first answer.
+//
+// The dial holds raxDialMu, not svcMu: on the phone it may wait 15 s, and
+// the other services (screenshots, app lists, the lock) should not wait
+// behind it.
 func (d *Device) raxReady(ctx context.Context) (*raxSession, error) {
-	d.svcMu.Lock()
-	defer d.svcMu.Unlock()
-	if d.rax != nil {
-		if d.rax.alive() {
-			return d.rax, nil
-		}
-		d.rax.Close()
-		d.rax = nil
+	onPhone := d.tunnelOnly()
+	if s, err, ok := d.raxHeld(onPhone); ok {
+		return s, err
 	}
-	if d.raxErr != nil && time.Since(d.raxFailedAt) < raxRecheckFailures {
-		return nil, d.raxErr
+	d.raxDialMu.Lock()
+	defer d.raxDialMu.Unlock()
+	// Another call may have dialed meanwhile.
+	if s, err, ok := d.raxHeld(onPhone); ok {
+		return s, err
 	}
 	d.mu.Lock()
 	closed := d.closed
@@ -94,15 +108,55 @@ func (d *Device) raxReady(ctx context.Context) (*raxSession, error) {
 	if closed {
 		return nil, fmt.Errorf("device closed: %w", driver.ErrOffline)
 	}
-	s, err := dialRAX(ctx, d.l.entry)
+	wait := raxAnswerWait
+	if onPhone {
+		wait = raxAnswerWaitTunnel
+	}
+	start := time.Now()
+	s, err := dialRAX(ctx, d.link().entry, wait)
+	d.svcMu.Lock()
+	defer d.svcMu.Unlock()
 	if err != nil {
 		if ctx.Err() == nil {
 			d.raxErr, d.raxFailedAt = err, time.Now()
 		}
+		if onPhone {
+			d.log.Warn("iphone: remoteAXService did not connect", "device", d.info.ID,
+				"after", time.Since(start).Round(time.Millisecond), "err", err)
+		}
 		return nil, err
+	}
+	d.mu.Lock()
+	closed = d.closed
+	d.mu.Unlock()
+	if closed {
+		// Closed during the dial: Close did not see this session.
+		s.Close()
+		return nil, fmt.Errorf("device closed: %w", driver.ErrOffline)
+	}
+	if onPhone {
+		d.log.Info("iphone: remoteAXService connected", "device", d.info.ID, "in", time.Since(start).Round(time.Millisecond))
 	}
 	d.rax, d.raxErr = s, nil
 	return s, nil
+}
+
+// raxHeld is the session raxReady has, or the recent failure it repeats
+// without dialing; ok is false when it should dial.
+func (d *Device) raxHeld(onPhone bool) (s *raxSession, err error, ok bool) {
+	d.svcMu.Lock()
+	defer d.svcMu.Unlock()
+	if d.rax != nil {
+		if d.rax.alive() {
+			return d.rax, nil, true
+		}
+		d.rax.Close()
+		d.rax = nil
+	}
+	if d.raxErr != nil && !onPhone && time.Since(d.raxFailedAt) < raxRecheckFailures {
+		return nil, d.raxErr, true
+	}
+	return nil, nil, false
 }
 
 // observeRAX reads the screen through remoteAXService: every element with
@@ -601,7 +655,7 @@ func raxScreenElements(els []raxElement, scale float64, w, h int, appID string, 
 		}
 		out = append(out, screen.Element{
 			Role: role, Label: label, Bounds: r, States: states,
-			Source: screen.SourceTree, Path: paths[i], ID: e.Ident,
+			Source: screen.SourceTree, Path: paths[i], ID: e.Ident, Content: raxContent(e, role),
 		})
 	}
 	var over []occluder
@@ -872,6 +926,24 @@ func raxRole(e raxElement, inTabBar bool) (string, []string) {
 		states = appendState(states, screen.StateDisabled)
 	}
 	return role, states
+}
+
+// raxContent is the text typed into a text field that raxLabel shows: its
+// value, unless that is its placeholder (an empty field on iOS 27 has its
+// placeholder as its value too), its label, or a password field's dots.
+func raxContent(e raxElement, role string) string {
+	if role != screen.RoleInput {
+		return ""
+	}
+	value := strings.TrimSpace(e.ValueText)
+	if value == "" {
+		value = strings.TrimSpace(e.Value)
+	}
+	if value == "" || value == strings.TrimSpace(e.Placeholder) || value == strings.TrimSpace(e.Label) ||
+		e.Type == xcSecureTextField || e.Traits&traitSecureText != 0 {
+		return ""
+	}
+	return value
 }
 
 func appendState(states []string, s string) []string {

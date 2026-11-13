@@ -1,15 +1,18 @@
 package ios
 
 import (
+	"context"
+	"slices"
 	"testing"
+
+	"github.com/danielpaulus/go-ios/ios/installationproxy"
 
 	"github.com/DIYgod/pinky/internal/driver"
 )
 
 // The home screen's layout, as SpringBoard sends it (format 2): the dock
 // first, then pages; folders hold pages of their own; widgets have no
-// bundle. Apps whose home screen name differs get it as an alias (GitHub
-// issue #7: WeChat is 微信 on a Chinese iPhone).
+// bundle.
 func TestHomeScreenNames(t *testing.T) {
 	layout := []any{
 		[]any{ // the dock
@@ -34,15 +37,69 @@ func TestHomeScreenNames(t *testing.T) {
 			t.Errorf("%s = %q, want %q", id, names[id], n)
 		}
 	}
-	apps := []driver.App{
-		{ID: "com.tencent.xin", Name: "WeChat"},
-		{ID: "com.tencent.weread", Name: "微信读书"},
-		{ID: "com.apple.mobilephone", Name: "Phone", System: true},
-		{ID: "com.example.hidden", Name: "Hidden"}, // in the App Library only
+}
+
+// The app list names apps as the home screen does, in the phone's language,
+// and keeps the bundle's own names as aliases (GitHub issue #7: WeChat is
+// 微信 on a Chinese iPhone, while its bundle says WeChat in every language).
+// An app only in the App Library keeps its bundle's name. The app in front,
+// found by its bundle's path, and a URL scheme's apps are named the same.
+func TestAppListUsesHomeScreenNames(t *testing.T) {
+	infos := []installationproxy.AppInfo{
+		{"CFBundleIdentifier": "com.tencent.xin", "CFBundleDisplayName": "WeChat", "CFBundleName": "WeChat",
+			"ApplicationType": "User", "Path": "/private/var/containers/Bundle/Application/A/WeChat.app",
+			"CFBundleURLTypes": []any{map[string]any{"CFBundleURLSchemes": []any{"weixin"}}}},
+		{"CFBundleIdentifier": "com.tencent.weread", "CFBundleDisplayName": "微信读书", "ApplicationType": "User"},
+		{"CFBundleIdentifier": "com.apple.mobilephone", "CFBundleName": "MobilePhone", "CFBundleDisplayName": "Phone", "ApplicationType": "System"},
+		{"CFBundleIdentifier": "com.example.library", "CFBundleName": "Library Only", "ApplicationType": "User"},
 	}
-	addHomeScreenNames(apps, names)
-	if len(apps[0].Aliases) != 1 || apps[0].Aliases[0] != "微信" || len(apps[1].Aliases) != 0 ||
-		apps[2].Aliases[0] != "电话" || len(apps[3].Aliases) != 0 {
-		t.Fatalf("apps = %+v", apps)
+	names := map[string]string{"com.tencent.xin": "微信", "com.tencent.weread": "微信读书", "com.apple.mobilephone": "电话"}
+	l := readAppInfos(infos, names)
+	got := map[string]driver.App{}
+	for _, a := range l.apps {
+		got[a.ID] = a
+	}
+	check := func(id, name string, aliases ...string) {
+		t.Helper()
+		a := got[id]
+		if a.Name != name || !slices.Equal(a.Aliases, aliases) {
+			t.Errorf("%s = %q %q, want %q %q", id, a.Name, a.Aliases, name, aliases)
+		}
+	}
+	check("com.tencent.xin", "微信", "WeChat")
+	check("com.tencent.weread", "微信读书")
+	check("com.apple.mobilephone", "电话", "Phone")
+	check("com.example.library", "Library Only")
+
+	c := &appCatalog{}
+	c.set(l)
+	if a, ok := c.appForExecutable("/private/var/containers/Bundle/Application/A/WeChat.app/WeChat"); !ok || a.Name != "微信" {
+		t.Errorf("app in front = %+v, %v", a, ok)
+	}
+	if s := c.schemeApps("weixin"); len(s) != 1 || s[0].Name != "微信" {
+		t.Errorf("weixin's apps = %+v", s)
+	}
+	// The frontmost app's element and banners name it either way.
+	for _, n := range []string{"微信", "WeChat"} {
+		if a, ok := c.byName(n); !ok || a.ID != "com.tencent.xin" {
+			t.Errorf("byName(%q) = %+v, %v", n, a, ok)
+		}
+	}
+}
+
+// Through WebDriverAgent, the app in front takes the app list's name, the
+// home screen's, once the list has been read; before, WDA's own.
+func TestWDAAppInfoUsesListName(t *testing.T) {
+	d := &WDADevice{}
+	front := wdaApp{BundleID: "com.tencent.xin", Name: "WeChat"}
+	if got := d.appInfo(context.Background(), front, nil); got.Name != "WeChat" {
+		t.Errorf("before the list: %+v", got)
+	}
+	d.apps = &appCatalog{}
+	d.apps.set(readAppInfos([]installationproxy.AppInfo{
+		{"CFBundleIdentifier": "com.tencent.xin", "CFBundleDisplayName": "WeChat", "ApplicationType": "User"},
+	}, map[string]string{"com.tencent.xin": "微信"}))
+	if got := d.appInfo(context.Background(), front, nil); got.Name != "微信" || got.ID != "com.tencent.xin" {
+		t.Errorf("with the list: %+v", got)
 	}
 }

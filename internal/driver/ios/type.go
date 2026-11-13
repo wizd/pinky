@@ -350,13 +350,14 @@ func keyStrokesFor(text string, pbErr error) ([]keyStroke, error) {
 // pasteboard returns the pasteboard connection, or nil when the phone has
 // no pasteboard service.
 func (d *Device) pasteboard() *pbConn {
-	if !d.l.has(pasteboardService) {
+	l := d.link()
+	if !l.has(pasteboardService) {
 		return nil
 	}
 	d.svcMu.Lock()
 	defer d.svcMu.Unlock()
 	if d.pb == nil {
-		d.pb = newPBConn(d.l.entry)
+		d.pb = newPBConn(l.entry)
 	}
 	return d.pb
 }

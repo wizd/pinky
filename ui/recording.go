@@ -521,7 +521,7 @@ func (a *app) recordingView(c *mg.Context, t gateway.TaskView, pl *recPlayer) {
 					switch {
 					case pl.state == "failed":
 						mg.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(8).Padding(20).Children(func() {
-							mg.Icon(c, icAlert).FontSize(22).TextColor(hex("#f7a74e"))
+							mg.Icon(c, icAlert).FontSize(iconBig).TextColor(hex("#f7a74e"))
 							mg.Text(c, recordingError(pl.err)).FontSize(fsCaption).LineHeight(1.4).TextColor(hex("#d0d0d8")).TextAlign(mg.Center).MaxWidth(220)
 						})
 					case pl.bitmap == nil:

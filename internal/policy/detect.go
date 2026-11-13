@@ -405,11 +405,11 @@ func impliedSearchBox(s *screen.Screen) bool {
 // IsCredentialField reports whether typing into e would hand a password or a
 // one-time code to the agent.
 //
-// The label counts as people read it: a code word anywhere in it. The
-// identifier, which agents do not see, counts by whole words (see
-// identifierWords), since apps join words there: a note's body named
-// "footprintTextView" or "barcodeNotes" must not turn into a code field
-// for the "otp" or "code" inside a longer word (GitHub issue #47). A
+// The field's name (fieldName) counts as people read it: a code word
+// anywhere in it. The identifier, which agents do not see, counts by whole
+// words (see identifierWords), since apps join words there: a note's body
+// named "footprintTextView" or "barcodeNotes" must not turn into a code
+// field for the "otp" or "code" inside a longer word (GitHub issue #47). A
 // password word counts anywhere in both.
 func IsCredentialField(e *screen.Element) bool {
 	if e == nil {
@@ -418,7 +418,7 @@ func IsCredentialField(e *screen.Element) bool {
 	if e.Has(screen.StatePassword) {
 		return true
 	}
-	label, id := strings.ToLower(e.Label), strings.ToLower(e.ID)
+	label, id := strings.ToLower(fieldName(e)), strings.ToLower(e.ID)
 	if containsAny(label, passwordWords) || containsAny(id, passwordWords) {
 		return true
 	}
@@ -438,6 +438,30 @@ func IsCredentialField(e *screen.Element) bool {
 		}
 	}
 	return false
+}
+
+// fieldName is what a text field is called: its label without the text
+// typed into it (screen.Element.Content), and without an identifier that
+// stands in for a missing label, which counts as an identifier instead.
+// What someone wrote says nothing about what the field is for: a message
+// that mentions "the code review", or an address bar showing a page about
+// codes, is no code field (GitHub issue #67).
+func fieldName(e *screen.Element) string {
+	name := e.Label
+	if c := e.Content; c != "" {
+		if name == c {
+			name = ""
+		} else if n, ok := strings.CutSuffix(name, ", "+c); ok {
+			name = n
+		}
+	}
+	// Android drivers label an unnamed field by the end of its resource id
+	// ("com.app:id/footprint_text" gives "footprint_text"), iOS by its
+	// identifier.
+	if id := e.ID; name != "" && id != "" && (name == id || strings.HasSuffix(id, "/"+name)) {
+		name = ""
+	}
+	return name
 }
 
 // identifierWords splits an identifier into lower-case words: at anything
@@ -598,15 +622,16 @@ func detect(in Input, cats []string) []Kind {
 			add(Payment)
 		}
 	case OpSwipe:
-		// Sliders such as "Slide to pay", also by their id ("slide_to_pay");
-		// a list that scrolls is no slider.
-		if t == nil {
+		// Sliders such as "Slide to pay", also by their id ("slide_to_pay").
+		// Only a slider commits by a swipe: a swipe that starts on anything
+		// else, a list or a button in it ("删除订单" in an order list),
+		// scrolls.
+		if t == nil || !slidesAlong(t, in.Move) {
 			break
 		}
-		slider := !t.Has(screen.StateScrollable) && t.Role != screen.RoleList
-		if commit, money := commitParts(t); commit || (slider && isCommitIcon(t)) {
+		if commit, money := commitParts(t); commit || isCommitIcon(t) {
 			add(Commit)
-			if money || (slider && isMoneyIcon(t)) || hasCurrency(label) || screenHasCurrency(in.Screen) {
+			if money || isMoneyIcon(t) || hasCurrency(label) || screenHasCurrency(in.Screen) {
 				add(Payment)
 			}
 		}
@@ -629,6 +654,32 @@ func detect(in Input, cats []string) []Kind {
 		}
 	}
 	return kinds
+}
+
+// slidesAlong reports whether a swipe that moves the finger by move,
+// starting on t, may slide t as a slider. It may unless t scrolls, is a
+// list, or the swipe scrolls across it: t is wider than it is tall, and
+// the swipe moves along its width less than a third of what it moves up
+// or down, as when an order list is scrolled from a button in a row
+// ("删除订单"). A diagonal swipe on "Slide to pay" still drags its knob,
+// and a sideways swipe on an element taller than it is wide may be a full
+// swipe on a row's revealed "删除" action, so both may slide. An element
+// without bounds, or a swipe without a known move, may be a slider.
+func slidesAlong(t *screen.Element, move screen.Point) bool {
+	if t.Has(screen.StateScrollable) || t.Role == screen.RoleList {
+		return false
+	}
+	if t.Bounds.Empty() || (move.X == 0 && move.Y == 0) {
+		return true
+	}
+	return !(t.Bounds.W > t.Bounds.H && 3*abs(move.X) < abs(move.Y))
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 func hasKind(ks []Kind, k Kind) bool {

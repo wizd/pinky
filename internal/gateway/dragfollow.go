@@ -191,7 +191,10 @@ func (f *dragFollow) fail(why string) {
 func (f *dragFollow) shoot(ctx context.Context) (image.Image, error) {
 	ctx, cancel := context.WithTimeout(ctx, followShotTimeout)
 	defer cancel()
-	if !f.onBG && cabled(f.d.info) {
+	f.g.mu.Lock()
+	onCable := cabled(f.d.info) // discovery sets it again under g.mu
+	f.g.mu.Unlock()
+	if !f.onBG && onCable {
 		return f.dev.Screenshot(ctx)
 	}
 	img, err := f.g.frameShotOpen(ctx, hubKey(f.d.id, f.onBG))

@@ -196,6 +196,8 @@ Everything except the shell process survives a reboot. A force stop undoes step 
 
 Unlike the throwaway program in [What ran here](#what-ran-here), this prototype is kept: `android/standalone`, `internal/standalone` and `internal/driver/android/local`. It follows [the recommended architecture](#android-one-app-the-companion-grown-up) and ran end to end on 2026-11-11: on the Android 17 emulator (API 37, arm64) and on a Xiaomi Mi 10 Pro with LineageOS (Android 17). It does not ship.
 
+The prototype has since become Pinky's Android app ([android-app.md](android-app.md)). What follows records it as it was: `android/standalone` folded into `android/companion`, `scripts/standalone.sh` became `scripts/androidcore.sh`, `policy.StandaloneApp` became `policy.IsPinkyScreen`, and the sockets `@pinky_standalone` and `@pinky_standalone_core` became the companion's own and `@pinky_core`.
+
 ### What was built
 
 - **An app of its own, Pinky Standalone (`app.pinky.standalone`).** Its Gradle project compiles the companion's sources with its own manifest, service and screens, so the shipped companion stays as it is. The companion only gained hooks a subclass can use: an open service class, `extraCommand`, `extraFeatures` and `defaultIdleDisableMs`. A product would grow the companion itself instead.
@@ -461,14 +463,14 @@ What stops it from being a product:
 
 ## Prototype results (iOS)
 
-Measured on 2026-11-11 on an iPhone 13 mini (iPhone14,4) with iOS 27.0.1 (24A446), sideloaded with a development profile, with the owner's OK. The code is kept in [ios/standalone](../../ios/standalone/README.md); it does not ship. At run time no computer took part. A Mac installed the app, made the pairing file once and read the phone's log for the numbers below. The engine acted only on Calculator and the home screen. Afterwards the app was uninstalled and the pairing file deleted.
+Measured on 2026-11-11 on an iPhone 13 mini (iPhone14,4) with iOS 27.0.1 (24A446), sideloaded with a development profile, with the owner's OK. The prototype has since grown into Pinky's iPhone app ([ios](../../ios/README.md), [iphone-app.md](iphone-app.md)); the numbers below are the prototype's. At run time no computer took part. A Mac installed the app, made the pairing file once and read the phone's log for the numbers below. The engine acted only on Calculator and the home screen. Afterwards the app was uninstalled and the pairing file deleted.
 
 It answers three questions: can a sideloaded app act on another app (Q1), does it stay alive while that app is in front (Q2), and does a whole task work, with an approval the agent cannot give itself and a Stop (Q3)? All three: yes, with the caveats below.
 
 ### What was built
 
 - **A loopback of its own.** A packet-tunnel extension routes 10.7.0.1 and sends each packet back with source and destination swapped, as LocalDevVPN does. A connection to 10.7.0.1 reaches `remotepairingd` on the same phone.
-- **Pairing.** A RemotePairing host identity, paired once from a Mac the phone already trusts (`ios/standalone/cmd/rppair`). The phone shows nothing. The app carries the identity, pair-verifies, opens the TLS-PSK tunnel and gives it to Pinky's own iOS driver. From there the driver works as on a Mac: display stream, HID, `remoteAXService` and screenshots over RSD. The driver gained only an entry point for that (`OpenOverTunnel` and three small helpers in `internal/driver/ios/standalone.go`, built for iOS only); nothing the desktop app uses changed.
+- **Pairing.** A RemotePairing host identity, paired once from a Mac the phone already trusts (`ios/cmd/rppair`). The phone shows nothing. The app carries the identity, pair-verifies, opens the TLS-PSK tunnel and gives it to Pinky's own iOS driver. From there the driver works as on a Mac: display stream, HID, `remoteAXService` and screenshots over RSD. The driver gained only an entry point for that (`OpenOverTunnel` and three small helpers in `internal/driver/ios/standalone.go`, built for iOS only); nothing the desktop app uses changed.
 - **The engine.** A Go core, linked as a C library into both the app and the extension; either one can host it. It guards input: never while Pinky's own app is in front, never while an approval waits, never on a locked phone, and it cannot open Pinky. It runs the tests below and a small agent loop on the Messages API, with eight tools (observe, tap, swipe, type, key, launch, wait and request approval). The loop follows Ask Pinky (`internal/pilot` on the builtin-agent branch), but without the gateway: the engine's guard stands in for Pinky's rules.
 - **The app.** SwiftUI screens for the task, the model, the API key (kept in memory only), Start and Stop, and the approval card, whose Approve asks for Face ID or the passcode. A Live Activity offers Stop. Local notifications announce approvals and ended tasks; they carry no buttons and only open the app.
 - **For measuring.** A debug build starts a run from launch arguments, so a test needs no taps once the VPN configuration is allowed. The engine logs a heartbeat every 10 s and each tool call's name, time and outcome, never its arguments.
@@ -659,6 +661,8 @@ Turning Pinky off only stops the agent, so it is not the danger. The danger is t
 
 ### Android: one app, the companion grown up
 
+This is being built: [android-app.md](android-app.md).
+
 ```
 ┌──────────────── Pinky for Android (app.pinky.companion) ────────────────┐
 │ Kotlin UI: task view, approval screen (sensitive views, FLAG_SECURE),   │
@@ -714,7 +718,7 @@ Rough sizes for the Android app above, in weeks of focused work by someone who k
 | **Accessibility tier, total** | **about 9–15** | |
 | Shell tier: Shizuku or Wireless debugging on the phone, `getevent`, the hidden second screen, `WRITE_SECURE_SETTINGS` | 3–4 more | Most of `internal/driver/android` (shell, input, background displays, Take over) |
 
-For iOS, the enthusiast build above, starting from the prototype (`ios/standalone`):
+For iOS, the enthusiast build above, starting from the prototype (now Pinky's iPhone app in `ios/`; progress in [iphone-app.md](iphone-app.md)):
 
 | Piece | Weeks | Reuses |
 | --- | --- | --- |

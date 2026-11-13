@@ -24,12 +24,14 @@ import (
 	"time"
 
 	"github.com/DIYgod/pinky/internal/api"
+	"github.com/DIYgod/pinky/internal/driver/ios"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "0.0.0-dev"
 
 func main() {
+	ios.PinkyVersion = version // the iPhone app kit of this release
 	cmd := "app"
 	args := os.Args[1:]
 	if len(args) > 0 && (!strings.HasPrefix(args[0], "-") || isCommandFlag(args[0])) {
@@ -49,6 +51,8 @@ func main() {
 		err = runMCP(args)
 	case "devices":
 		err = runDevices(args)
+	case "task":
+		err = runTask(args)
 	case "companion":
 		err = runCompanion(args)
 	case "helper":
@@ -77,6 +81,13 @@ func main() {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(2)
 		}
+		var ee *exitError
+		if errors.As(err, &ee) {
+			if ee.err != nil {
+				fmt.Fprintf(os.Stderr, "pinky %s: %v\n", cmd, ee.err)
+			}
+			os.Exit(ee.code)
+		}
 		fmt.Fprintf(os.Stderr, "pinky %s: %v\n", cmd, err)
 		os.Exit(1)
 	}
@@ -104,12 +115,17 @@ Commands:
   mcp       run the MCP server on stdio (agents launch this); starts the
             gateway when none is running
   devices   list connected phones
+  task run|status|steer|cancel|list
+            hand Ask Pinky a task from a shell and follow it, as an agent
+            named "Pinky CLI" or -as name ("pinkyctl task help")
   companion install [phone]
-            install or update the Android companion app
-  helper install [--team ID] [--bundle-id ID] [--local-signing] [phone]
-            build the iPhone helper (WebDriverAgent) with Xcode, as
-            "Pinky Helper" with Pinky's icon, and install it on the phone;
-            run it again when its signature runs out (macOS)
+            install or update Pinky on the phone, Pinky's app for Android phones
+  helper install [--team ID] [--bundle-id ID] [--local-signing]
+                 [--helper-only] [phone]
+            build Pinky on the iPhone, Pinky's app for the iPhone, with
+            WebDriverAgent in it, with Xcode and install it on the phone
+            (--helper-only: the older Pinky Helper); run it again when its
+            signature runs out (macOS)
   token     print the agent token, which agents connecting over HTTP send
   quit      quit the running Pinky (the app or the daemon)
   update [--check]

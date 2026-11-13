@@ -57,10 +57,7 @@ func (g *Gateway) RemoveDevice(ctx context.Context, deviceID string, opt RemoveO
 		g.endLeaseLocked(l, OutcomeStopped, "")
 	}
 	d.removed = true
-	delete(g.devices, d.id)
-	delete(g.background, d.id)
-	delete(g.known, d.id)
-	delete(g.chosen, d.id)
+	g.dropSettingsLocked(d.id)
 	forgetTaskWay(d)
 	g.removed[d.id] = true
 	if g.paused[d.id] {
@@ -131,6 +128,37 @@ func (g *Gateway) RemoveDevice(ctx context.Context, deviceID string, opt RemoveO
 	g.emit(Event{Kind: EventTasks, DeviceID: id})
 	g.emit(Event{Kind: EventNeeds, DeviceID: id})
 	return err
+}
+
+// dropSettingsLocked takes the phone off the list with what the gateway
+// keeps about it in memory. The caller holds g.mu.
+func (g *Gateway) dropSettingsLocked(id string) {
+	delete(g.devices, id)
+	delete(g.background, id)
+	delete(g.known, id)
+	delete(g.chosen, id)
+}
+
+// forgetSettings deletes what is saved about a phone that left the list
+// without the person removing it (an emulator that went away, discover):
+// its record and settings, its read-only switch, how Pinky connects to it,
+// and approvals about it that no task holds. Its history stays, and it is
+// not kept off the list.
+func (g *Gateway) forgetSettings(p driver.Provider, id string) {
+	if g.store != nil {
+		g.rec.do(func(ctx context.Context) error { return g.store.ForgetDevice(ctx, id) })
+	}
+	gone := g.approvals.WithdrawWhere(func(i approval.Info) bool { return i.Binding.Device == id }, OutcomeStopped)
+	g.closePendingSteps(gone, OutcomeStopped)
+	g.stopHubs(id)
+	if err := g.policy.ForgetDevice(id); err != nil {
+		g.log.Warn("forget device: read-only switch", "device", id, "err", err)
+	}
+	if cc, ok := p.(driver.ConnectionChooser); ok {
+		if err := cc.SetConnection(id, driver.ConnectionAuto); err != nil {
+			g.log.Warn("forget device: connection", "device", id, "err", err)
+		}
+	}
 }
 
 // deleteDeviceHistory deletes the tasks of a removed phone that started

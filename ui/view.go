@@ -31,16 +31,19 @@ func (a *app) view(c *mg.Context) {
 	mg.Row(c).Fill().AlignItems(mg.Stretch).Children(func() {
 		a.sidebar(c)
 		mg.Column(c).Grow(1).MinWidth(0).Background(p.bg).Children(func() {
-			switch a.page {
-			case pageActivity:
-				a.activityPage(c)
-			case pageSettings:
-				a.settingsPage(c)
-			case pageAddPhone:
-				a.addPhonePage(c)
-			default:
-				a.phonesPage(c)
-			}
+			// A page fades in where the last one was.
+			mg.Column(c.Key(a.page)).Grow(1).MinHeight(0).Transition(swapIn()).Children(func() {
+				switch a.page {
+				case pageActivity:
+					a.activityPage(c)
+				case pageSettings:
+					a.settingsPage(c)
+				case pageAddPhone:
+					a.addPhonePage(c)
+				default:
+					a.phonesPage(c)
+				}
+			})
 		})
 	})
 	a.telemetryDialogs(c)
@@ -49,6 +52,7 @@ func (a *app) view(c *mg.Context) {
 	a.removeDialog(c)
 	a.awayDialog(c)
 	a.phoneWiFiDialog(c)
+	a.schedDialog(c)
 	a.sweepMirrors()
 	// A QR pairing lasts while its step shows, and a recording plays while
 	// Activity does.
@@ -103,7 +107,7 @@ func (a *app) sidebar(c *mg.Context) {
 			a.add.reset(a)
 		}
 		add.TextColor(navInk(c, add, on)).Label(locales.SidebarAddPhone()).Children(func() {
-			mg.Icon(c, icPlus).FontSize(16)
+			mg.Icon(c, icPlus).FontSize(iconBody)
 			mg.Text(c, locales.SidebarAddPhone()).FontSize(fsBody)
 		})
 
@@ -111,25 +115,28 @@ func (a *app) sidebar(c *mg.Context) {
 		a.agentCard(c)
 		a.updateCards(c)
 		mg.Column(c).Gap(2).Padding(sp2, 0, 0, 0).BorderWidth(1, 0, 0, 0).BorderColor(p.line).Children(func() {
-			footRow(c, icHistory, locales.SidebarActivity(), a.page == pageActivity, func() {
+			footRow(c, icHistory, icHistoryOn, locales.SidebarActivity(), a.page == pageActivity, func() {
 				a.page = pageActivity
 				a.act.load(a)
 			})
-			footRow(c, icSettings, locales.SidebarSettings(), a.page == pageSettings, func() { a.page = pageSettings })
+			footRow(c, icSettings, icSettingsOn, locales.SidebarSettings(), a.page == pageSettings, func() { a.page = pageSettings })
 			// Stop all shows once Pinky lists a phone: before that it has
 			// nothing to stop. Its shortcut works either way.
 			if len(a.devices) == 0 {
 				return
 			}
 			stop := mg.ButtonBase(c).Height(32).Padding(0, 10, 0, rowInset).Radius(rControl).Gap(10).AlignItems(mg.Center).Justify(mg.Start).Label(locales.SidebarStopAll())
-			if stop.Hovered() {
+			switch {
+			case stop.Pressed():
+				stop.Background(p.redTint.Mix(p.redLine, 0.5))
+			case stop.Hovered():
 				stop.Background(p.redTint)
 			}
 			if stop.Clicked() {
 				a.stopAll()
 			}
 			stop.TextColor(p.red).Children(func() {
-				mg.Icon(c, icStop).FontSize(16)
+				mg.Icon(c, icStop).FontSize(iconBody)
 				mg.Text(c, locales.SidebarStopAll()).FontSize(fsBody).Grow(1)
 				mg.Text(c, shortcutLabel()).FontSize(fsCaption).TextColor(p.ink3)
 			})
@@ -166,14 +173,15 @@ func (a *app) sidebarPhones(c *mg.Context) {
 				reveal(row, allPhones)
 			}
 			row.MinHeight(32).TextColor(navInk(c, row, on)).Label(locales.SidebarAllPhones()).Children(func() {
-				mg.Icon(c, icGrid).FontSize(16)
+				mg.Icon(c, pick(on, icGridOn, icGrid)).FontSize(iconBody)
 				mg.Text(c, locales.SidebarAllPhones()).FontSize(fsBody)
 			})
 		}
 		for _, d := range a.devices {
 			d := d
 			on := phones && a.sel == d.Info.ID
-			row := phoneRow(c.Key(d.Info.ID), on)
+			// A phone joining or leaving the list grows in or closes up.
+			row := phoneRow(c.Key(d.Info.ID), on).Transition(listRow())
 			if row.Clicked() {
 				a.selectPhone(d.Info.ID)
 			}
@@ -190,8 +198,13 @@ func (a *app) sidebarPhones(c *mg.Context) {
 					if d.Status == gateway.DeviceOffline {
 						name.TextColor(p.ink2)
 					}
-					mg.Text(c, statusLine(d)).FontSize(fsCaption).TextColor(p.ink2).SingleLine()
+					// No empty second line: it would lift the name off the
+					// dot beside it.
+					if line := statusLine(d); line != "" {
+						textSwap(mg.Text(c, line).FontSize(fsCaption).TextColor(p.ink2).SingleLine())
+					}
 				})
+				a.webMirrorBadge(c, d.Info.ID)
 			})
 		}
 	})
@@ -205,10 +218,12 @@ func phoneRow(c *mg.Context, on bool) mg.Element {
 	case on:
 		row.Background(p.ink.Alpha(wingSelAlpha))
 		selectionMark(c, row)
+	case row.Pressed():
+		row.Background(p.ink.Alpha(wingSelAlpha))
 	case row.Hovered():
 		row.Background(p.ink.Alpha(wingHoverAlpha))
 	}
-	return row
+	return fillFade(row)
 }
 
 // A sidebar row's fill when selected and when hovered: the ink, faint, so
@@ -228,16 +243,26 @@ func navInk(c *mg.Context, row mg.Element, on bool) mg.Color {
 	return p.ink2
 }
 
-// footRow is a row at the foot of the sidebar: Activity, Settings.
-func footRow(c *mg.Context, ic *mg.SVG, text string, on bool, click func()) {
+// footRow is a row at the foot of the sidebar: Activity, Settings. Its
+// icon is icOn while the row is selected.
+func footRow(c *mg.Context, ic, icOn *mg.SVG, text string, on bool, click func()) {
 	row := phoneRow(c, on).Height(32).Label(text)
 	if row.Clicked() {
 		click()
 	}
 	row.TextColor(navInk(c, row, on)).Children(func() {
-		mg.Icon(c, ic).FontSize(16)
+		mg.Icon(c, pick(on, icOn, ic)).FontSize(iconBody)
 		mg.Text(c, text).FontSize(fsBody)
 	})
+}
+
+// pick returns a if on, else b: a selected row's filled icon, or the
+// line one.
+func pick(on bool, a, b *mg.SVG) *mg.SVG {
+	if on {
+		return a
+	}
+	return b
 }
 
 // statusDot is a phone's dot: green and pulsing while an agent works,
@@ -281,4 +306,13 @@ func unlockWords() (button, keep string) {
 		return locales.PlatformUnlockWindows(), locales.PlatformUnlockKeepWindows()
 	}
 	return locales.PlatformUnlockOther(), locales.PlatformUnlockKeepOther()
+}
+
+// unlockIcon is the icon of Unlock: a fingerprint where it says Touch ID,
+// an open lock where Windows Hello or the keyring asks.
+func unlockIcon() *mg.SVG {
+	if runtime.GOOS == "darwin" {
+		return icTouchID
+	}
+	return icUnlock
 }

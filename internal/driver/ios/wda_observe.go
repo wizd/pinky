@@ -207,7 +207,7 @@ func wdaScreenElements(root *wdaNode, scale float64, w, h int, appID string) ([]
 				case label != "" || role != screen.RoleOther:
 					out = append(out, screen.Element{
 						Role: role, Label: label, Bounds: r, States: states,
-						Source: screen.SourceTree, Path: path, ID: e.Ident,
+						Source: screen.SourceTree, Path: path, ID: e.Ident, Content: raxContent(e, role),
 					})
 					if label != "" {
 						said = norm(label)

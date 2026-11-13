@@ -158,24 +158,60 @@ type btnOpt struct {
 	icon  *mg.SVG
 	label string // accessible name for an icon-only button
 	dark  bool   // the dark, translucent buttons over a tile
+	// maxW is the most the button is wide, where it has less room than
+	// its label takes: the label then keeps its start and its end, around
+	// an ellipsis.
+	maxW float32
+	// shrink keeps a button of words no wider than the row or column it is
+	// in, its label cut as with maxW where that has less room, and then
+	// whole in a tooltip.
+	shrink bool
+}
+
+// A button's sizes: its height and the padding beside its label, for a
+// regular and a small one, and its border (button, buttonWidth).
+const (
+	buttonHeight      = 34
+	buttonPadX        = 14
+	smallButtonHeight = 28
+	smallButtonPadX   = 10
+	buttonBorder      = 1
+)
+
+// buttonSize returns a button's height, the padding beside its label and
+// the size of its label: a small button's when small.
+func buttonSize(small bool) (h, px, fs float32) {
+	if small {
+		return smallButtonHeight, smallButtonPadX, fsSmall
+	}
+	return buttonHeight, buttonPadX, fsBody
+}
+
+// buttonWidth returns how wide button draws a button with the label text
+// and no icon, for what lays out the words beside it.
+func buttonWidth(c *mg.Context, text string, small bool) float32 {
+	_, px, fs := buttonSize(small)
+	w, _ := c.MeasureText(0, mg.Span{Text: text, Size: fs, Weight: fwMedium})
+	return w + 2*(px+buttonBorder)
 }
 
 // button draws the prototype's .btn: 34 high, a border, a quiet hover.
 func button(c *mg.Context, text string, o btnOpt) mg.Element {
 	p := pal(c)
 	b := mg.ButtonBase(c).Gap(7).Justify(mg.Center).AlignItems(mg.Center)
-	h, px, r, fs := float32(34), float32(14), float32(8), float32(14)
+	h, px, fs := buttonSize(o.small)
+	r := float32(8)
 	if o.small {
-		h, px, r, fs = 28, 10, 7, 13
+		r = 7
 	}
 	b.Height(h).Padding(0, px).Radius(r)
 	bg, border, fg := p.panel, p.line2, p.ink
-	hovered := b.Hovered()
+	hovered, pressed := b.Hovered(), b.Pressed()
 	switch o.kind {
 	case btnPrimary:
 		bg, border, fg = p.accentBtn, p.accentBtn, p.white
 		switch {
-		case b.Pressed():
+		case pressed:
 			bg = bg.Mix(mg.RGB(0, 0, 0), 0.12)
 		case hovered:
 			bg = bg.Mix(mg.RGB(255, 255, 255), 0.08)
@@ -183,11 +219,17 @@ func button(c *mg.Context, text string, o btnOpt) mg.Element {
 		border = bg
 	case btnRed:
 		fg, border = p.red, p.redLine
-		if hovered {
+		switch {
+		case pressed:
+			bg = p.redTint.Mix(p.redLine, 0.5)
+		case hovered:
 			bg = p.redTint
 		}
 	default:
-		if hovered {
+		switch {
+		case pressed:
+			bg = p.sel
+		case hovered:
 			bg = p.bg3
 		}
 	}
@@ -197,7 +239,7 @@ func button(c *mg.Context, text string, o btnOpt) mg.Element {
 			fg = hex("#ffb4a8")
 		}
 	}
-	b.Background(bg).Border(1, border).TextColor(fg)
+	fillFade(b.Background(bg).Border(buttonBorder, border).TextColor(fg))
 	if !o.dark && !p.dark {
 		// A push button stands a hair off the page, as the system's do.
 		b.Shadow(0, 1, 1, 0, mg.RGBA(18, 18, 28, 0.04))
@@ -209,13 +251,40 @@ func button(c *mg.Context, text string, o btnOpt) mg.Element {
 	}
 	b.Children(func() {
 		if o.icon != nil {
-			mg.Icon(c, o.icon).FontSize(18)
+			mg.Icon(c, o.icon).FontSize(iconBody)
 		}
 		if text != "" {
-			mg.Text(c, text).FontSize(fs).FontWeight(fwMedium).NoWrap()
+			t := mg.Text(c, text).FontSize(fs).FontWeight(fwMedium)
+			if o.maxW > 0 || o.shrink {
+				t.SingleLine().TruncateMiddle().MinWidth(0)
+			} else {
+				t.NoWrap()
+			}
 		}
 	})
+	if o.maxW > 0 {
+		b.MaxWidth(o.maxW)
+	}
+	if o.shrink {
+		b.MaxWidthPercent(100)
+		// Narrower than its label in the last frame, which a tooltip does
+		// not change: the label whole.
+		if lb := b.LayoutBounds(); lb.W > 0 && lb.W < buttonWidth(c, text, o.small)-0.01 {
+			b.Tooltip(text)
+		}
+	}
 	return b
+}
+
+// ringInside draws e's focus ring inside its edge rather than around it,
+// for an element in what clips its surroundings, as a list that scrolls,
+// and returns e.
+func ringInside(c *mg.Context, e mg.Element) mg.Element {
+	w := c.Theme().FocusRingWidth
+	if w <= 0 {
+		w = 2 // MyGo's, where the theme sets none
+	}
+	return e.FocusRingOffset(-w)
 }
 
 // linkButton is the prototype's .link: accent text that underlines on hover.
@@ -232,6 +301,13 @@ func linkButton(c *mg.Context, text string) mg.Element {
 	return b
 }
 
+// quietButtonWidth returns how wide quietButton draws text, for what lays
+// it out beside other buttons.
+func quietButtonWidth(c *mg.Context, text string) float32 {
+	w, _ := c.MeasureText(0, mg.Span{Text: text, Size: fsSmall, Weight: fwMedium})
+	return w
+}
+
 // quietButton is a text button in the secondary ink.
 func quietButton(c *mg.Context, text string) mg.Element {
 	p := pal(c)
@@ -246,9 +322,11 @@ func quietButton(c *mg.Context, text string) mg.Element {
 	return b
 }
 
-// dot is the prototype's 8-pixel status dot; live ones pulse.
+// dot is the prototype's 8-pixel status dot; live ones pulse. A dot that
+// changes color, as a phone's from working to waiting, fades to it.
 func dot(c *mg.Context, col mg.Color, live bool) mg.Element {
-	d := mg.Box(c).Size(8, 8).Radius(4).Background(col).Shrink(0)
+	d := mg.Box(c).Size(8, 8).Radius(4).Shrink(0)
+	d.Background(colorTo(d, "color", col))
 	if live && !c.Preferences().ReduceMotion {
 		d.Opacity(0.35 + 0.65*d.Loop("pulse", 1600*time.Millisecond, mg.Bounce(mg.EaseInOut)))
 	}
@@ -280,7 +358,7 @@ func toggle(c *mg.Context, on *bool, label string) mg.Element {
 		x = 18
 	}
 	x = s.Animate("knob", x, 150*time.Millisecond)
-	s.Background(bg).Draw(func(pt *mg.Painter, r mg.Rect) {
+	s.Background(colorTo(s, "track", bg)).Draw(func(pt *mg.Painter, r mg.Rect) {
 		k := mg.Rect{X: r.X + x, Y: r.Y + 2, W: 16, H: 16}
 		pt.Shadow(k, 8, 0, 1, 2, 0, mg.RGBA(0, 0, 0, 0.25))
 		pt.Fill(k, p.white, 8)
@@ -366,7 +444,15 @@ func sheet(c *mg.Context, open *bool, fn func()) mg.Element {
 	p := pal(c)
 	w, h := c.Size()
 	return mg.DialogBase(c, open, func(back, panel mg.Element) {
-		back.Background(mg.RGBA(0, 0, 0, 0.32))
+		// The backdrop fades in, and the dialog with it, rising a little
+		// and growing from just under its size. Both go at once when
+		// closed: MyGo builds no dialog to see go.
+		back.Background(mg.RGBA(0, 0, 0, 0.32)).Transition(mg.ElementTransition{
+			Colors: true, Duration: motionFor(motionShort), Enter: &mg.Motion{}, ExitDuration: -1,
+		})
+		panel.Transition(mg.ElementTransition{
+			Colors: true, Duration: motionFor(motionMove), Enter: &mg.Motion{Y: 8, Scale: 0.98}, ExitDuration: -1,
+		})
 		panel.Padding(sp6).Gap(sp3).Radius(rSheet).Background(p.panel).Border(1, p.line).
 			MaxWidth(w-2*sp6).MaxHeight(h-2*sp6).
 			Shadow(0, 1, 3, 0, p.shadowLo).Shadow(0, 24, 60, 0, mg.RGBA(0, 0, 0, 0.22))
@@ -381,27 +467,45 @@ func menuPanel(c *mg.Context, panel mg.Element) mg.Element {
 }
 
 // menuItem is the prototype's .mi row.
-func menuItem(c *mg.Context, text string, col mg.Color) mg.Element {
+func menuItem(c *mg.Context, ic *mg.SVG, text string, col mg.Color) mg.Element {
 	p := pal(c)
-	b := mg.ButtonBase(c).Label(text).MinHeight(32).Padding(6, 10).Radius(rSmall).Gap(10).AlignItems(mg.Center).Justify(mg.Start)
-	if b.Hovered() || b.Focused() {
+	b := mg.ButtonBase(c).Label(text).MinHeight(32).Padding(6, 10).Radius(rSmall).Gap(menuGap).AlignItems(mg.Center).Justify(mg.Start)
+	switch {
+	case b.Pressed():
+		b.Background(p.sel)
+	case b.Hovered() || b.Focused():
 		b.Background(p.bg3)
 	}
+	fillFade(b)
 	if col == (mg.Color{}) {
 		col = p.ink
 	}
-	b.Children(func() { mg.Text(c, text).FontSize(fsBody).TextColor(col) })
+	b.TextColor(col).Children(func() {
+		mg.Icon(c, ic).FontSize(iconBody)
+		mg.Text(c, text).FontSize(fsBody)
+	})
 	return b
 }
+
+// menuGap is the room between a menu row's icon and its words, and
+// menuIndent the room before content that lines up with the words.
+const (
+	menuGap    = 10
+	menuIndent = iconBody + menuGap
+)
 
 // menuText is the words of a menu row with a line under its name, as
 // Work in background and Pause connection have: the name at the size of
 // menuItem's, the line smaller and secondary.
-func menuText(c *mg.Context, name, desc string, ink mg.Color) {
+func menuText(c *mg.Context, ic *mg.SVG, name, desc string, ink mg.Color) {
 	p := pal(c)
-	mg.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-		mg.Text(c, name).FontSize(fsBody).TextColor(ink)
-		mg.Text(c, desc).FontSize(fsCaption).LineHeight(1.4).TextColor(p.ink2)
+	mg.Row(c).Grow(1).MinWidth(0).Gap(menuGap).AlignItems(mg.Start).Children(func() {
+		// The icon sits beside the name, the first line.
+		mg.Icon(c, ic).FontSize(iconBody).TextColor(ink).Margin(1, 0, 0, 0)
+		mg.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+			mg.Text(c, name).FontSize(fsBody).TextColor(ink)
+			mg.Text(c, desc).FontSize(fsCaption).LineHeight(1.4).TextColor(p.ink2)
+		})
 	})
 }
 

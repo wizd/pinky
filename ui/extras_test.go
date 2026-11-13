@@ -2,8 +2,10 @@ package ui
 
 import (
 	"testing"
+	"time"
 
 	"github.com/DIYgod/pinky/internal/gateway"
+	"github.com/DIYgod/pinky/ui/fakeapi"
 )
 
 // The gateway's step texts, as the client words them.
@@ -32,5 +34,29 @@ func TestStepDisplay(t *testing.T) {
 		if text != c.want || sub != c.wsub || kind != c.wantKind {
 			t.Errorf("%q (%s, task %s) = %q / %q / %v, want %q / %q / %v", c.text, c.stat, c.state, text, sub, kind, c.want, c.wsub, c.wantKind)
 		}
+	}
+}
+
+// Step screenshots no build asked for during mediaKeep let go of their
+// pixels; the ones still shown stay, and the sweep comes again for them.
+func TestSweepMedia(t *testing.T) {
+	ta := newTestApp(t, fakeapi.ManyPhones)
+	ta.mediaCache["old"] = &mediaEntry{usedAt: time.Now().Add(-mediaKeep)}
+	ta.mediaCache["new"] = &mediaEntry{usedAt: time.Now()}
+	ta.mediaSweep = true
+	ta.sweepMedia()
+	if _, ok := ta.mediaCache["old"]; ok {
+		t.Error("a screenshot unused for mediaKeep stayed loaded")
+	}
+	if _, ok := ta.mediaCache["new"]; !ok {
+		t.Error("a screenshot in use was let go")
+	}
+	if !ta.mediaSweep {
+		t.Error("no sweep due for the screenshot that stayed")
+	}
+	ta.mediaCache["new"].usedAt = time.Now().Add(-mediaKeep)
+	ta.sweepMedia()
+	if len(ta.mediaCache) != 0 || ta.mediaSweep {
+		t.Errorf("after the last went: %d loaded, sweep due %v", len(ta.mediaCache), ta.mediaSweep)
 	}
 }

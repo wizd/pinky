@@ -34,6 +34,9 @@ type State struct {
 	// them again by itself, and tells the person once how to install it by
 	// hand. An entry goes once the phone has a current companion.
 	CompanionByHand map[string]CompanionByHand `json:"companion_by_hand,omitempty"`
+	// PhoneTasksSeen: the person put away the card that says Pinky's app
+	// on a phone can do tasks by itself, so it shows no more.
+	PhoneTasksSeen bool `json:"phone_tasks_seen,omitempty"`
 }
 
 // CompanionByHand is a companion build a phone refused over USB.

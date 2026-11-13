@@ -101,10 +101,12 @@ func defaultCheckup(info driver.Info) driver.Checkup {
 func companionCheck(cs driver.CompanionState) driver.Check {
 	c := driver.Check{ID: driver.CheckCompanion, Detail: "the companion app is " + string(cs)}
 	switch cs {
-	case "", driver.CompanionOn, driver.CompanionReady:
+	case "", driver.CompanionOn, driver.CompanionReady, driver.CompanionManualOn:
 		c.Status, c.Detail = driver.CheckPass, "the companion app is "+string(cs)
 	case driver.CompanionOff:
 		c.Status, c.Fix = driver.CheckFail, driver.FixTurnOnCompanion
+	case driver.CompanionManual:
+		c.Status, c.Fix = driver.CheckFail, driver.FixTurnOnCompanionByHand
 	case driver.CompanionMissing:
 		c.Status, c.Fix = driver.CheckFail, driver.FixInstallCompanion
 	case driver.CompanionOutdated, driver.CompanionPublicKey:
@@ -132,7 +134,7 @@ func XiaomiCheckup() driver.Checkup {
 
 // errRestricted is the error a Xiaomi phone gives an install over USB while
 // Install via USB is off.
-var errRestricted = errors.New("android: install pinky-companion.apk: Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]")
+var errRestricted = errors.New("android: install pinky-android.apk: Failure [INSTALL_FAILED_USER_RESTRICTED: Install canceled by user]")
 
 // Unplug takes a phone offline, as when its cable comes out: like the
 // gateway, without the step it may have waited for.

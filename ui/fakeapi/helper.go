@@ -54,7 +54,7 @@ func (a *API) InstallHelper(ctx context.Context, deviceID, team string, progress
 	h := &a.hlp
 	if !h.can {
 		a.mu.Unlock()
-		return &driver.HelperInstallError{Fix: driver.HelperFixXcode, Err: errors.New("installing the iPhone helper needs a Mac with Xcode")}
+		return &driver.HelperInstallError{Fix: driver.HelperFixXcode, Err: errors.New("installing Pinky on the iPhone needs a Mac with Xcode")}
 	}
 	if deviceID != "" {
 		d := a.device(deviceID)
@@ -123,7 +123,7 @@ func (a *API) InstallHelper(ctx context.Context, deviceID, team string, progress
 	}
 	a.mu.Unlock()
 	for _, id := range ids {
-		a.SetIPhone(id, driver.Info{State: driver.StateOnline, HelperExpires: time.Now().Add(helperValid)})
+		a.SetIPhone(id, driver.Info{State: driver.StateOnline, HelperExpires: a.opt.Now().Add(helperValid)})
 	}
 	return nil
 }

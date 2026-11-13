@@ -280,7 +280,7 @@ func TestPhoneAppRefuses(t *testing.T) {
 	ctx := context.Background()
 	x := newExtraDev("pixel", "Pixel 9")
 	x.pkgs = map[string]driver.Package{
-		"companion": {ID: "app.pinky.companion", Name: "Pinky Companion", Version: "9"},
+		"companion": {ID: "app.pinky.companion", Name: "Pinky", Version: "9"},
 		"settings":  {ID: "com.android.settings", Name: "Settings", Version: "99"},
 		"chase":     {ID: "com.chase.sig.android", Name: "Chase", Version: "5.0"},
 	}
@@ -311,7 +311,7 @@ func TestPhoneAppRefuses(t *testing.T) {
 	}
 	steps := appSteps(g, s)
 	if steps[0] != "Blocked by “System apps”: stop “Settings” [blocked_by_policy]" ||
-		steps[4] != "Blocked by “Pinky's own apps”: install “Pinky Companion” 9 [blocked_by_policy]" {
+		steps[4] != "Blocked by “Pinky's own apps”: install “Pinky” 9 [blocked_by_policy]" {
 		t.Fatalf("steps %q", steps)
 	}
 

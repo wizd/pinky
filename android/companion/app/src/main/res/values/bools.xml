@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Whether Pinky's screens for running tasks on the phone itself show,
+         with the core and the permissions they need. On in every build
+         since tasks on the phone shipped; a build that turns it off keeps
+         only desktop mode (docs/notes/android-app.md). -->
+    <bool name="on_phone_ui">true</bool>
+</resources>

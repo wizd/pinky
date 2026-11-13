@@ -29,7 +29,9 @@ import (
 type mirror struct {
 	a       *app
 	id      string
-	agent   bool // the display an agent works on in the background, which takes no input
+	agent   bool   // the display an agent works on in the background, which takes no input
+	task    string // an agent's display: the task it belongs to
+	ownTask string // an agent's display: a task on the phone's own screen (gateway.ErrOwnScreen), not asked for again
 	gen     int
 	cancel  context.CancelFunc
 	player  *video.Player
@@ -188,7 +190,7 @@ func (m *mirror) open() {
 	}
 	m.opening = true
 	m.openedAt, m.firstAt, m.holdDue = time.Now(), time.Time{}, false
-	a := m.a
+	a, task := m.a, m.task
 	go func() {
 		logf("pinky: mirror %s: opening the stream (gen %d, agent %v)", m.id, gen, m.agent)
 		if m.agent {
@@ -214,10 +216,11 @@ func (m *mirror) open() {
 				s.Close()
 			}
 		}
-		logf("pinky: mirror %s: stream opened (gen %d): %v", m.id, gen, err)
 		if err != nil {
-			a.logInfo(fmt.Sprintf("pinky: mirror %s: stream opened", m.id), "err", err)
+			logf("pinky: mirror %s: could not open the stream (gen %d): %v", m.id, gen, err)
+			a.logInfo(fmt.Sprintf("pinky: mirror %s: could not open the stream", m.id), "err", err)
 		} else {
+			logf("pinky: mirror %s: stream opened (gen %d)", m.id, gen)
 			a.logInfo(fmt.Sprintf("pinky: mirror %s: stream opened", m.id))
 		}
 		a.post(func() {
@@ -230,15 +233,21 @@ func (m *mirror) open() {
 			}
 			m.opening = false
 			if err != nil {
+				const wait = 3 * time.Second
 				m.state, m.err = "failed", err
-				m.retry = time.Now().Add(3 * time.Second)
+				m.retry = time.Now().Add(wait)
 				if errors.Is(err, video.ErrNotFound) {
 					a.videoErr = err
-					m.logFailed(err, time.Time{}) // no retry: the decoder is missing
+					m.logFailed(err, 0) // no retry: the decoder is missing
+					return
+				}
+				if m.agent && errors.Is(err, gateway.ErrOwnScreen) {
+					m.ownTask = task
+					m.logFailed(err, 0) // no retry during this task (agentMirrorFor)
 					return
 				}
 				m.retryLater()
-				m.logFailed(err, m.retry)
+				m.logFailed(err, wait)
 				return
 			}
 			m.player, m.state = p, "playing"
@@ -257,19 +266,21 @@ func (m *mirror) open() {
 // ended records that the mirror's stream ended after it played, and writes
 // it to the log: the mirror tries again in two seconds.
 func (m *mirror) ended(err error) {
+	const wait = 2 * time.Second
 	m.state, m.err = "failed", err
-	m.retry = time.Now().Add(2 * time.Second)
-	m.logFailed(err, m.retry)
+	m.retry = time.Now().Add(wait)
+	m.logFailed(err, wait)
 	m.retryLater()
 }
 
-// logFailed writes that the mirror's stream failed, with the error and
-// when the mirror tries again: the line that shows an unstable picture in
-// the person's log. A zero retry means the mirror will not try again.
-func (m *mirror) logFailed(err error, retry time.Time) {
+// logFailed writes that the mirror's stream failed, with the error and how
+// long the mirror waits before it tries again: the line that shows an
+// unstable picture in the person's log. No wait means the mirror will not
+// try again.
+func (m *mirror) logFailed(err error, wait time.Duration) {
 	args := []any{"err", err}
-	if !retry.IsZero() {
-		args = append(args, "retry_in", time.Until(retry).Round(time.Second))
+	if wait > 0 {
+		args = append(args, "retry_in", wait)
 	}
 	m.a.logInfo(fmt.Sprintf("pinky: mirror %s: stream failed", m.id), args...)
 }
@@ -550,7 +561,7 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 				pill.Padding(6, 10).Gap(6)
 			}
 			pill.Children(func() {
-				mg.Icon(c, icLock).FontSize(16)
+				mg.Icon(c, icLock).FontSize(iconBody)
 				label := locales.MirrorLocked(d.Info.Name)
 				if tile {
 					label = locales.MirrorLockedTile()
@@ -566,7 +577,7 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 			})
 		case m.state == "failed":
 			mg.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(8).Padding(20).PassThrough().Children(func() {
-				mg.Icon(c, icAlert).FontSize(22).TextColor(hex("#f7a74e"))
+				mg.Icon(c, icAlert).FontSize(iconBig).TextColor(hex("#f7a74e"))
 				if !tile {
 					mg.Text(c, mirrorError(m.err)).FontSize(fsSmall).TextColor(hex("#d0d0d8")).TextAlign(mg.Center).MaxWidth(240)
 				}

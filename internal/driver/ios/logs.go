@@ -615,7 +615,8 @@ func (d *Device) DevBuild(ctx context.Context, app driver.App) (bool, error) {
 func (d *Device) StopAppLogs() { d.logs.stopAll() }
 
 func (d *Device) logPhone() logPhone {
-	return logPhone{entry: d.l.base, rsd: d.l.entry, logs: &d.logs, procs: func(ctx context.Context) (map[int]string, error) {
+	l := d.link()
+	return logPhone{entry: l.base, rsd: l.entry, logs: &d.logs, procs: func(ctx context.Context) (map[int]string, error) {
 		m, err := d.processPaths(ctx)
 		if err != nil {
 			return nil, err

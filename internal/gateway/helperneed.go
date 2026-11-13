@@ -125,7 +125,7 @@ func (g *Gateway) personHelper(ctx context.Context, d *device) (driver.Device, e
 	if !ok {
 		return nil, driver.ErrUnsupported
 	}
-	g.log.Info("person: moving to the helper", "device", d.id)
+	g.log.Info("person: moving to Pinky on the iPhone", "device", d.id)
 	if res := g.switchTo(ctx, d, cc, wayHelper); res != nil {
 		// The phone waits for a step first, the passcode iOS asks before
 		// the helper starts: it goes back on its own after switchBackAfter
@@ -137,12 +137,12 @@ func (g *Gateway) personHelper(ctx context.Context, d *device) (driver.Device, e
 		}
 		setup := d.info.Setup
 		g.mu.Unlock()
-		g.log.Info("person: the helper waits for a step", "device", d.id, "setup", setup)
+		g.log.Info("person: Pinky on the iPhone waits for a step", "device", d.id, "setup", setup)
 		return nil, &driver.SetupError{Setup: setup, Detail: personSetupWords(d.name(), setup)}
 	}
 	g.mu.Lock()
 	dev, there := d.dev, d.online && d.info.Backend == wayHelper && d.dev != nil
-	detail := "the helper did not start"
+	detail := "Pinky on the iPhone did not start"
 	if d.openErr != nil {
 		detail = strings.TrimSuffix(d.openErr.Error(), ".")
 	}
@@ -152,9 +152,9 @@ func (g *Gateway) personHelper(ctx context.Context, d *device) (driver.Device, e
 	g.mu.Unlock()
 	if !there {
 		// It did not come up on the helper: back to the person's choice.
-		g.log.Warn("person: the helper did not start", "device", d.id, "detail", detail)
+		g.log.Warn("person: Pinky on the iPhone did not start", "device", d.id, "detail", detail)
 		g.switchTo(ctx, d, cc, "")
-		return nil, fmt.Errorf("Pinky could not move %s to the WebDriverAgent helper: %s", d.name(), detail)
+		return nil, fmt.Errorf("Pinky could not move %s to Pinky on the iPhone: %s", d.name(), detail)
 	}
 	return dev, nil
 }
@@ -187,7 +187,7 @@ func (g *Gateway) pinchHelper(ctx context.Context, l *lease) *Result {
 	if s, err := g.observe(ctx, d, false); err == nil {
 		cur = s
 	}
-	res = statusResult(StatusStale, "%s Nothing was pinched yet: pinch again with the refs and points of the screen below, read through the helper.", note)
+	res = statusResult(StatusStale, "%s Nothing was pinched yet: pinch again with the refs and points of the screen below, read through Pinky on the iPhone.", note)
 	if cur == nil {
 		return res
 	}
@@ -197,7 +197,7 @@ func (g *Gateway) pinchHelper(ctx context.Context, l *lease) *Result {
 // personPinchHelper starts moving the phone to the helper for the person's
 // pinch on the mirror, when it may: the gesture that starts it is lost, as
 // are the touches until the phone is back, while its status reads
-// "Switching to the helper". It reports whether the touch is taken care
+// "Switching to Pinky on the iPhone". It reports whether the touch is taken care
 // of so.
 func (g *Gateway) personPinchHelper(d *device, a driver.TouchAction) bool {
 	g.mu.Lock()
@@ -226,7 +226,7 @@ func (g *Gateway) personPinchHelper(d *device, a driver.TouchAction) bool {
 // language (driver.SetupError's Setup).
 func personSetupWords(name, setup string) string {
 	if setup == driver.SetupPasscode {
-		return fmt.Sprintf("Enter the passcode on %s: iOS asks for it before the WebDriverAgent helper can work. Then try again.", name)
+		return fmt.Sprintf("Enter the passcode on %s: iOS asks for it before Pinky on the iPhone can work. Then try again.", name)
 	}
-	return fmt.Sprintf("%s needs a step before the WebDriverAgent helper can work: see its page. Then try again.", name)
+	return fmt.Sprintf("%s needs a step before Pinky on the iPhone can work: see its page. Then try again.", name)
 }

@@ -55,7 +55,7 @@ func TestAppChangeRefuses(t *testing.T) {
 		app  screen.App
 		rule string
 	}{
-		{screen.App{ID: "app.pinky.companion", Name: "Pinky Companion"}, RulePinkyApps},
+		{screen.App{ID: "app.pinky.companion", Name: "Pinky"}, RulePinkyApps},
 		{screen.App{ID: "app.pinky.companion.dev"}, RulePinkyApps},
 		{screen.App{ID: "app.pinky.companion@10"}, RulePinkyApps},
 		{screen.App{ID: "com.diygod.WebDriverAgentRunner.xctrunner", Name: "WebDriverAgentRunner-Runner"}, RulePinkyApps},

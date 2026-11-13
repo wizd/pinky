@@ -25,8 +25,26 @@ const inputSettle = 500 * time.Millisecond
 // anyone watches or Pinky sends input (see idle.go).
 type Device struct {
 	info driver.Info
-	l    *link
 	log  *slog.Logger
+
+	// l is the tunnel and the services on it; read it through link, which
+	// wakes a resting phone, or cur (rest.go). lmu guards l, resting and
+	// wakeLost; wakeMu serializes resting and waking.
+	lmu      sync.Mutex
+	l        *link
+	resting  bool
+	wakeLost error // why the last wake failed; the phone is gone then
+	wakeMu   sync.Mutex
+	working  atomic.Bool  // an agent works on the phone (AgentWorking)
+	usedAt   atomic.Int64 // unix nanos of the last use of the tunnel
+	openedAt time.Time    // guarded by mu
+	// redial opens a new link for a wake (tests); nil: dialLink.
+	redial func(context.Context) (*link, error)
+	// reconnect connects again, after a wake, what the device connects as
+	// it opens; nil: nothing.
+	reconnect func()
+	// hasInfo is set once the display info service answered (iOS 27).
+	hasInfo bool
 
 	mu      sync.Mutex // guards the fields below
 	m       *media
@@ -55,7 +73,9 @@ type Device struct {
 	streamOn    int
 	streamShows string
 	good        map[string]int
-	noVideo     *noVideoError // why the last stream start got no picture; nil once one did
+	noVideo     *noVideoError         // why the last stream start got no picture; nil once one did
+	echo        map[string]*echoCount // what input did on each display, by key (multiinput.go)
+	hidProbed   bool                  // the HID services were asked for once (probeHIDServices)
 
 	lastInput atomic.Int64 // unix nanos of the last input or launch Pinky sent
 
@@ -72,6 +92,7 @@ type Device struct {
 	restartFailedAt time.Time
 	restartErr      error
 
+	raxDialMu   sync.Mutex // one remoteAXService dial at a time (raxReady)
 	svcMu       sync.Mutex
 	info2       *cdService // deviceinfo
 	shot        *cdService // screencapture
@@ -139,6 +160,10 @@ func dialDevice(ctx context.Context, info driver.Info, log *slog.Logger) (*Devic
 
 // run starts what an open device runs beside its stream.
 func (d *Device) run() {
+	d.mu.Lock()
+	d.openedAt = time.Now()
+	d.mu.Unlock()
+	d.reconnect = d.reconnectCore
 	go d.idleLoop()
 	go d.orientLoop()
 	// Connect the accessibility service now (the phone answers its first
@@ -162,7 +187,16 @@ func (d *Device) run() {
 
 // start reads the phone's displays and starts the stream.
 func (d *Device) start(ctx context.Context) error {
-	svc, err := dialCoreDevice(d.l.entry, deviceInfoService)
+	if err := d.readDisplays(ctx); err != nil {
+		return err
+	}
+	return d.restartMedia(ctx)
+}
+
+// readDisplays connects the display info service and reads the phone's
+// displays, which the stream starts on.
+func (d *Device) readDisplays(ctx context.Context) error {
+	svc, err := dialCoreDevice(d.link().entry, deviceInfoService)
 	if err != nil {
 		return err
 	}
@@ -171,11 +205,10 @@ func (d *Device) start(ctx context.Context) error {
 		svc.Close()
 		return err
 	}
-	d.info2 = svc
+	d.svcMu.Lock()
+	d.info2, d.hasInfo = svc, true
+	d.svcMu.Unlock()
 	d.noteDisplays(di)
-	if err := d.restartMedia(ctx); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -257,7 +290,7 @@ func (d *Device) startStream(ctx context.Context) error {
 		stop(old)
 	}
 	sd := streamDisplay{
-		start:  func(ctx context.Context, id int) (*media, error) { return startMedia(ctx, d.l, id) },
+		start:  func(ctx context.Context, id int) (*media, error) { return startMedia(ctx, d.link(), id) },
 		stop:   stop,
 		gone:   d.linkGone,
 		wait:   readyWait,
@@ -268,7 +301,7 @@ func (d *Device) startStream(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	h, err := newHIDSession(d.l.entry)
+	h, err := newHIDSession(d.link().entry)
 	if err != nil {
 		stop(m)
 		return err
@@ -287,12 +320,28 @@ func (d *Device) startStream(ctx context.Context) error {
 	d.inputAt = m.started.Add(inputSettle)
 	d.streamedLocked(want, m.display, pw, ph)
 	m.setTurn(d.scr.turn())
+	shows := d.streamShows
+	probe := multi && !d.hidProbed
+	d.hidProbed = d.hidProbed || multi
 	d.mu.Unlock()
 	if multi {
 		d.log.Info("iphone: streaming display", "device", d.info.ID, "display", m.display, "tried", ids,
-			"wanted", want, "picture", fmt.Sprintf("%dx%d", pw, ph), "displays", describeDisplays(ds))
+			"wanted", want, "shows", shows, "picture", fmt.Sprintf("%dx%d", pw, ph), "displays", describeDisplays(ds),
+			"touch_service", surfaceTouchscreen)
+	}
+	if probe {
+		go d.logHIDServices()
 	}
 	return nil
+}
+
+// logHIDServices logs which HID services the phone lists, once a session
+// on a phone with several displays (probeHIDServices).
+func (d *Device) logHIDServices() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	reply, err := probeHIDServices(ctx, d.l.entry)
+	d.log.Info("iphone: the phone's HID services", "device", d.info.ID, "reply", reply, "err", errString(err))
 }
 
 // streamPlanLocked returns what a stream start is for (the key of the
@@ -423,11 +472,17 @@ func otherDisplayMayStart(err error) bool {
 
 // linkGone reports whether the tunnel the device was opened over stopped.
 func (d *Device) linkGone() bool {
-	if d.l == nil || d.l.tunnel == nil {
+	d.lmu.Lock()
+	l, resting, lost := d.l, d.resting, d.wakeLost
+	d.lmu.Unlock()
+	if lost != nil {
+		return true
+	}
+	if resting || l == nil || l.tunnel == nil {
 		return false
 	}
 	select {
-	case <-d.l.tunnel.Done():
+	case <-l.tunnel.Done():
 		return true
 	default:
 		return false
@@ -465,10 +520,16 @@ func (d *Device) live(ctx context.Context) (*media, *hidSession, error) {
 	if closed {
 		return nil, nil, fmt.Errorf("device closed: %w", driver.ErrOffline)
 	}
-	select {
-	case <-d.l.tunnel.Done():
-		return nil, nil, fmt.Errorf("%v: %w", d.l.tunnel.Err(), driver.ErrOffline)
-	default:
+	l := d.link() // wakes a resting phone
+	if l.tunnel != nil {
+		select {
+		case <-l.tunnel.Done():
+			if d.linkGone() {
+				return nil, nil, fmt.Errorf("%v: %w", l.tunnel.Err(), driver.ErrOffline)
+			}
+			return nil, nil, fmt.Errorf("%v", l.tunnel.Err())
+		default:
+		}
 	}
 	if m != nil && !m.stopped.Load() && h != nil && h.alive() && !moved {
 		return m, h, nil
@@ -489,7 +550,7 @@ func (d *Device) live(ctx context.Context) (*media, *hidSession, error) {
 			return m, h, nil // another caller fixed it
 		}
 		// The stream runs but the HID connection dropped: reconnect it.
-		nh, err := newHIDSession(d.l.entry)
+		nh, err := newHIDSession(d.link().entry)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -523,13 +584,11 @@ func (d *Device) Info() driver.Info { return d.info }
 // gateway reads driver.ErrOffline as the phone having dropped, and opens it
 // again over the connection it is on now.
 func (d *Device) gone(err error) error {
-	if err == nil || errors.Is(err, driver.ErrOffline) || d.l == nil || d.l.tunnel == nil {
+	if err == nil || errors.Is(err, driver.ErrOffline) {
 		return err
 	}
-	select {
-	case <-d.l.tunnel.Done():
+	if d.linkGone() {
 		return fmt.Errorf("%v: %w", err, driver.ErrOffline)
-	default:
 	}
 	return err
 }
@@ -602,7 +661,27 @@ func (d *Device) display() screenInfo {
 func (d *Device) hasDisplayInfo() bool {
 	d.svcMu.Lock()
 	defer d.svcMu.Unlock()
-	return d.info2 != nil
+	return d.hasInfo
+}
+
+// infoSvc returns the display info service, connecting it again after the
+// phone rested; nil below iOS 27, where there is none.
+func (d *Device) infoSvc() *cdService {
+	d.svcMu.Lock()
+	svc, has := d.info2, d.hasInfo
+	d.svcMu.Unlock()
+	if svc != nil || !has {
+		return svc
+	}
+	l := d.link()
+	d.svcMu.Lock()
+	defer d.svcMu.Unlock()
+	if d.info2 == nil {
+		if s, err := dialCoreDevice(l.entry, deviceInfoService); err == nil {
+			d.info2 = s
+		}
+	}
+	return d.info2
 }
 
 // orientFresh is how long a read of the display's orientation is trusted:
@@ -614,9 +693,7 @@ const orientFresh = time.Second
 // orientation above all, which the video's packets carry from then on, and
 // on a foldable which display is in use.
 func (d *Device) readDisplayNow(ctx context.Context) (screenInfo, error) {
-	d.svcMu.Lock()
-	svc := d.info2
-	d.svcMu.Unlock()
+	svc := d.infoSvc()
 	if svc == nil {
 		return d.display(), fmt.Errorf("display info: %w", driver.ErrOffline)
 	}
@@ -838,11 +915,16 @@ func (d *Device) gestureSteps(ctx context.Context, steps []driver.DragStep, onDo
 	if err := h.liftHeld(); err != nil {
 		return err
 	}
+	// On a phone with several displays: whether the touches before this
+	// one showed on the display in use (multiinput.go).
+	unseen := d.inputUnseen()
 	si := d.freshDisplay(ctx)
 	x, y := panelPoint(steps[0].P, si)
+	sent := time.Now()
 	if err := h.touchAt(true, x, y); err != nil {
 		return err
 	}
+	defer d.watchEcho("touch", sent, x, y)
 	if onDown != nil {
 		onDown()
 	}
@@ -862,6 +944,9 @@ func (d *Device) gestureSteps(ctx context.Context, steps []driver.DragStep, onDo
 	}
 	if err := h.touchAt(false, x, y); err != nil {
 		return errors.Join(gerr, err)
+	}
+	if gerr == nil {
+		return unseen
 	}
 	return gerr
 }
@@ -928,7 +1013,12 @@ func (d *Device) Touch(ctx context.Context, a driver.TouchAction, p screen.Point
 		}
 		return h.touchAt(true, x, y)
 	case driver.TouchUp:
-		return h.touchAt(false, x, y)
+		up := time.Now()
+		err := h.touchAt(false, x, y)
+		if err == nil {
+			d.watchEcho("mirror touch", up, x, y)
+		}
+		return err
 	}
 	return fmt.Errorf("touch action %q: %w", a, driver.ErrUnsupported)
 }
@@ -982,7 +1072,7 @@ func (d *Device) Close() error {
 	}
 	d.svcMu.Unlock()
 	d.logs.stopAll()
-	errs = append(errs, d.l.Close())
+	errs = append(errs, d.cur().Close())
 	return errors.Join(errs...)
 }
 

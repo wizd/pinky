@@ -73,9 +73,9 @@ func release(t *testing.T, v string, crash bool) string {
 	path := filepath.Join(t.TempDir(), "pinky-"+v+"-linux-amd64.tar.gz")
 	writeArchive(t, path, []tarEntry{
 		{name: "pinky", body: fakePinky(v, crash), mode: 0o755},
-		{name: "pinky-companion.apk", body: "apk " + v},
+		{name: "pinky-android.apk", body: "apk " + v},
 		{name: "lib/libavutil.so.61", body: "ffmpeg " + v, mode: 0o755},
-		{name: fileList, body: "lib\npinky\npinky-companion.apk\n", mode: 0o600},
+		{name: fileList, body: "lib\npinky\npinky-android.apk\n", mode: 0o600},
 	})
 	return path
 }
@@ -171,7 +171,7 @@ func TestArchiveStage(t *testing.T) {
 	if filepath.Dir(st.work) != filepath.Dir(dir) || !strings.HasPrefix(filepath.Base(st.work), ".Pinky.update-") {
 		t.Errorf("work folder %s", st.work)
 	}
-	if got := readTree(t, st.files)["pinky-companion.apk"]; got != "apk 2026.1107.2" {
+	if got := readTree(t, st.files)["pinky-android.apk"]; got != "apk 2026.1107.2" {
 		t.Errorf("staged apk %q", got)
 	}
 	if data, _ := os.ReadFile(st.helper); string(data) != fakePinky("2026.1107.1", false) {
@@ -201,7 +201,7 @@ func TestArchiveSwapNow(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := readTree(t, dir)
-	if got["pinky-companion.apk"] != "apk 2026.1107.2" || got["lib/libavutil.so.61"] != "ffmpeg 2026.1107.2" {
+	if got["pinky-android.apk"] != "apk 2026.1107.2" || got["lib/libavutil.so.61"] != "ffmpeg 2026.1107.2" {
 		t.Errorf("after SwapNow: %v", got)
 	}
 	untouched(t, dir, before)
@@ -244,7 +244,7 @@ func TestArchiveHelperUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := readTree(t, dir); got["pinky-companion.apk"] != "apk 2026.1107.2" {
+	if got := readTree(t, dir); got["pinky-android.apk"] != "apk 2026.1107.2" {
 		t.Errorf("after the update: %v", got)
 	}
 	untouched(t, dir, before)
@@ -258,7 +258,7 @@ func TestArchiveHelperRollsBack(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "didn't start") {
 		t.Fatalf("RunHelper = %v", err)
 	}
-	if got := readTree(t, dir); got["pinky-companion.apk"] != "apk 2026.1107.1" {
+	if got := readTree(t, dir); got["pinky-android.apk"] != "apk 2026.1107.1" {
 		t.Errorf("after the rollback: %v", got)
 	}
 	untouched(t, dir, before)

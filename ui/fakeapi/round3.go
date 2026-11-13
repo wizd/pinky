@@ -298,7 +298,7 @@ func (a *API) Connections(_ context.Context, deviceID string) (driver.Connection
 	out := driver.Connections{Chosen: d.way, Ways: []driver.Connection{
 		{ID: driver.ConnectionAuto, Available: true},
 		{ID: "coredevice", Available: true},
-		{ID: "wda", Reason: "not_installed", Detail: "The WebDriverAgent helper is not installed on this iPhone."},
+		{ID: "wda", Reason: "not_installed", Detail: "Pinky is not installed on this iPhone."},
 	}}
 	if d.info.State == driver.StateOnline {
 		out.Current = d.info.Backend
@@ -322,7 +322,7 @@ func (a *API) SetConnection(deviceID, way string) error {
 	d.way = way
 	if way == "wda" {
 		d.info.State, d.info.Setup = driver.StateNeedsSetup, driver.SetupInstallHelper
-		d.info.Detail = "The WebDriverAgent helper is not installed on this iPhone. Install it once on a Mac with Xcode, with Install the helper in Pinky's window or pinkyctl helper install, or choose another connection in Settings > Phones."
+		d.info.Detail = "Pinky is not installed on this iPhone. Install it once on a Mac with Xcode, with Install Pinky on the iPhone in Pinky's window or pinkyctl helper install, or choose another connection in Settings > Phones."
 	} else {
 		d.info.State, d.info.Setup, d.info.Detail, d.info.Backend = driver.StateOnline, "", "", "coredevice"
 	}

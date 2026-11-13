@@ -77,9 +77,10 @@ func logMirror(t *testing.T, buf *bytes.Buffer, api *logAPI) (*mirror, *logPosts
 }
 
 // TestMirrorLogsItsLife: what the mirror does reaches the log the
-// person's feedback carries: the stream opening, the stream failing, the
+// person's feedback carries: the stream opening, an open that failed, the
 // stream ending after it played, and the mirror closing. The lines say
-// which phone, and carry no picture of it.
+// which phone, and carry no picture of it. The waits are the ones the
+// mirror chose, whatever time passed before the line was written.
 func TestMirrorLogsItsLife(t *testing.T) {
 	var buf bytes.Buffer
 	api := &logAPI{API: fakeapi.New(fakeapi.Options{Scenario: fakeapi.NoPhones}), err: errors.New("the phone went away")}
@@ -94,7 +95,7 @@ func TestMirrorLogsItsLife(t *testing.T) {
 	t.Logf("the log:\n%s", got)
 	for _, want := range []string{
 		`msg="pinky: mirror pixel-9: opening the stream"`,
-		`msg="pinky: mirror pixel-9: stream opened" err="the phone went away"`,
+		`msg="pinky: mirror pixel-9: could not open the stream" err="the phone went away"`,
 		`msg="pinky: mirror pixel-9: stream failed" err="the phone went away" retry_in=3s`,
 		`msg="pinky: mirror pixel-9: stream failed" err=EOF retry_in=2s`,
 		`msg="pinky: mirror pixel-9: closed"`,
@@ -102,6 +103,10 @@ func TestMirrorLogsItsLife(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("the log lacks %s:\n%s", want, got)
 		}
+	}
+	// No stream opened, and the log does not say one did.
+	if strings.Contains(got, "stream opened") {
+		t.Errorf("the log says a stream opened that did not:\n%s", got)
 	}
 	// The mirror still shows the failure and tries again, as before.
 	if m.state != "failed" || m.err == nil || m.err.Error() != "EOF" {

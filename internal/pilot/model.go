@@ -62,8 +62,14 @@ type turn struct {
 // model is a conversation with a model over one API. It keeps the
 // history: each send adds the results of the last turn's calls, then the
 // text, if any, as the person's message.
+//
+// The conversation outlives its task, so that the person can continue
+// the task (Runner.Continue): setKey gives it the key read for the new
+// stretch, and a send after one that failed adds to the person's last
+// turn, which the model never answered.
 type model interface {
 	send(ctx context.Context, results []result, text string) (*turn, error)
+	setKey(key string)
 }
 
 // newModel starts a conversation with the model of cfg.

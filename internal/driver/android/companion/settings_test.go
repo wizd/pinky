@@ -2,10 +2,13 @@ package companion
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/DIYgod/pinky/internal/driver"
 )
 
 const mika = "com.wangzan101.mika/.a11y.MikaAccessibilityService"
@@ -154,14 +157,11 @@ func TestForceDisable(t *testing.T) {
 
 func TestEnableTimesOutWhenServiceNeverStarts(t *testing.T) {
 	p := newFakePhone(t)
-	// The setting never takes: Android rewrites it without Pinky.
+	p.deaf = true // the setting takes, and the service never answers
 	c := New(p)
 	defer c.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Millisecond)
 	defer cancel()
-	p.mu.Lock()
-	p.rewrite = func(v string) string { return strings.ReplaceAll(v, Release.Component(), "") }
-	p.mu.Unlock()
 	if err := c.Enable(ctx); err == nil {
 		t.Fatal("Enable should fail when the service never answers")
 	}
@@ -171,6 +171,130 @@ func TestEnableTimesOutWhenServiceNeverStarts(t *testing.T) {
 	}
 	if err := c.Disable(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// ignoredChange checks that err says the phone did not keep the change,
+// and that it came at once: startWait is 10 s, the caller's wait 5.
+func ignoredChange(t *testing.T, what string, err error, took time.Duration) {
+	t.Helper()
+	var se *driver.CompanionStartError
+	if !errors.As(err, &se) || se.Reason != driver.CompanionStartSettingIgnored {
+		t.Fatalf("%s = %v, want a CompanionStartError for a change the phone did not keep", what, err)
+	}
+	if took > 2*time.Second {
+		t.Errorf("%s took %v: it waited for a service that cannot come on", what, took)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("%s: the error wraps context.DeadlineExceeded: %v", what, err)
+	}
+	for _, want := range []string{"did not keep Pinky's entry", "by hand"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: no %q in %q", what, want, err)
+		}
+	}
+	// The person's other accessibility services are theirs to tell.
+	if strings.Contains(err.Error(), "mika") {
+		t.Errorf("%s: the error names another service: %q", what, err)
+	}
+}
+
+// writes counts the shell's settings put and delete commands.
+func (p *fakePhone) writes() (puts, deletes int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, cmd := range p.shell {
+		switch {
+		case strings.HasPrefix(cmd, "settings put"):
+			puts++
+		case strings.HasPrefix(cmd, "settings delete"):
+			deletes++
+		}
+	}
+	return puts, deletes
+}
+
+// A phone that takes the change without an error and keeps nothing of it
+// (vivo's OriginOS 6, issue #94): Enable says so at once instead of waiting
+// 10 seconds for a service that cannot come on, and writes nothing more.
+func TestEnableOnAPhoneThatIgnoresTheChange(t *testing.T) {
+	for _, before := range []string{"", mika} {
+		p := newFakePhone(t)
+		if before != "" {
+			p.settings[settingKey] = before
+		}
+		p.ignoreWrites = true
+		c := New(p)
+		defer c.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		start := time.Now()
+		err := c.Enable(ctx)
+		ignoredChange(t, "Enable", err, time.Since(start))
+		if got, ok := p.settings[settingKey]; got != before || ok != (before != "") {
+			t.Errorf("setting = %q (set: %v), want %q", got, ok, before)
+		}
+		if puts, deletes := p.writes(); puts != 1 || deletes != 0 {
+			t.Errorf("%d puts and %d deletes, want the one put: %q", puts, deletes, p.shell)
+		}
+		if slices.ContainsFunc(p.shell, func(s string) bool { return strings.HasPrefix(s, "echo "+probeMark) }) {
+			t.Errorf("probed the service: %q", p.shell)
+		}
+		if c.EnabledForTask() {
+			t.Error("EnabledForTask after a change the phone did not keep")
+		}
+		// The next try writes again: the phone may take it by then.
+		p.mu.Lock()
+		p.ignoreWrites = false
+		p.mu.Unlock()
+		if err := c.Enable(ctx); err != nil {
+			t.Fatalf("Enable once the phone takes the change: %v", err)
+		}
+		if err := c.Disable(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := p.settings[settingKey]; got != before || ok != (before != "") {
+			t.Errorf("after Disable: setting = %q (set: %v), want %q", got, ok, before)
+		}
+	}
+}
+
+// Android stores the list without Pinky's entry: the same at once, and
+// Enable puts the setting back as it was.
+func TestEnableWhenThePhoneDropsTheEntry(t *testing.T) {
+	p := newFakePhone(t)
+	p.rewrite = func(v string) string { return strings.ReplaceAll(v, Release.Component(), "") }
+	c := New(p)
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	err := c.Enable(ctx)
+	ignoredChange(t, "Enable", err, time.Since(start))
+	if _, ok := p.settings[settingKey]; ok {
+		t.Errorf("setting left behind: %q", p.settings[settingKey])
+	}
+	if err := c.Disable(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTurnOnOnAPhoneThatIgnoresTheChange(t *testing.T) {
+	p := newFakePhone(t)
+	p.settings[settingKey] = mika
+	p.ignoreWrites = true
+	c := New(p)
+	t.Cleanup(func() { c.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	start := time.Now()
+	err := c.TurnOn(ctx)
+	ignoredChange(t, "TurnOn", err, time.Since(start))
+	if got := p.settings[settingKey]; got != mika {
+		t.Errorf("setting = %q, want %q", got, mika)
+	}
+	if req := p.lastRequest("config"); req != nil {
+		t.Errorf("TurnOn configured a service that is not on: %v", req)
 	}
 }
 

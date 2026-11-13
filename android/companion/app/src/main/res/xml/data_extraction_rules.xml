@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and later. allowBackup="false" keeps this app out of cloud
+     backups, but a transfer to a new phone ignores it. Both leave out the
+     model keys' ciphertext (Secrets): the Keystore key that opens it never
+     leaves this phone, so a new phone could not read it and would only say
+     the saved key is lost, rather than ask for one. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="secrets.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="secrets.xml" />
+    </device-transfer>
+</data-extraction-rules>

@@ -29,6 +29,21 @@ import (
 // exactly; a service someone else turned on goes off too, unless another
 // client still uses it.
 //
+// A phone that ignores the driver's change to its accessibility settings
+// (manual; vivo's OriginOS 6, GitHub issue #94) lets only the person turn
+// the service on. There the driver leaves on a service the person turned
+// on, until they turn it off on the phone, and stops the app's own idle
+// backstop: the owner decided on 2026-11-12 that it stays on, rather than
+// have the person turn it on again before every task.
+//
+// Pinky on the phone (on-phone mode) runs tasks of its own. While an agent
+// works, the driver claims the phone on its event subscription (held), so
+// that the phone's own tasks wait and its pill says a computer is using
+// it; the agent's calls fail with driver.BusyError while Pinky on the phone
+// holds it, and with driver.ErrStoppedOnPhone once the person pressed Stop
+// there. A service that on-phone mode keeps on stays on. Apps from before
+// claims (2026-11-12) work as before.
+//
 // Without the app, or when it is too old or does not answer, the driver
 // falls back to uiautomator and the keyboard. The two never run together:
 // a uiautomator dump unbinds every accessibility service.
@@ -68,11 +83,26 @@ type companionLink struct {
 	reason  string    // why the companion is not used, logged once
 	// failed is why the service did not come on the last time the driver
 	// tried, for CompanionState; nil once it came on.
-	failed  error
+	failed error
+	// manual: the phone took the driver's last change to
+	// enabled_accessibility_services without an error and did not keep it
+	// (vivo's OriginOS 6, issue #94), so only the person can turn the
+	// service on, in the phone's accessibility settings (CompanionManual).
+	// It stays set when the service comes on without a change (the person
+	// turned it on), and goes when a change of the driver's is kept. Kept
+	// across restarts in Device.manuals (setManualLocked). While it is set,
+	// the driver leaves a service the person turned on on.
+	manual  bool
 	idle    *time.Timer
 	lastUse atomic.Int64 // Unix nanoseconds of the last driver call
 	sub     *companion.Subscription
 	stop    context.CancelFunc // ends the subscription's context
+	// claimed: the subscription holds the phone for the agent
+	// (FeatureClaim), so Pinky on the phone does not start a task meanwhile.
+	// busy is who held it at the last try, at busyAt.
+	claimed bool
+	busy    *driver.BusyError
+	busyAt  time.Time
 
 	// gated: the gateway reports when an agent works (AgentWorking), and
 	// the service is turned on only while one does; working: one does.
@@ -87,6 +117,10 @@ type companionLink struct {
 	windowAt map[int]time.Time
 	events   []screen.Event // toasts and notifications since the last Observe
 	live     bool           // the subscription is delivering
+	// stopped: the person ended the agent's claim on the phone (Stop on
+	// the pill), so the agent's task must end; until the next one starts.
+	// lost: the claim ended that way, and claimed is out of date.
+	stopped, lost bool
 }
 
 // companionUse is what a caller wants the companion for.
@@ -172,17 +206,26 @@ func (d *Device) companionOnLocked(ctx context.Context) error {
 		if ctx.Err() == nil {
 			k.failed = err
 		}
+		if settingIgnored(err) {
+			if !k.manual {
+				d.cfg.logf("android: %s: the phone did not keep Pinky's change to its accessibility settings; only the person can turn the companion's service on", d.info.ID)
+			}
+			d.setManualLocked(true)
+		}
 		if se := (*driver.CompanionStartError)(nil); errors.As(err, &se) {
 			return err // it says so, with what the phone showed
 		}
 		return fmt.Errorf("its service did not start: %w", err)
+	}
+	if k.client.EnabledForTask() {
+		d.setManualLocked(false) // the phone kept the driver's change this time
 	}
 	info, err := k.client.Ping(ctx)
 	if err == nil && info.Protocol != companion.ProtocolVersion {
 		err = fmt.Errorf("it speaks protocol %d, the driver %d", info.Protocol, companion.ProtocolVersion)
 	}
 	if err == nil {
-		err = d.subscribeLocked()
+		err = d.subscribeLocked(info)
 	}
 	if err != nil {
 		d.disableLocked()
@@ -190,6 +233,11 @@ func (d *Device) companionOnLocked(ctx context.Context) error {
 			k.failed = err
 		}
 		return fmt.Errorf("version %s: %w", k.version, err)
+	}
+	if k.manual {
+		// The person turned it on, on a phone where only they can: it
+		// stays on after the task, also once Pinky is gone.
+		d.keepOn(ctx, k.client)
 	}
 	k.on = true
 	k.info = info
@@ -264,6 +312,10 @@ func (d *Device) AgentWorking(on bool) {
 		return
 	}
 	if on {
+		// A new stretch of work: a stop on the phone belonged to the last.
+		k.evMu.Lock()
+		k.stopped = false
+		k.evMu.Unlock()
 		go d.warmCompanion()
 		// The task's first read may need OCR: load its models meanwhile.
 		ocrWarm()
@@ -277,7 +329,7 @@ func (d *Device) warmCompanion() {
 	ctx, cancel := context.WithTimeout(context.Background(), companionWarm)
 	defer cancel()
 	if d.comp.working.Load() {
-		d.companionClient(ctx)
+		_ = d.held(ctx) // a busy phone is the agent's first call's to report
 	}
 }
 
@@ -292,6 +344,7 @@ func (d *Device) restCompanion(first bool) {
 	}
 	switch {
 	case k.on:
+		d.releaseLocked()
 		if k.idle != nil {
 			k.idle.Reset(companionRest) // measured from the last call
 		}
@@ -300,10 +353,124 @@ func (d *Device) restCompanion(first bool) {
 	}
 }
 
+// claimRetry is how long a busy phone is reported busy before the driver
+// asks the app again. A variable for tests.
+var claimRetry = 2 * time.Second
+
+// acting notes a driver call for an agent and checks that the agent may act
+// on the phone (held).
+func (d *Device) acting(ctx context.Context) error {
+	d.used()
+	return d.held(ctx)
+}
+
+// held makes sure the phone is the agent's while one works on it: it
+// claims the phone on the event subscription, so that Pinky on the phone
+// waits and shows that a computer is using it. It returns a
+// *driver.BusyError while Pinky on the phone (or another computer) holds
+// it, and driver.ErrStoppedOnPhone once the person stopped the task there.
+// Without an app that takes claims, or while no agent works (the person
+// unlocking the phone from the computer), it lets everything through, as
+// before claims.
+func (d *Device) held(ctx context.Context) error {
+	k := &d.comp
+	if k.gated.Load() && !k.working.Load() {
+		return nil
+	}
+	if k.stoppedOnPhone() {
+		return driver.ErrStoppedOnPhone
+	}
+	if d.companionClient(ctx) == nil {
+		return nil // without the app: as before
+	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return d.claimLocked(ctx)
+}
+
+// stoppedOnPhone reports whether the person stopped the agent's task on
+// the phone.
+func (k *companionLink) stoppedOnPhone() bool {
+	k.evMu.Lock()
+	defer k.evMu.Unlock()
+	return k.stopped
+}
+
+// claimLocked claims the phone on the subscription unless it holds it
+// already. A busy phone is reported for claimRetry before the app is asked
+// again. When the claim gets no answer the driver goes on without it: the
+// claim is cooperative, and the subscription's own end frees the phone.
+func (d *Device) claimLocked(ctx context.Context) error {
+	k := &d.comp
+	k.evMu.Lock()
+	if k.lost {
+		k.claimed, k.lost = false, false
+	}
+	k.evMu.Unlock()
+	if !k.on || k.claimed || k.info == nil || !k.info.Has(companion.FeatureClaim) {
+		return nil
+	}
+	if k.busy != nil && time.Since(k.busyAt) < claimRetry {
+		return k.busy
+	}
+	k.evMu.Lock()
+	sub := k.sub
+	k.evMu.Unlock()
+	if sub == nil {
+		return nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	err := sub.Claim(cctx, companion.ByComputer, "")
+	var ce *companion.Error
+	switch {
+	case err == nil:
+		if k.busy != nil {
+			d.cfg.logf("android: %s: the phone is free again; the agent holds it", d.info.ID)
+		}
+		k.claimed, k.busy = true, nil
+		return nil
+	case errors.As(err, &ce) && ce.Code == companion.CodeBusy:
+		if k.busy == nil {
+			d.cfg.logf("android: %s: the phone is busy: %s", d.info.ID, ce.Message)
+		}
+		k.busy, k.busyAt = &driver.BusyError{By: ce.By, Task: ce.Task}, time.Now()
+		return k.busy
+	default:
+		if ctx.Err() == nil {
+			d.cfg.logf("android: %s: claiming the phone: %v; going on without a claim", d.info.ID, err)
+		}
+		return nil
+	}
+}
+
+// releaseLocked gives the phone back as the agent stops working, so that
+// Pinky on the phone may start a task before the service rests.
+func (d *Device) releaseLocked() {
+	k := &d.comp
+	k.busy = nil
+	if !k.claimed {
+		return
+	}
+	k.claimed = false
+	k.evMu.Lock()
+	sub := k.sub
+	k.evMu.Unlock()
+	if sub == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := sub.Release(ctx); err != nil {
+		d.cfg.logf("android: %s: giving the phone back: %v", d.info.ID, err)
+	}
+}
+
 // quietLocked turns the service off when it is on although no agent works
 // and no client uses it: Pinky until 2026-11-08 kept it on for good once
 // installed. One that another client uses, or that the phone does not let
-// the computer turn off, stays on.
+// the computer turn off, stays on, and so does one the person turned on on
+// a phone where only they can (manual).
 func (d *Device) quietLocked() {
 	k := &d.comp
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -318,8 +485,15 @@ func (d *Device) quietLocked() {
 	if err != nil || !listed {
 		return
 	}
-	if others := companionPeers(ctx, k.client); others {
-		d.cfg.logf("android: %s: another client is using the companion; leaving its service on", d.info.ID)
+	if why := companionKept(ctx, k.client); why != "" {
+		d.cfg.logf("android: %s: %s; leaving its service on", d.info.ID, why)
+		return
+	}
+	if k.manual {
+		// Only the person can turn it on here, and they did: it stays on.
+		d.keepOn(ctx, k.client)
+		k.client.Close()
+		d.cfg.logf("android: %s: leaving on the companion's service, which the person turned on on a phone where only they can", d.info.ID)
 		return
 	}
 	if err := k.client.ForceDisable(ctx); err != nil {
@@ -343,20 +517,27 @@ func (d *Device) closeCompanion() {
 }
 
 // subscribeLocked starts the event subscription, which outlives the call
-// that started it.
-func (d *Device) subscribeLocked() error {
+// that started it. With an app that takes claims it asks for claim events
+// too: the app then counts the subscription as a claim only once the
+// driver claims on it (claimLocked), and says when the person stops it.
+func (d *Device) subscribeLocked(info *companion.Info) error {
 	k := &d.comp
 	ctx, stop := context.WithCancel(context.Background())
-	sub, err := k.client.Events(ctx,
-		companion.EventWindow, companion.EventWindows, companion.EventContent,
-		companion.EventToast, companion.EventNotification)
+	kinds := []companion.EventKind{companion.EventWindow, companion.EventWindows, companion.EventContent,
+		companion.EventToast, companion.EventNotification}
+	if info.Has(companion.FeatureClaim) {
+		kinds = append(kinds, companion.EventClaim)
+	}
+	sub, err := k.client.Events(ctx, kinds...)
 	if err != nil {
 		stop()
 		return fmt.Errorf("subscribe to events: %w", err)
 	}
-	k.sub, k.stop = sub, stop
+	k.stop = stop
 	k.evMu.Lock()
+	k.sub = sub // readCompanionEvents reads it under evMu
 	k.live = true
+	k.lost = false
 	k.events = nil
 	k.lastAt = map[int]time.Time{}
 	k.windowAt = map[int]time.Time{}
@@ -379,6 +560,13 @@ func (d *Device) readCompanionEvents(sub *companion.Subscription) {
 		}
 		if ev.Kind == companion.EventWindow {
 			k.windowAt[ev.Display] = now
+		}
+		if ev.Kind == companion.EventClaim && ev.Stopped {
+			k.lost = true
+			if !k.stopped {
+				k.stopped = true
+				d.cfg.logf("android: %s: the person stopped the agent's task on the phone", d.info.ID)
+			}
 		}
 		if se, ok := ev.ScreenEvent(); ok {
 			k.events = append(k.events, se)
@@ -507,7 +695,9 @@ func (d *Device) companionOffLocked(why string) {
 // only Pinky's entry when it was on already (an older Pinky kept it on for
 // good, or another client turned it on for its reads). One that another
 // client still uses stays on: several drivers (two Pinky processes, Pinky
-// and androidctl) may share it, and the last to leave turns it off.
+// and androidctl) may share it, and the last to leave turns it off. On a
+// phone where only the person can turn it on (manual), one they turned on
+// stays on too.
 func (d *Device) disableLocked() {
 	k := &d.comp
 	if k.idle != nil {
@@ -515,26 +705,29 @@ func (d *Device) disableLocked() {
 	}
 	if k.sub != nil {
 		k.sub.Close()
-		k.sub = nil
 	}
 	if k.stop != nil {
 		k.stop()
 		k.stop = nil
 	}
 	k.evMu.Lock()
+	k.sub = nil // readCompanionEvents reads it under evMu
 	k.live = false
 	k.evMu.Unlock()
+	k.claimed, k.busy = false, nil // the claim ended with the subscription
 	if k.client == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	var err error
-	switch {
-	case companionPeers(ctx, k.client):
-		d.cfg.logf("android: %s: another client is using the companion; leaving its service on", d.info.ID)
+	switch why := companionKept(ctx, k.client); {
+	case why != "":
+		d.cfg.logf("android: %s: %s; leaving its service on", d.info.ID, why)
 	case k.client.EnabledForTask():
 		err = k.client.Disable(ctx)
+	case k.manual:
+		d.cfg.logf("android: %s: leaving on the companion's service, which the person turned on on a phone where only they can", d.info.ID)
 	default:
 		err = k.client.ForceDisable(ctx)
 	}
@@ -542,6 +735,24 @@ func (d *Device) disableLocked() {
 		d.cfg.logf("android: %s: turning the companion off: %v", d.info.ID, err)
 	}
 	k.client.Close()
+}
+
+// companionKept says why the service stays on although the driver is done
+// with it, or "": on-phone mode is on (Pinky on the phone keeps it on, and
+// turning it off would turn that mode off too), or another client uses it.
+func companionKept(ctx context.Context, c *companion.Client) string {
+	pctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	info, err := c.Ping(pctx)
+	cancel()
+	switch {
+	case err != nil:
+		return ""
+	case info.OnPhone:
+		return "Pinky on the phone keeps the companion on (on-phone mode)"
+	case companionPeers(ctx, c):
+		return "another client is using the companion"
+	}
+	return ""
 }
 
 // companionPeers asks the app whether clients other than this one's
@@ -581,6 +792,64 @@ func (d *Device) companionFailure() error {
 	defer k.mu.Unlock()
 	return k.failed
 }
+
+// companionManual reports whether only the person can turn the service on:
+// the phone did not keep the driver's last change to its accessibility
+// settings, and nothing else kept the service off since.
+func (d *Device) companionManual() bool {
+	k := &d.comp
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.manual && (k.failed == nil || settingIgnored(k.failed))
+}
+
+// companionManualPhone reports whether the phone is one where only the
+// person can turn the service on, whether it is on now or not.
+func (d *Device) companionManualPhone() bool {
+	k := &d.comp
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.manual
+}
+
+// useManuals keeps whether the phone ignores the driver's change to its
+// accessibility settings in s, and reads what s knows of it, as the device
+// opens: before the first AgentWorking(false), so that quietLocked leaves
+// on a service the person turned on.
+func (d *Device) useManuals(s *manualStore) {
+	d.manuals = s
+	d.comp.manual = s.has(d.Info().ID)
+}
+
+// setManualLocked notes whether the phone ignores the driver's change to
+// its accessibility settings, and keeps it across Pinky's restarts.
+func (d *Device) setManualLocked(manual bool) {
+	d.comp.manual = manual
+	d.manuals.set(d.Info().ID, manual)
+}
+
+// keepOn stops the app's idle backstop, which would turn the service off a
+// minute after the last computer left, on a phone where only the person
+// can turn it on: what they turned on stays on until they turn it off. The
+// app forgets it when the service goes off, so it is said each time the
+// driver finds the service on. It needs the service to answer.
+func (d *Device) keepOn(ctx context.Context, c *companion.Client) {
+	if err := c.SetIdleDisable(ctx, 0); err != nil {
+		d.cfg.logf("android: %s: keeping on the companion's service, which the person turned on: %v", d.info.ID, err)
+	}
+}
+
+// settingIgnored reports whether err says the phone took the change to
+// enabled_accessibility_services and did not keep it.
+func settingIgnored(err error) bool {
+	var se *driver.CompanionStartError
+	return errors.As(err, &se) && se.Reason == driver.CompanionStartSettingIgnored
+}
+
+// companionManualWords say, for an agent, why the service is off on a
+// phone where only the person can turn it on.
+const companionManualWords = "this phone does not let Pinky turn on Pinky's accessibility service over USB debugging; " +
+	"the person can turn on Pinky in the phone's accessibility settings by hand"
 
 var _ driver.WorkWatcher = (*Device)(nil)
 
@@ -627,6 +896,10 @@ func (d *Device) observeCompanion(ctx context.Context, c *companion.Client) (*sc
 			}
 		}
 	}
+	// Pinky on the phone's own pill and approval card, which on-phone mode
+	// shows while the agent holds the phone, lie over the app: a tap there
+	// lands on them.
+	s.Covered = append(s.Covered, read.OverlaysOf(c.App().Package)...)
 	s.App.Name = d.companionAppName(s.App)
 	s.Events = d.comp.takeEvents()
 	return s, scanCompanion(read), nil

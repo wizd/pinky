@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"maps"
 	"runtime"
 	"sort"
 	"strings"
@@ -46,9 +47,11 @@ func (a *app) changed() {
 	}
 }
 
-// clone returns s with a list of blocked apps of its own.
+// clone returns s with a list of blocked apps, and maps, of its own.
 func (s Settings) clone() Settings {
 	s.BlockedApps = append([]BlockedApp(nil), s.BlockedApps...)
+	s.PilotModels = maps.Clone(s.PilotModels)
+	s.PilotURLs = maps.Clone(s.PilotURLs)
 	return s
 }
 
@@ -59,7 +62,7 @@ func (a *app) settingsPage(c *mg.Context) {
 	mg.Row(c).Grow(1).MinHeight(0).AlignItems(mg.Stretch).Children(func() {
 		mg.Column(c).Width(200).Shrink(0).Padding(sp3, 10).Gap(2).BorderWidth(0, 1, 0, 0).BorderColor(p.line).
 			Role(mg.RoleTabList).Label(locales.SettingsSectionsLabel()).Children(func() {
-			tab := func(sec settingsSection, ic *mg.SVG, name string, needs bool) {
+			tab := func(sec settingsSection, ic, icOn *mg.SVG, name string, needs bool) {
 				on := s.sec == sec
 				b := mg.ButtonBase(c.Key(sec)).Height(32).Padding(0, 10, 0, rowInset).Radius(rControl).Gap(10).AlignItems(mg.Center).Justify(mg.Start).
 					Role(mg.RoleTab).Selected(on).Label(name)
@@ -67,35 +70,38 @@ func (a *app) settingsPage(c *mg.Context) {
 				case on:
 					b.Background(p.sel)
 					selectionMark(c, b)
+				case b.Pressed():
+					b.Background(p.sel)
 				case b.Hovered():
 					b.Background(p.bg3)
 				}
+				fillFade(b)
 				if b.Clicked() {
 					s.sec = sec
 				}
 				b.TextColor(navInk(c, b, on)).Children(func() {
-					mg.Icon(c, ic).FontSize(16)
+					mg.Icon(c, pick(on, icOn, ic)).FontSize(iconBody)
 					mg.Text(c, name).FontSize(fsBody).Grow(1)
 					if needs {
 						dot(c, p.amberDot, false).Label(locales.SettingsNeedsYou())
 					}
 				})
 			}
-			tab(secPhones, icAndroid, locales.SettingsSectionPhones(), false)
+			tab(secPhones, icAndroid, icAndroidOn, locales.SettingsSectionPhones(), false)
 			agentsWait := false
 			for _, n := range a.needs {
 				agentsWait = agentsWait || newAgentNeed(n)
 			}
-			tab(secAgents, icPlug, locales.SettingsSectionAgents(), agentsWait)
-			tab(secSafety, icShield, locales.SettingsSectionSafety(), len(a.files.list) > 0)
-			tab(secPrivacy, icEyeOff, locales.SettingsSectionPrivacy(), false)
-			tab(secAdvanced, icSliders, locales.SettingsSectionAdvanced(), false)
+			tab(secAgents, icPlug, icPlugOn, locales.SettingsSectionAgents(), agentsWait)
+			tab(secSafety, icShield, icShieldOn, locales.SettingsSectionSafety(), len(a.files.list) > 0)
+			tab(secPrivacy, icPrivacy, icPrivacyOn, locales.SettingsSectionPrivacy(), false)
+			tab(secAdvanced, icSliders, icSlidersOn, locales.SettingsSectionAdvanced(), false)
 			a.feedbackLink(c)
 		})
 		a.watchFileProblems(c)
 		a.watchGatewaySettings(c)
 		mg.Scroll(c).Grow(1).MinWidth(0).Padding(28, 40).Children(func() {
-			mg.Column(c).MaxWidth(640).Gap(28).Children(func() {
+			mg.Column(c.Key(s.sec)).MaxWidth(640).Gap(28).Transition(swapIn()).Children(func() {
 				switch s.sec {
 				case secPhones:
 					a.settingsPhones(c)
@@ -265,7 +271,7 @@ func (a *app) settingsSafety(c *mg.Context) {
 						st.BlockedApps = withoutBlocked(st.BlockedApps, b)
 						a.changed()
 					}
-					rm.TextColor(p.ink3).Children(func() { mg.Icon(c, icX).FontSize(14) })
+					rm.TextColor(p.ink3).Children(func() { mg.Icon(c, icX).FontSize(iconSmall) })
 				})
 			}
 		})
@@ -290,7 +296,8 @@ func (a *app) settingsSafety(c *mg.Context) {
 			a.toggleRow(c, "unlock", locales.SettingsUnlockFromComputer(), desc, false, &st.UnlockFromComputer)
 		}
 		a.offWhile(c, rulesYAML).Children(func() {
-			a.toggleRow(c, "codes", locales.SettingsSafetyHideCodes(), locales.SettingsSafetyHideCodesDesc(), true, &st.HideCodes)
+			a.toggleRow(c, "codes", locales.SettingsSafetyHideCodes(), locales.SettingsSafetyHideCodesDesc(), false, &st.HideCodes)
+			a.toggleRow(c, "virtual-credentials", locales.SettingsSafetyVirtualCredentials(), locales.SettingsSafetyVirtualCredentialsDesc(), true, &st.VirtualCredentials)
 		})
 	})
 	a.rulesSection(c)
@@ -413,6 +420,7 @@ func (a *app) settingsPhones(c *mg.Context) {
 				a.connectionRows(c, d)
 				a.awayRow(c, d)
 				a.phoneWiFiRow(c, d)
+				a.phoneTasksRow(c, d)
 				mg.Row(c).Padding(sp2, sp4).Gap(sp2).AlignItems(mg.Center).Justify(mg.End).Children(func() {
 					if button(c, locales.PhoneCheckup(), btnOpt{small: true}).Label(locales.SettingsPhonesCheckupLabel(d.Info.Name)).Clicked() {
 						a.openCheckup(d)
@@ -440,6 +448,7 @@ func (a *app) settingsPhones(c *mg.Context) {
 			a.awayKeepAwakeRow(c)
 		}
 	})
+	a.webMirrorSettings(c)
 }
 
 // phoneHead is the head of a phone's group in Settings › Phones: its
@@ -451,7 +460,7 @@ func phoneHead(c *mg.Context, d gateway.DeviceView, line string) {
 		ic = icIphone
 	}
 	mg.Box(c).Size(36, 36).Radius(rControl).Background(p.bg3).Shrink(0).Justify(mg.Center).AlignItems(mg.Center).Children(func() {
-		mg.Icon(c, ic).FontSize(20).TextColor(p.ink2)
+		mg.Icon(c, ic).FontSize(iconLarge).TextColor(p.ink2)
 	})
 	mg.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 		mg.Text(c, d.Info.Name).FontSize(fsHeadline).FontWeight(fwSemibold)
@@ -705,8 +714,18 @@ func (a *app) settingsAgents(c *mg.Context) {
 	if !canList {
 		mg.Text(c, locales.SettingsAgentsUnlisted()).FontSize(fsCaption).TextColor(p.ink3)
 	}
-	a.askSettings(c)
-	a.connectAgents(c)
+	// Until an agent has connected, the list says to connect one below,
+	// and Connect an agent comes right there, before Ask Pinky, which
+	// would fill the window and leave it out of sight.
+	if len(rows) == 0 {
+		a.connectAgents(c)
+		a.askSettings(c)
+		a.memorySettings(c)
+	} else {
+		a.askSettings(c)
+		a.memorySettings(c)
+		a.connectAgents(c)
+	}
 	a.remoteAgents(c)
 	a.vcorpAgents(c)
 }

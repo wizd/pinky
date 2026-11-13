@@ -323,7 +323,7 @@ func iconButton(c *mg.Context, ic *mg.SVG, label, tip string, disabled bool) mg.
 		b.Background(p.bg3)
 		col = p.ink
 	}
-	b.TextColor(col).Children(func() { mg.Icon(c, ic).FontSize(14) })
+	b.TextColor(col).Children(func() { mg.Icon(c, ic).FontSize(iconSmall) })
 	return b
 }
 

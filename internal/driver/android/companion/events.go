@@ -24,6 +24,9 @@ const (
 	EventToast        EventKind = "toast"        // a toast appeared
 	EventNotification EventKind = "notification" // a notification was posted
 	EventDropped      EventKind = "dropped"      // the app dropped Count events for a slow reader
+	// EventClaim: who drives the phone changed (FeatureClaim). One arrives
+	// right after subscribing, with who holds it then.
+	EventClaim EventKind = "claim"
 )
 
 // Event is something that happened on the phone.
@@ -44,6 +47,11 @@ type Event struct {
 	Window   int      // window and windows: the window id
 	Changes  []string // windows: added, removed, title, bounds, layer, active, focused, ...
 	Count    int      // content: events folded into this one; dropped: events lost
+	// Claim (claim events) is who holds the phone now; nil when it is free.
+	Claim *Claim
+	// Stopped (claim events): Pinky on the phone ended this subscription's
+	// claim, because the person pressed Stop there.
+	Stopped bool
 }
 
 // ScreenEvent converts a toast or notification into the screen model's
@@ -77,10 +85,21 @@ type wireEvent struct {
 	Window   int      `json:"window"`
 	Changes  []string `json:"changes"`
 	Count    int      `json:"count"`
+	By       string   `json:"by"`
+	Task     string   `json:"task"`
+	Implicit bool     `json:"implicit"`
+	Stopped  bool     `json:"stopped"`
+
+	// A reply to a request on the subscription (Claim) has no event.
+	ID     int64           `json:"id"`
+	OK     bool            `json:"ok"`
+	Result json.RawMessage `json:"result"`
+	Error  *Error          `json:"error"`
 }
 
 // Subscription delivers events on its own connection until it is closed,
-// its context ends or the service goes away.
+// its context ends or the service goes away. Claims are made on it too, so
+// that they end with it.
 type Subscription struct {
 	client *Client
 	conn   net.Conn
@@ -88,8 +107,12 @@ type Subscription struct {
 	done   chan struct{}
 	once   sync.Once
 
-	mu  sync.Mutex
-	err error
+	wmu sync.Mutex // writes of requests
+
+	mu      sync.Mutex
+	err     error
+	nextID  int64
+	pending map[int64]chan response // requests waiting for their reply, by id
 }
 
 // Events subscribes to events of the given kinds.
@@ -132,7 +155,8 @@ func (c *Client) Events(ctx context.Context, kinds ...EventKind) (*Subscription,
 	}
 	_ = conn.SetDeadline(time.Time{})
 
-	s := &Subscription{client: c, conn: conn, c: make(chan Event, 256), done: make(chan struct{})}
+	s := &Subscription{client: c, conn: conn, c: make(chan Event, 256), done: make(chan struct{}),
+		nextID: 1, pending: map[int64]chan response{}}
 	c.subMu.Lock()
 	c.subs[s] = struct{}{}
 	c.subMu.Unlock()
@@ -184,7 +208,13 @@ func (s *Subscription) read(ctx context.Context, rd *bufio.Reader) {
 			return
 		}
 		var w wireEvent
-		if json.Unmarshal(raw, &w) != nil || w.Event == "" {
+		if json.Unmarshal(raw, &w) != nil {
+			continue
+		}
+		if w.Event == "" {
+			if w.ID != 0 {
+				s.replied(response{ID: w.ID, OK: w.OK, Result: w.Result, Error: w.Error})
+			}
 			continue
 		}
 		display := -1 // left out: not known
@@ -203,6 +233,10 @@ func (s *Subscription) read(ctx context.Context, rd *bufio.Reader) {
 			Window:   w.Window,
 			Changes:  w.Changes,
 			Count:    w.Count,
+			Stopped:  w.Stopped,
+		}
+		if w.By != "" {
+			ev.Claim = &Claim{By: w.By, Task: w.Task, Implicit: w.Implicit}
 		}
 		select {
 		case s.c <- ev:

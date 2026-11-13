@@ -26,7 +26,8 @@ const (
 	fieldPoll     = 150 * time.Millisecond
 )
 
-// setInputNote keeps a note about the current Type for TakeInputNote.
+// setInputNote keeps a note about the current Type or Key for
+// TakeInputNote; "" forgets the one before.
 func (d *Device) setInputNote(note string) {
 	d.stateMu.Lock()
 	d.inputNote = note
@@ -34,7 +35,8 @@ func (d *Device) setInputNote(note string) {
 }
 
 // TakeInputNote implements driver.InputNoter: what the agent should know
-// about the last Type, such as a field Pinky could not read back.
+// about the last Type or Key, such as a field Pinky could not read back
+// or a key the phone may have dropped (droppedKeyNote).
 func (d *Device) TakeInputNote() string {
 	d.stateMu.Lock()
 	defer d.stateMu.Unlock()

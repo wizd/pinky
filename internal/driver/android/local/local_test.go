@@ -38,7 +38,7 @@ func labels(s *screen.Screen) []string {
 // Settings as it is without the card, the card's area counts as covered,
 // and another service's overlay still hides what it lies over.
 func TestAgentScreenLeavesOutOwnOverlays(t *testing.T) {
-	pkg := Standalone.Package
+	pkg := companion.Release.Package
 	card := companion.Window{ID: 9, Type: companion.WindowAccessibilityOverlay, Layer: 3, Title: pkg,
 		Bounds: companion.Bounds{31, 1847, 1048, 2306}}
 	pill := companion.Window{ID: 8, Type: companion.WindowAccessibilityOverlay, Layer: 2, Title: pkg,
@@ -67,7 +67,7 @@ func TestAgentScreenLeavesOutOwnOverlays(t *testing.T) {
 }
 
 func TestOwnUIRefusalIsNotDone(t *testing.T) {
-	d := &Device{app: Standalone}
+	d := &Device{app: companion.Release}
 	err := d.wrap(&companion.Error{Code: "own_ui", Message: "Pinky's own controls"})
 	if !errors.Is(err, ErrOwnUI) || !errors.Is(err, driver.ErrUnsupported) {
 		t.Fatalf("own_ui became %v; want ErrOwnUI, which the gateway reports as not done", err)

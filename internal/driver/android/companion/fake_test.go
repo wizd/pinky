@@ -32,16 +32,31 @@ type fakePhone struct {
 	// rewrite simulates Android persisting the list again in its own form
 	// while the service is on.
 	rewrite func(string) string
+	// ignoreWrites takes `settings put` and `settings delete` without an
+	// error and changes nothing, as vivo's OriginOS 6 does with
+	// enabled_accessibility_services (issue #94).
+	ignoreWrites bool
+	// deaf closes every connection at once, even while Pinky's service is
+	// listed: a service that never starts.
+	deaf bool
 	// dropAfter closes a connection after that many requests on it.
 	dropAfter int
 	setText   func(req map[string]any) (any, *Error)
-	apkSum    string // sha256 of the installed APK
+	input     func(req map[string]any) *Error // gesture and global; nil answers ok
+	apkSum    string                          // sha256 of the installed APK
 	// probe is what the phone shows when the client asks why the service
 	// did not answer (probeCmd); "" fails the command.
 	probe  string
 	conns  []net.Conn
 	events chan string
+	// claim answers claim; nil gives the claim. An error with code
+	// fakeHangUp closes the connection instead of answering.
+	claim func(req map[string]any) (any, *Error)
 }
+
+// fakeHangUp, as the code of an answer's error, makes the fake phone close
+// the connection without replying.
+const fakeHangUp = "fake_hang_up"
 
 func newFakePhone(t *testing.T) *fakePhone {
 	t.Helper()
@@ -74,7 +89,10 @@ func (p *fakePhone) serve() {
 		if err != nil {
 			return
 		}
-		if !p.on() {
+		p.mu.Lock()
+		deaf := p.deaf
+		p.mu.Unlock()
+		if !p.on() || deaf {
 			c.Close()
 			continue
 		}
@@ -87,6 +105,13 @@ func (p *fakePhone) serve() {
 
 func (p *fakePhone) handle(c net.Conn) {
 	defer c.Close()
+	var wmu sync.Mutex
+	write := func(b []byte) error {
+		wmu.Lock()
+		defer wmu.Unlock()
+		_, err := c.Write(append(b, '\n'))
+		return err
+	}
 	rd := bufio.NewReader(c)
 	n := 0
 	for {
@@ -104,6 +129,9 @@ func (p *fakePhone) handle(c net.Conn) {
 		drop := p.dropAfter
 		p.mu.Unlock()
 		result, perr := p.answer(req)
+		if perr != nil && perr.Code == fakeHangUp {
+			return
+		}
 		resp := map[string]any{"id": req["id"], "ok": perr == nil}
 		if perr != nil {
 			resp["error"] = perr
@@ -111,16 +139,21 @@ func (p *fakePhone) handle(c net.Conn) {
 			resp["result"] = result
 		}
 		b, _ := json.Marshal(resp)
-		if _, err := c.Write(append(b, '\n')); err != nil {
+		if write(b) != nil {
 			return
 		}
 		if req["cmd"] == "events" {
-			for ev := range p.events {
-				if _, err := c.Write([]byte(ev + "\n")); err != nil {
-					return
+			// Events go out while the connection takes more requests,
+			// as the app's do; closing p.events ends the connection.
+			go func() {
+				for ev := range p.events {
+					if write([]byte(ev)) != nil {
+						return
+					}
 				}
-			}
-			return
+				c.Close()
+			}()
+			continue
 		}
 		n++
 		if drop > 0 && n >= drop {
@@ -147,8 +180,23 @@ func (p *fakePhone) answer(req map[string]any) (any, *Error) {
 		return map[string]any{"settled": true, "waited_ms": 300}, nil
 	case "config":
 		return map[string]any{}, nil
+	case "gesture", "global":
+		if p.input != nil {
+			if err := p.input(req); err != nil {
+				return nil, err
+			}
+		}
+		return map[string]any{"took_ms": 12}, nil
 	case "events":
 		return map[string]any{"kinds": req["kinds"]}, nil
+	case "claim":
+		p.mu.Lock()
+		claim := p.claim
+		p.mu.Unlock()
+		if claim != nil {
+			return claim(req)
+		}
+		return map[string]any{"by": req["by"], "task": req["task"]}, nil
 	}
 	return nil, &Error{Code: "unknown_command", Message: fmt.Sprint(req["cmd"])}
 }
@@ -184,12 +232,18 @@ func (p *fakePhone) Shell(_ context.Context, cmd string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		if p.ignoreWrites {
+			return "", nil
+		}
 		if p.rewrite != nil {
 			v = p.rewrite(v)
 		}
 		p.settings[f[3]] = v
 		return "", nil
 	case len(f) == 4 && f[0] == "settings" && f[1] == "delete" && f[2] == "secure":
+		if p.ignoreWrites {
+			return "", nil
+		}
 		delete(p.settings, f[3])
 		return "Deleted 1 rows\n", nil
 	case len(f) == 3 && f[0] == "pm" && f[1] == "path":

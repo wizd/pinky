@@ -39,6 +39,19 @@ type AgentInfo struct {
 	// in Pinky's window: it needs no New agent approval, as the person just
 	// asked for it. Its scope and everything else work as any agent's.
 	Trusted bool
+	// Continue is, for Pinky's own agent (Pilot), the id of a task of its
+	// that ended which the session's phone_connect continues: the person
+	// gave the task a new message (pilot.Runner.Continue). The task
+	// runs again as the same task, in Activity and the history, with its
+	// steps so far; a task the gateway no longer has, or one on another
+	// phone, starts afresh.
+	Continue string
+	// Pilot marks a session of Pinky's own agent (internal/pilot): one the
+	// person started (Trusted), or one doing a task another agent handed
+	// it, under that agent's name and without Trusted. Only Pinky's MCP
+	// server sets it; it lets the session continue a task (Continue) and
+	// take the person's messages (PersonSaid), and changes nothing else.
+	Pilot bool
 }
 
 // Status is the outcome of a call, from DESIGN.md's Results table.
@@ -72,7 +85,11 @@ const (
 	ErrDeviceOffline ErrorCode = "device_offline"
 	// ErrDevicePaused: the person paused Pinky's connection to the phone
 	// in Pinky (pause.go); it is unusable until they resume it.
-	ErrDevicePaused    ErrorCode = "device_paused"
+	ErrDevicePaused ErrorCode = "device_paused"
+	// ErrDeviceBusy: Pinky on the phone (the Android app's on-phone
+	// mode), or Pinky on another computer, holds the phone for a task of
+	// its own (onphone.go); nothing was done.
+	ErrDeviceBusy      ErrorCode = "device_busy"
 	ErrLeaseHeld       ErrorCode = "lease_held"
 	ErrScopeDenied     ErrorCode = "scope_denied"
 	ErrNotFound        ErrorCode = "not_found"
@@ -107,6 +124,7 @@ type Result struct {
 	Apps       []driver.App
 	Screenshot image.Image
 	Steps      []*Result // phone_batch, one per step that ran
+	Scan       *ScanView // phone_read_list
 	Task       string    // phone_connect: the task id
 	Folder     string    // phone_files: the folder on the computer
 	Files      []FileView
@@ -139,6 +157,9 @@ type Call struct {
 
 	// reuse lets a batch step start from the previous step's read.
 	reuse bool
+	// noAsk refuses an action the rules would ask the person about,
+	// instead of asking: phone_read_list never opens an approval.
+	noAsk bool
 }
 
 // reuseAge is how old the previous step's read may be for the next batch
@@ -230,14 +251,51 @@ type BatchRequest struct {
 	Steps []Action
 }
 
+// ReadListRequest is phone_read_list.
+type ReadListRequest struct {
+	Call
+	Ref           int
+	Area          *screen.Rect
+	Direction     string
+	MaxScreens    int
+	MaxMS         int
+	OCR           string // auto, all or off
+	ScrollPercent int
+	Continuation  string
+}
+
+// ScanPage is the newly exposed content from one physical screen.
+type ScanPage struct {
+	Number int
+	Lines  []string
+}
+
+// ScanView is a compact, ordered account of a list scan. The model gets
+// text rather than one screenshot or complete tree per screen.
+type ScanView struct {
+	Pages        int
+	StartScreen  int
+	Swipes       int
+	Lines        int
+	Overlap      int
+	Stop         string
+	Complete     bool
+	Truncated    bool
+	OutputBytes  int
+	Sections     []ScanPage
+	Continuation string
+}
+
 // Limits from DESIGN.md's tool table.
 const (
 	MaxTextLen     = 16384
 	MaxObserveWait = 30 * time.Second
 	MaxWaitFor     = 45 * time.Second
 	// MaxWaitTexts is the most texts one phone_wait_for takes (text and any).
-	MaxWaitTexts  = 10
-	MaxBatchSteps = 50
+	MaxWaitTexts   = 10
+	MaxBatchSteps  = 50
+	MaxReadScreens = 30
+	MaxReadTime    = 45 * time.Second
 	// MaxSettle is the most an action's settle_ms may ask for: the
 	// default limit, SettleMax, is never raised.
 	MaxSettle = 3 * time.Second
@@ -426,7 +484,7 @@ func (g *Gateway) finish(l *lease, r *Result) *Result {
 			r.Message += " The last action may have happened before the pause."
 		}
 	}
-	if ended && by == OutcomeStopped {
+	if ended && by == OutcomeStopped && r.Status != StatusStopped {
 		ran := r.Status == StatusSettled || r.Status == StatusUncertain
 		r = statusResult(StatusStopped, "The person pressed Stop; the lease is gone. End the task.")
 		if ran {
@@ -627,6 +685,7 @@ func (s *Session) Connect(ctx context.Context, req ConnectRequest) *Result {
 		}
 	}
 	l := g.newLeaseLocked(s, d, title, req.Apps)
+	continued := l.task.continued
 	l.readOnly, l.task.readOnly = req.ReadOnly, req.ReadOnly
 	l.inflight++
 	shared := g.noteSharedLocked(s)
@@ -636,7 +695,10 @@ func (s *Session) Connect(ctx context.Context, req ConnectRequest) *Result {
 	unknown := g.resolveTaskApps(ctx, l)
 	g.recordSession(s)
 	own := req.OwnScreen && g.useOwnScreen(l)
-	g.addStep(l, connectStep(d.name(), title, req, own))
+	if !continued {
+		// A task that continues has its connection among its steps.
+		g.addStep(l, connectStep(d.name(), title, req, own))
+	}
 	g.emit(Event{Kind: EventTasks, DeviceID: d.id, TaskID: l.task.id})
 	g.emit(Event{Kind: EventDevices, DeviceID: d.id})
 	res, note := g.taskConnection(ctx, l, way)
@@ -721,8 +783,11 @@ func readOnlyNote(res *Result, readOnly bool) *Result {
 
 func (g *Gateway) newLeaseLocked(s *Session, d *device, title string, apps []string) *lease {
 	now := time.Now()
-	t := &task{id: history.NewID("t_"), sessionID: s.id, title: title, agent: s.agent.Name, deviceID: d.id,
-		deviceName: d.name(), state: TaskWorking, started: now}
+	t := g.reopenLocked(s, d)
+	if t == nil {
+		t = &task{id: history.NewID("t_"), sessionID: s.id, title: title, agent: s.agent.Name, deviceID: d.id,
+			deviceName: d.name(), state: TaskWorking, started: now}
+	}
 	l := &lease{id: history.NewID("l_"), session: s, dev: d, task: t, created: now, lastUsed: now,
 		apps: append([]string(nil), apps...), grants: map[string]bool{}}
 	l.ctx, l.cancel = context.WithCancel(g.ctx)
@@ -734,6 +799,7 @@ func (g *Gateway) newLeaseLocked(s *Session, d *device, title string, apps []str
 	}
 	l.bgWanted = g.backgroundLocked(d) && scope.Mode != ScopeWatchOnly
 	d.lease = l
+	d.leaseGen++
 	if d.person {
 		// The person is still in control from before: the task starts paused.
 		t.state = TaskPaused
@@ -746,6 +812,82 @@ func (g *Gateway) newLeaseLocked(s *Session, d *device, title string, apps []str
 	g.recordTaskLocked(t)
 	return l
 }
+
+// reopenLocked takes back the ended task that s continues on d
+// (AgentInfo.Continue), running again; nil when s continues none, or the
+// gateway no longer has it. Only one phone_connect continues it. The
+// caller holds g.mu.
+func (g *Gateway) reopenLocked(s *Session, d *device) *task {
+	id := s.agent.Continue
+	if id == "" || !s.agent.Trusted && !s.agent.Pilot {
+		return nil
+	}
+	s.agent.Continue = ""
+	for i := len(g.ended) - 1; i >= 0; i-- {
+		t := g.ended[i]
+		if t.id != id {
+			continue
+		}
+		if t.deviceID != d.id || t.agent != s.agent.Name {
+			return nil
+		}
+		g.ended = append(g.ended[:i:i], g.ended[i+1:]...)
+		t.state, t.ended, t.outcome, t.summary = TaskWorking, time.Time{}, "", ""
+		t.deviceName = d.name()
+		t.continued = true
+		return t
+	}
+	return nil
+}
+
+// PersonSaid adds what the person told Pinky's own agent during its task
+// on a phone to the task's steps, as the agent's model reads it: a message
+// typed while the task ran, or the one that continued it. It is ErrNoTask
+// when Pinky's own agent runs no task on the phone. It approves nothing.
+func (g *Gateway) PersonSaid(deviceID, text string) error {
+	return g.said(deviceID, "", text)
+}
+
+// AgentSaid is PersonSaid for a message from the agent that handed Pinky's
+// own agent the task (AgentInfo.Pilot), by its name: the step says the
+// agent said it, never the person.
+func (g *Gateway) AgentSaid(deviceID, agent, text string) error {
+	if strings.TrimSpace(agent) == "" {
+		agent = "Agent"
+	}
+	return g.said(deviceID, strings.TrimSpace(agent), text)
+}
+
+func (g *Gateway) said(deviceID, agent, text string) error {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	d := g.devices[deviceID]
+	if d == nil || d.lease == nil || d.lease.ended || !d.lease.session.agent.Trusted && !d.lease.session.agent.Pilot {
+		return ErrNoTask
+	}
+	line := strings.Join(strings.Fields(text), " ")
+	if r := []rune(line); len(r) > 300 {
+		line = string(r[:299]) + "…"
+	}
+	args, said := map[string]any{"text": text}, fmt.Sprintf("You said: “%s”", line)
+	if agent != "" {
+		args["from"], said = agent, fmt.Sprintf("%s said: “%s”", agent, line)
+	}
+	g.addStepLocked(d.lease.task, StepView{Tool: PersonStep, Args: argsJSON(args),
+		Text: said, Status: string(StatusSettled), At: time.Now()}, "", "")
+	return nil
+}
+
+// PersonStep is the tool name of the steps PersonSaid and AgentSaid add.
+const PersonStep = "person_message"
+
+// ErrNoTask is PersonSaid's for a phone where Pinky's own agent runs no
+// task.
+var ErrNoTask = errors.New("gateway: Pinky runs no task on this phone")
 
 func appendUniq(list []string, s string) []string {
 	for _, x := range list {
@@ -1587,7 +1729,7 @@ func (s *Session) Apps(ctx context.Context, req AppsRequest) *Result {
 		if scope.Mode == ScopeApps && !g.policy.IsSystem(app) && !appListed(app, scope.Apps) {
 			continue
 		}
-		if q != "" && !strings.Contains(strings.ToLower(a.Name), q) && !strings.Contains(strings.ToLower(a.ID), q) {
+		if q != "" && !appNamed(a, q, func(n string) bool { return strings.Contains(n, q) }) && !strings.Contains(strings.ToLower(a.ID), q) {
 			continue
 		}
 		out = append(out, a)

@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>{{index .Text "title"}}</title>
+<style>
+/* Pinky's own palette (ui/style.go), light and dark, as the web mirror's page. */
+:root {
+  --bg: #ffffff; --bg2: #f7f7f8; --bg3: #efeff2;
+  --ink: #1d1d22; --ink2: #5b5b64; --ink3: #6c6c75;
+  --line: #ebebef; --line2: #d9d9e0;
+  --accent: #5450d6; --on-accent: #ffffff; --green: #2f9e5a;
+  --amber: #975800; --amber-tint: #fff7ed; --amber-line: #f4dcbc;
+  --red: #c32c18; --red-tint: #fef0ed; --red-line: #f0c6bd;
+  --target: #ff4d6d;
+  --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px rgba(20,20,30,.10);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1f; --bg2: #161619; --bg3: #2b2b30;
+    --ink: #ededf2; --ink2: #b3b3bc; --ink3: #a3a3ad;
+    --line: #2e2e34; --line2: #404047;
+    --accent: #9895ff; --on-accent: #16161a; --green: #4cc38a;
+    --amber: #f7a74e; --amber-tint: #322a23; --amber-line: #5a4530;
+    --red: #f87a60; --red-tint: #3a1e19; --red-line: #723b31;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.4);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg2); color: var(--ink);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased; }
+button { font: inherit; }
+header { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; height: 52px;
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+  background: var(--bg); border-bottom: 1px solid var(--line); font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+.dot.bad { background: var(--red); }
+main { max-width: 560px; margin: 0 auto; padding: 16px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  display: flex; flex-direction: column; gap: 14px; }
+.note { padding: 14px 16px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); color: var(--ink2); }
+.note.warn { background: var(--amber-tint); border-color: var(--amber-line); color: var(--amber); }
+.note.bad { background: var(--red-tint); border-color: var(--red-line); color: var(--red); }
+.note h2 { margin: 0 0 6px; font-size: 17px; color: var(--ink); }
+.code { font: 600 34px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; color: var(--ink); margin: 10px 0 4px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; border-radius: 10px;
+  border: 1px solid var(--line2); background: var(--bg); color: var(--ink); font-weight: 600; cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.armed { outline: 3px solid var(--accent); outline-offset: 2px; font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+.card { border-radius: 14px; background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden; }
+.card .head { padding: 14px 16px 0; }
+.card .meta { font-size: 13px; color: var(--ink3); display: flex; gap: 8px; justify-content: space-between; }
+.card .left { font-variant-numeric: tabular-nums; flex: none; }
+.card .left.soon { color: var(--red); font-weight: 600; }
+.card h3 { margin: 6px 0 2px; font-size: 18px; }
+.card .detail { color: var(--ink2); }
+.card .rule { margin-top: 6px; font-size: 13px; color: var(--amber); }
+.shot { position: relative; margin: 12px 16px 0; border-radius: 10px; overflow: hidden; background: #000; }
+.shot img { display: block; width: 100%; height: auto; }
+.shot svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.actions { display: flex; gap: 10px; padding: 14px 16px 16px; }
+.actions .btn { flex: 1; }
+.card .msg { padding: 0 16px 14px; font-size: 14px; color: var(--ink2); }
+.card .msg.bad { color: var(--red); }
+.card.over { opacity: .6; }
+</style>
+</head>
+<body>
+<header><span class="dot" id="dot"></span><span>{{index .Text "title"}}</span></header>
+<main id="main"></main>
+<script>
+"use strict";
+const T = {{.Text}};
+const FAIL = {{.Fail}};
+const API = location.pathname.replace(/\/$/, "") + "/api/";
+const KEY = "pinky-approvals";
+const main = document.getElementById("main");
+const dot = document.getElementById("dot");
+
+const b64 = {
+  enc(buf) {
+    const b = new Uint8Array(buf); let s = "";
+    for (const c of b) s += String.fromCharCode(c);
+    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  },
+  dec(s) {
+    s = s.replace(/-/g, "+").replace(/_/g, "/"); while (s.length % 4) s += "=";
+    return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  },
+};
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function note(cls, title, body) {
+  const n = el("div", "note " + (cls || ""));
+  if (title) n.append(el("h2", "", title));
+  if (body) n.append(el("div", "", body));
+  return n;
+}
+function show(...nodes) { main.replaceChildren(...nodes); }
+
+function session() { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } }
+function setSession(s) { try { s ? localStorage.setItem(KEY, s) : localStorage.removeItem(KEY); } catch {} }
+
+async function call(path, body, auth) {
+  const h = { "Content-Type": "application/json" };
+  if (auth) h.Authorization = "Bearer " + session();
+  const r = await fetch(API + path, { method: "POST", headers: h, body: JSON.stringify(body || {}), cache: "no-store" });
+  if (r.headers.get("Content-Type") === "image/jpeg") return r.ok ? r.blob() : Promise.reject({ error: "shot" });
+  const j = await r.json().catch(() => ({ error: "bad_response" }));
+  if (!r.ok) throw j;
+  return j;
+}
+
+function canPasskeys() {
+  return window.isSecureContext && window.PublicKeyCredential && navigator.credentials &&
+    typeof AuthenticatorAttestationResponse !== "undefined" &&
+    typeof AuthenticatorAttestationResponse.prototype.getPublicKey === "function";
+}
+
+// Adding this phone: the link's token, a passkey, the code, the person's
+// Allow in Pinky's window.
+async function pairFlow(link) {
+  let begun;
+  try { begun = await call("pair/begin", { link }); }
+  catch (e) { show(note("bad", "", e.error === "tailnet" ? T.tailnet : e.error === "slow_down" ? T.slowDown : T.linkUsed)); return; }
+  const btn = el("button", "btn primary", T.addButton);
+  const n = note("", T.addTitle, T.addBody);
+  const row = el("div"); row.style.marginTop = "12px"; row.append(btn); n.append(row);
+  show(n);
+  btn.onclick = async () => {
+    btn.disabled = true;
+    let cred;
+    try {
+      // Called right in the click: Safari wants a user gesture.
+      cred = await navigator.credentials.create({ publicKey: {
+        challenge: b64.dec(begun.challenge),
+        rp: { id: begun.rpId, name: "Pinky" },
+        user: { id: b64.dec(begun.user), name: "Pinky · " + begun.rpId, displayName: "Pinky · " + begun.rpId },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+        authenticatorSelection: { userVerification: "required", residentKey: "preferred" },
+        attestation: "none", timeout: 120000,
+      }});
+    } catch (e) {
+      btn.disabled = false;
+      n.querySelector(".msg")?.remove();
+      const m = el("div", "msg", T.passkeyFailed.replace("{detail}", e && e.message || String(e)));
+      m.style.marginTop = "10px"; m.style.color = "var(--red)"; n.append(m);
+      return;
+    }
+    const r = cred.response;
+    let fin;
+    try {
+      fin = await call("pair/finish", {
+        id: begun.id, credentialId: b64.enc(cred.rawId), publicKey: b64.enc(r.getPublicKey()),
+        alg: r.getPublicKeyAlgorithm(), clientData: b64.enc(r.clientDataJSON), authData: b64.enc(r.getAuthenticatorData()),
+      });
+    } catch (e) { show(note("bad", "", e.error === "passkey" ? T.verifyFailed : T.linkUsed)); return; }
+    const c = note("", T.compareTitle, T.compare);
+    const code = el("div", "code", fin.code.slice(0, 3) + " " + fin.code.slice(3));
+    c.insertBefore(code, c.lastChild);
+    show(c);
+    for (;;) {
+      await new Promise(r => setTimeout(r, 1500));
+      let st;
+      try { st = await call("pair/status", { id: begun.id, poll: fin.poll }); } catch { continue; }
+      if (st.state === "allowed") { setSession(st.session); start(note("", "", T.added)); return; }
+      if (st.state === "denied") { show(note("bad", "", T.turnedDown)); return; }
+      if (st.state === "gone") { show(note("bad", "", T.linkUsed)); return; }
+    }
+  };
+}
+
+// The approvals.
+const cards = new Map(); // id → {node, need, ch: {allow, deny}, state}
+let skew = 0, lastCount = 0, banner = null, timer = 0, busy = false;
+const busyNote = note("warn", "", T.busy);
+
+function start(first) {
+  banner = first || null;
+  poll();
+  setInterval(tick, 500);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+}
+
+async function poll() {
+  clearTimeout(timer);
+  let r;
+  try { r = await call("needs", {}, true); dot.classList.remove("bad"); }
+  catch (e) {
+    if (e.error === "session") { setSession(""); show(note("bad", "", T.removed)); return; }
+    if (e.error === "tailnet") { show(note("bad", "", T.tailnet)); return; }
+    dot.classList.add("bad");
+    timer = setTimeout(poll, 3000);
+    return;
+  }
+  skew = r.now - Date.now();
+  busy = !!r.busy;
+  render(r.needs);
+  timer = setTimeout(poll, document.hidden ? 10000 : 2000);
+}
+
+function render(needs) {
+  // While an agent uses this phone the server sends no cards: drop them,
+  // they were not answered.
+  if (busy) { for (const c of cards.values()) c.node.remove(); cards.clear(); }
+  const seen = new Set();
+  for (const n of needs) {
+    seen.add(n.id);
+    // A card is made again when it can be answered here or no longer can
+    // (an agent started or stopped using this phone).
+    const c = cards.get(n.id);
+    if (!c || (!c.final && !c.busy && c.need.answerable !== n.answerable)) cards.set(n.id, makeCard(n));
+  }
+  for (const [id, c] of cards) {
+    if (!seen.has(id) && !c.final) {
+      // Answered on the computer or elsewhere, or the time ran out.
+      finish(c, Date.now() + skew >= c.need.deadline ? T.timedOut : T.already, false);
+    }
+    if (!seen.has(id) && c.final && Date.now() - c.final > 20000) { c.node.remove(); cards.delete(id); }
+  }
+  const open = needs.filter(n => n.answerable).length;
+  if (open > lastCount && navigator.vibrate) navigator.vibrate(200);
+  lastCount = open;
+  document.title = (open ? "(" + open + ") " : "") + T.title;
+  const nodes = [];
+  if (banner) nodes.push(banner);
+  if (busy) nodes.push(busyNote);
+  for (const c of cards.values()) nodes.push(c.node);
+  if (!cards.size && !busy) nodes.push(note("", "", T.none));
+  if (nodes.length !== main.children.length || nodes.some((n, i) => main.children[i] !== n)) show(...nodes);
+}
+
+function makeCard(n) {
+  const c = { need: n, ch: {}, final: 0 };
+  const node = el("div", "card");
+  const head = el("div", "head");
+  const meta = el("div", "meta");
+  meta.append(el("span", "", [n.agent, n.phone, n.app].filter(Boolean).join(" · ")));
+  c.left = el("span", "left");
+  meta.append(c.left);
+  head.append(meta, el("h3", "", n.title));
+  if (n.detail) head.append(el("div", "detail", n.detail));
+  if (n.rule) head.append(el("div", "rule", T.rule.replace("{rule}", n.rule)));
+  node.append(head);
+  if (n.shot) node.append(shot(n));
+  c.msg = el("div", "msg");
+  if (n.answerable) {
+    const a = el("div", "actions");
+    c.deny = el("button", "btn", T.deny);
+    c.allow = el("button", "btn primary", T.allow);
+    c.deny.onclick = () => answer(c, "deny");
+    c.allow.onclick = () => answer(c, "allow");
+    a.append(c.deny, c.allow);
+    node.append(a);
+  } else {
+    c.msg.textContent = T.onComputer;
+    c.msg.style.paddingTop = "12px";
+  }
+  node.append(c.msg);
+  c.node = node;
+  return c;
+}
+
+function shot(n) {
+  const box = el("div", "shot");
+  const img = el("img");
+  img.alt = "";
+  box.append(img);
+  call("shot", { id: n.id }, true).then(b => { img.src = URL.createObjectURL(b); }).catch(() => {});
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", "0 0 " + n.shot.w + " " + n.shot.h);
+  svg.setAttribute("preserveAspectRatio", "none");
+  const k = n.shot.w / 360;
+  if (n.target) {
+    const r = document.createElementNS(ns, "rect");
+    for (const [a, v] of [["x", n.target.X], ["y", n.target.Y], ["width", n.target.W], ["height", n.target.H], ["rx", 8 * k]]) r.setAttribute(a, v);
+    r.setAttribute("fill", "none"); r.setAttribute("stroke", "var(--target)"); r.setAttribute("stroke-width", 3 * k);
+    svg.append(r);
+  }
+  for (const pts of [n.points, n.points2]) {
+    if (!pts || !pts.length) continue;
+    if (pts.length > 1) {
+      const l = document.createElementNS(ns, "polyline");
+      l.setAttribute("points", pts.map(p => p.X + "," + p.Y).join(" "));
+      l.setAttribute("fill", "none"); l.setAttribute("stroke", "var(--target)"); l.setAttribute("stroke-width", 4 * k);
+      l.setAttribute("stroke-linecap", "round"); l.setAttribute("stroke-linejoin", "round"); l.setAttribute("opacity", ".8");
+      svg.append(l);
+    }
+    const c = document.createElementNS(ns, "circle");
+    c.setAttribute("cx", pts[0].X); c.setAttribute("cy", pts[0].Y); c.setAttribute("r", 14 * k);
+    c.setAttribute("fill", "rgba(255,77,109,.35)"); c.setAttribute("stroke", "var(--target)"); c.setAttribute("stroke-width", 3 * k);
+    svg.append(c);
+  }
+  box.append(svg);
+  return box;
+}
+
+// A tap fetches the challenge for that answer, never ahead of it: the
+// server refuses an answer if an agent used this phone since. The passkey
+// sheet then needs a second tap (Safari wants it in the user's gesture).
+function arm(c, d, ch) {
+  c.ch = ch ? { [d]: ch } : {};
+  c.allow.textContent = ch && d === "allow" ? T.confirmAllow : T.allow;
+  c.deny.textContent = ch && d === "deny" ? T.confirmDeny : T.deny;
+  c.allow.classList.toggle("armed", !!ch && d === "allow");
+  c.deny.classList.toggle("armed", !!ch && d === "deny");
+}
+
+function apiFail(c, e) {
+  c.msg.className = "msg bad";
+  c.msg.textContent = e && e.error === "computer" ? T.onComputer : e && e.error === "busy" ? T.busy : T.verifyFailed;
+}
+
+async function answer(c, d) {
+  if (c.final || c.busy) return;
+  const ch = c.ch[d];
+  if (!ch || ch.expires <= Date.now() + skew + 5000) {
+    c.busy = true; c.allow.disabled = c.deny.disabled = true; c.msg.textContent = ""; c.msg.className = "msg";
+    let got = null;
+    try { got = await call("challenge", { id: c.need.id, decision: d }, true); } catch (e) { apiFail(c, e); }
+    c.busy = false; c.allow.disabled = c.deny.disabled = false;
+    arm(c, d, got);
+    return;
+  }
+  c.busy = true; c.allow.disabled = c.deny.disabled = true; c.msg.textContent = ""; c.msg.className = "msg";
+  arm(c, d, null);
+  let a;
+  try {
+    a = await navigator.credentials.get({ publicKey: {
+      challenge: b64.dec(ch.challenge), rpId: ch.rpId, userVerification: "required", timeout: 60000,
+      allowCredentials: [{ type: "public-key", id: b64.dec(ch.credentialId) }],
+    }});
+  } catch {
+    c.busy = false; c.allow.disabled = c.deny.disabled = false; c.msg.textContent = T.notAnswered;
+    return;
+  }
+  let r;
+  try {
+    r = await call("decide", {
+      challenge: ch.challenge, credentialId: b64.enc(a.rawId), clientData: b64.enc(a.response.clientDataJSON),
+      authData: b64.enc(a.response.authenticatorData), signature: b64.enc(a.response.signature),
+    }, true);
+  } catch (e) {
+    c.busy = false; c.allow.disabled = c.deny.disabled = false;
+    apiFail(c, e);
+    return;
+  }
+  if (r.result === "done") finish(c, d === "allow" ? T.allowed : T.denied, true);
+  else finish(c, r.late ? T.late : T.already, false);
+}
+
+function finish(c, text, mine) {
+  c.final = Date.now();
+  c.node.classList.add("over");
+  if (c.allow) c.allow.disabled = c.deny.disabled = true;
+  c.left.textContent = "";
+  c.msg.className = "msg" + (mine ? "" : " bad");
+  c.msg.textContent = text;
+}
+
+function tick() {
+  const now = Date.now() + skew;
+  for (const c of cards.values()) {
+    if (c.final) continue;
+    const s = Math.max(0, Math.ceil((c.need.deadline - now) / 1000));
+    c.left.textContent = T.left.replace("{seconds}", s);
+    c.left.classList.toggle("soon", s <= 10);
+    for (const d of ["allow", "deny"]) {
+      const ch = c.ch[d];
+      if (ch && !c.busy && ch.expires - now < 5000) arm(c, d, null); // tap again for a new one
+    }
+  }
+}
+
+(function init() {
+  if (FAIL === "tailnet") { dot.classList.add("bad"); show(note("bad", "", T.tailnet)); return; }
+  const link = new URLSearchParams(location.hash.slice(1)).get("pair");
+  if (location.hash) history.replaceState(null, "", location.pathname);
+  if (!canPasskeys()) { dot.classList.add("bad"); show(note("bad", "", T.noPasskeys)); return; }
+  if (link) { pairFlow(link); return; }
+  if (!session()) { show(note("warn", "", T.notAdded)); return; }
+  start();
+})();
+</script>
+</body>
+</html>

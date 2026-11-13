@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Japanese. Pinky is the app's name in every language. The debug page's
+     strings stay English: it is for Pinky's tests. -->
+<resources>
+    <string name="app_name">Pinky</string>
+    <string name="service_label">Pinky</string>
+    <string name="service_description">このスマホの Pinky で始めたタスクのために、Pinky が画面を読み取り、タップ、スワイプ、文字入力をできるようにします。そのためにオンにすると、ここでオフにするまでオンのままです。また、エージェントがこのスマホで作業している間、パソコンの Pinky が画面上のコントロールを読み取り、文字を入力できるようにします。USB デバッグからのタップを受け付けないスマホでは、タップやスワイプも行います。Pinky はエージェントがここで作業している間だけ USB デバッグ経由でこのサービスをオンにし、タスクが終わるか、あなたが引き継いでから数秒後にオフに戻します。Pinky との接続が切れて 1 分たつと、自分でもオフになります。銀行などのアプリは、オンになっているユーザー補助サービスを検出できます。ここでオフにしても次のタスクまでです。Pinky にまったく使わせたくない場合は、このアプリをアンインストールしてください。なくても Pinky は動きますが、遅くなります。USB デバッグ経由で Pinky がオンにできないスマホでは、ここで自分でオンにします。ここでオフにするまでオンのままです。</string>
+</resources>

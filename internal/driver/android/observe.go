@@ -38,7 +38,9 @@ func (d *Device) Observe(ctx context.Context, opt driver.ObserveOptions) (*scree
 
 // ObserveWithText is Observe with what it did about OCR.
 func (d *Device) ObserveWithText(ctx context.Context, opt driver.ObserveOptions) (*screen.Screen, TextStats, error) {
-	d.used()
+	if err := d.acting(ctx); err != nil {
+		return nil, TextStats{}, err
+	}
 	since := time.Now()
 	s, sc, err := d.observeTree(ctx)
 	if err != nil {
@@ -231,7 +233,9 @@ func firstLine(out []byte) string {
 // Screenshot implements driver.Device with `screencap -p`, in the same
 // pixel space as Observe.
 func (d *Device) Screenshot(ctx context.Context) (image.Image, error) {
-	d.used()
+	if err := d.acting(ctx); err != nil {
+		return nil, err
+	}
 	out, err := d.screencap(ctx, "screencap -p")
 	if err != nil {
 		return nil, err

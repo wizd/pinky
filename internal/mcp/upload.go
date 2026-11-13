@@ -225,7 +225,7 @@ func uploadStatus(res *gateway.Result) int {
 		return http.StatusBadRequest
 	case res.Error == gateway.ErrScopeDenied, res.Status == gateway.StatusBlocked:
 		return http.StatusForbidden
-	case res.Error == gateway.ErrDeviceOffline, res.Error == gateway.ErrDevicePaused:
+	case res.Error == gateway.ErrDeviceOffline, res.Error == gateway.ErrDevicePaused, res.Error == gateway.ErrDeviceBusy:
 		return http.StatusServiceUnavailable
 	case res.IsError():
 		return http.StatusInternalServerError

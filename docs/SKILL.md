@@ -10,7 +10,7 @@ Pinky gives you the person's real phone. They watch every step in the Pinky app,
 ## The loop
 
 1. `phone_connect { task: "Reorder last week's lunch" }`. The task name is what the person sees, so make it plain. If several phones are connected, pass `device` (an id or name from the error message). One task at a time per phone: release it before you start another there, as a phone that runs another of your tasks returns `lease_held`. When Pinky says several tasks share this session, another conversation may be using it too: pass `device` on every call from then on, and leave phones that run tasks you did not start alone. Optionally pass `apps: ["Dinely"]` when the task needs only those apps; Pinky then holds you to that list, which protects the person if a page tries to send you elsewhere. Pass `read_only: true` when the task only looks (reading balances, checking an order): Pinky then refuses anything that would ask the person, so a misread screen cannot turn into a payment. On an iPhone with Pinky's helper, Pinky moves the task to the helper by itself for apps that refuse to run while the screen is shared (DBS digibank, 招商银行); pass `connection: "helper"` for another such app (one that closes itself or warns about screen sharing), and the message says what happened.
-2. Act: `phone_launch`, `phone_tap`, `phone_type`, `phone_swipe`, `phone_pinch`, `phone_drag`, `phone_key`. Every action waits for the screen to settle and returns what changed, so you rarely need `phone_observe`.
+2. Act: `phone_launch`, `phone_tap`, `phone_type`, `phone_swipe`, `phone_pinch`, `phone_drag`, `phone_key`. Every action waits for the screen to settle and returns what changed, so you rarely need `phone_observe`. When the task is to read several screens of one list, use `phone_read_list` instead of repeating `phone_swipe` and `phone_observe`.
 3. `phone_release { outcome: "done", summary: "Ordered one chicken rice bowl for $12.80." }` when you finish, also when you give up (`failed`).
 
 ## Reading the screen
@@ -54,7 +54,7 @@ The first line of every result is its status (or `error: <code>`), with details 
 | `device_needs_setup` | The phone is connected but waits for the person to do a step first, such as trusting this computer, allowing USB debugging, turning on Developer Mode or entering the passcode; `setup` and the message say which. Nothing happened | `phone_handoff` asking for that step: it returns with the screen once the phone is ready. For `setup: passcode` call it at once, since iOS stops asking after a while; then repeat the call that returned it (such as `phone_launch`). For `setup: preparing`, wait a few seconds and `phone_observe`; for `setup: update`, tell the person and end the task |
 | `stopped` | The person pressed Stop; your lease is gone | End the task. Do not reconnect |
 
-Errors: `device_offline` (wait, it may come back within a minute), `device_paused` (the person paused Pinky's connection to that phone: ask them to resume it, or use another phone; it does not come back by itself), `lease_held` (another agent uses that phone; the result says who), `scope_denied` (an app outside your scope or the task's list), `not_found` (the ref is gone; read the screen again), `unsupported` (this phone cannot do it, e.g. `recents` on iPhone), `invalid_argument` (fix the call).
+Errors: `device_offline` (wait, it may come back within a minute), `device_paused` (the person paused Pinky's connection to that phone: ask them to resume it, or use another phone; it does not come back by itself), `device_busy` (Pinky on the phone runs a task of its own there, and nothing was done: try again in a while, or tell the person, who can stop it on the phone), `lease_held` (another agent uses that phone; the result says who), `scope_denied` (an app outside your scope or the task's list), `not_found` (the ref is gone; read the screen again), `unsupported` (this phone cannot do it, e.g. `recents` on iPhone), `invalid_argument` (fix the call).
 
 A tool result that says Pinky is not running means the person quit Pinky: tell them, and once they open it again (the connection comes back by itself), call `phone_connect` again and observe before acting.
 
@@ -118,9 +118,28 @@ Testing an app on the phone? `phone_logs` reads that app's own log lines and cra
 
 `phone_device` flips the switches developers test with: `{ rotation: "landscape" }`, `{ appearance: "dark" }`, `{ location: { latitude: 35.6812, longitude: 139.7671 } }`; with no arguments it reads them, and the phone's model, system, battery and storage. `phone_launch { app: "Settings", language: "ja" }` opens an app in another language (`region: "JP"` for its formats) and restarts it if it runs. These change the person's phone, so on a real phone the person approves them first; on emulators and Simulators they usually go through at once. Pinky puts everything back when you release the phone; `phone_device { reset: ["all"] }` does it sooner. What a phone cannot do returns `unsupported` with why: there is no simulated location on an Android phone, for example.
 
+## Handing Pinky a whole task
+
+For a simple task where only the outcome matters (set an alarm, look something up in one app), you can hand it to Pinky's own agent instead of driving the phone yourself. It works with the model and limits the person chose in Pinky.
+
+```text
+→ phone_task_run { task: "Set an alarm for 7:00 tomorrow and tell me if one already exists" }
+← running · task_id: t3f9c2a17b04e · Pixel 9 · steps: 0
+→ phone_task_wait { task_id: "t3f9c2a17b04e" }
+← done · task_id: t3f9c2a17b04e · Pixel 9 · steps: 6
+  Pinky's agent did the task. Its summary: Set an alarm for 7:00; none existed.
+```
+
+- Write `task` as you would for a person: what to do, and what to report back. Pinky's agent sees only those words and the screen.
+- Call `phone_task_wait` again while it returns `running`. `waiting_for_person` means it waits for an approval or a handoff that only the person can answer: wait, or tell them. You cannot approve anything for it.
+- The task works as you: your first connection asks the person, and your access and their rules apply. `stopped` means the person stopped it; do not start it again unless they ask. `phone_task_cancel` ends it.
+- To correct it or ask for more, `phone_task_steer { task_id, message }`: a running task reads it before its next step, an ended one carries on with it. Not after the person stopped it.
+- Release a phone you hold before you hand Pinky a task there. `phone_task_list` lists your tasks from the last day; you see only your own.
+- It works only while Pinky's window is open and Ask Pinky is on with a model and key; otherwise the call returns `unsupported` and you drive the phone with the tools above.
+
 ## Things you must not do
 
-- Never type passwords or one-time codes; Pinky refuses (`rule: credentials`). Call `phone_handoff { reason: "Please sign in to Dinely" }` and wait.
+- Never type passwords or one-time codes; Pinky refuses (`rule: credentials`). Call `phone_handoff { reason: "Please sign in to Dinely" }` and wait. The one exception is a virtual phone (an emulator or a Simulator) when the person turned on "Allow passwords on virtual phones" in Settings › Safety: there type the ones your task gives you, never guessed ones.
 - A result that says your tool definitions come from an older Pinky means Pinky updated while your MCP connection stayed open: arguments it added since may not reach it. Tell the person, and ask them to restart Pinky's MCP server (or start a new session) when the task needs them.
 - Never retry an `uncertain` action without observing first.
 - Never try to reach the phone another way (adb, scripts) to get around a refusal.
@@ -137,6 +156,7 @@ Testing an app on the phone? `phone_logs` reads that app's own log lines and cra
   - If the icons only trade places or the target moves aside, observe and aim again from where they are now.
   - For a slider, press its knob (`ref`) and let go where the value should be; `phone_drag { from, to }` works where the knob has no element of its own.
   - The home screen stays in its editing mode afterwards on an iPhone: tap Done, or press `home`.
+- `phone_read_list { ref: 12, max_screens: 30, intent: "Read this list for a summary" }` reads a long vertical list in one call. It returns compact page-labelled text with overlap removed. On a web page that has no list element, pass `scroll_area: {x, y, width, height}` instead of `ref`. `direction: "up"` reads later content and `down` reads earlier content in document order. If the result says `partial: true`, call it again with its `continuation` when you need more; each continuation starts a fresh `max_screens` budget. Do not describe a partial result as the complete list. It never asks the person: when it stops at `blocked_by_policy`, swipe there with `phone_swipe`, which asks, then read on.
 - `phone_type` replaces the field's text; `append: true` adds to it. Pass `ref` to pick the field, or it types into the focused one. Any language works. If it returns `uncertain` because the text did not go in, the field had no focus: tap it until a cursor or the keyboard shows, then type again.
 - `phone_wait_for { text: "Order placed" }` waits for loading better than repeated observing; `phone_observe { wait_ms: 3000 }` returns as soon as the screen changes.
 - When several things may come next, wait for all of them in one call instead of sleeping and observing: `phone_wait_for { any: ["Order placed", "Payment failed", "Try again"] }` returns at the first that shows and names it; with `gone: true` it returns once none of them shows. If the word is on the screen already somewhere else (a tab bar, a chat, a list that is always there), add `area: { x: 0, y: 300, width: 1080, height: 900 }`: only text whose `@x,y` is inside counts, and toasts and notifications do not.

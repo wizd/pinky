@@ -129,6 +129,9 @@ func (d *Device) Apps(ctx context.Context) ([]driver.App, error) {
 // icon: through the scrcpy server, or for a clone with `am start` in the
 // clone's user.
 func (d *Device) Launch(ctx context.Context, app string) error {
+	if err := d.held(ctx); err != nil {
+		return err
+	}
 	t, err := d.resolveApp(ctx, app)
 	if err != nil {
 		return err

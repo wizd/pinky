@@ -248,9 +248,47 @@ func (s *frameStream) Close() error {
 	return err
 }
 
+// videoRangeTable builds the 256-entry lookup that maps full-range samples
+// onto video range. Luma of a full-range picture runs 0 to 255 and that of a
+// video-range one 16 to 235, so base is 16 and the span is 219; chroma runs
+// 0 to 255 around 128 and 16 to 240 around 128, so base is 128, the span is
+// 224, and the samples are scaled from the middle rather than from 0.
+func videoRangeTable(base, span int, centred bool) (t [256]byte) {
+	for v := range t {
+		if centred {
+			n := (v - 128) * span
+			if n >= 0 {
+				n += 127
+			} else {
+				n -= 127
+			}
+			t[v] = clamp8(base + n/255)
+			continue
+		}
+		t[v] = clamp8(base + (v*span+127)/255)
+	}
+	return t
+}
+
+// fullToVideoY and fullToVideoC take a JPEG's full-range samples into the
+// video range NV12 is read in. A JPEG always carries full range — that is
+// what the format defines, whatever the picture is — while NV12 ('420v') is
+// video range, so every sample changes format on the way in. The decoder
+// applies the inverse when it reads the stream, so the picture that comes
+// out is the picture the phone drew: white comes back as white instead of
+// clipping, black as black, and every tone between lands on its own value.
+// Because the scaling is undone exactly, this holds for any picture — a dark
+// screen, a white sheet, a photograph — and not for one of them in
+// particular.
+var (
+	fullToVideoY = videoRangeTable(16, 219, false)
+	fullToVideoC = videoRangeTable(128, 224, true)
+)
+
 // toNV12 converts a picture to NV12 planes, cropped to even sizes: the Y
-// plane, then Cb and Cr interleaved at half size. JPEG's 4:2:0 pictures
-// convert without arithmetic; others go through RGB.
+// plane, then Cb and Cr interleaved at half size. A JPEG's 4:2:0 samples are
+// full range and are scaled into video range as they are copied; other
+// pictures go through RGB, which arrives at the same video range.
 func toNV12(img image.Image) (y, uv []byte, w, h int) {
 	b := img.Bounds()
 	w, h = b.Dx()&^1, b.Dy()&^1
@@ -261,14 +299,18 @@ func toNV12(img image.Image) (y, uv []byte, w, h int) {
 	uv = make([]byte, w*h/2)
 	if yc, ok := img.(*image.YCbCr); ok && yc.SubsampleRatio == image.YCbCrSubsampleRatio420 {
 		for row := 0; row < h; row++ {
-			copy(y[row*w:(row+1)*w], yc.Y[yc.YOffset(b.Min.X, b.Min.Y+row):])
+			src := yc.Y[yc.YOffset(b.Min.X, b.Min.Y+row):]
+			dst := y[row*w : (row+1)*w]
+			for col := 0; col < w; col++ {
+				dst[col] = fullToVideoY[src[col]]
+			}
 		}
 		for row := 0; row < h/2; row++ {
 			ci := yc.COffset(b.Min.X, b.Min.Y+2*row)
 			dst := uv[row*w : (row+1)*w]
 			for col := 0; col < w/2; col++ {
-				dst[2*col] = yc.Cb[ci+col]
-				dst[2*col+1] = yc.Cr[ci+col]
+				dst[2*col] = fullToVideoC[yc.Cb[ci+col]]
+				dst[2*col+1] = fullToVideoC[yc.Cr[ci+col]]
 			}
 		}
 		return y, uv, w, h

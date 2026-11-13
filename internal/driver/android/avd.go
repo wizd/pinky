@@ -283,7 +283,22 @@ func androidVersion(target string) string {
 }
 
 // emulatorSerial reports whether an adb serial is an emulator's.
-func emulatorSerial(serial string) bool { return strings.HasPrefix(serial, "emulator-") }
+func emulatorSerial(serial string) bool {
+	// "emulator-" and the console port, as the adb server names the
+	// emulators it finds on this computer. A connection by address is
+	// "host:port", so a phone at a host named "emulator-…" is none: Virtual
+	// lifts the credentials rule where the person allows it (policy).
+	port, ok := strings.CutPrefix(serial, "emulator-")
+	if !ok || port == "" {
+		return false
+	}
+	for _, r := range port {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
 
 // avdSerials maps the running AVDs to their emulators' adb serials, from
 // the property each emulator reads its AVD's name into (deviceProps). An

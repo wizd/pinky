@@ -203,6 +203,13 @@ type HostCheck struct {
 	// Apple's iPhone driver, from the Apple Devices app or iTunes),
 	// "usbmuxd" (Linux: the usbmuxd package), "usbmuxd_stopped" (Linux:
 	// installed, but not running; it starts when an iPhone is plugged in).
+	// Android's: "adb" (no adb to start a server with), "adb_server" (no
+	// server runs, and starting one failed), "adb_old" (the server is
+	// older than protocol 41), "adb_no_network" (the server cannot reach
+	// phones on the local network), "adb_restarts" (another program keeps
+	// replacing the server), "adb_other_server" (another program's adb
+	// server, on another port, holds a phone on a cable; Detail begins
+	// "Another program's adb server, on port <port>,").
 	Missing string
 	Detail  string // the same in a sentence
 }
@@ -338,9 +345,10 @@ type App struct {
 	ID     string // package name or bundle id
 	Name   string
 	System bool
-	// Aliases are other names the person knows the app by: on an iPhone,
-	// the name its home screen shows when that differs from the app's own
-	// ("微信" for WeChat, whose bundle is named WeChat in every language).
+	// Aliases are other names the person or an agent may know the app by.
+	// On an iPhone or a Simulator, Name is the name the home screen shows,
+	// in the phone's language ("微信"), and the alias is the bundle's own
+	// name when that differs ("WeChat", the same in every language).
 	Aliases []string
 	// CloneOf is set on an app clone (Android's 应用分身, Dual apps, App
 	// Twin): a second copy of an installed app that the phone keeps in
@@ -928,6 +936,19 @@ const (
 	// Clients treat it as CompanionOutdated and say why.
 	CompanionPublicKey CompanionState = "public_key"
 	CompanionNoAPK     CompanionState = "no_apk" // Pinky has no APK to install (a build without it)
+	// CompanionManual: installed and current, its service is off, and the
+	// phone does not let Pinky turn it on over USB debugging: it took
+	// Pinky's change to its accessibility settings without an error and
+	// kept nothing of it (CompanionStartSettingIgnored; vivo's OriginOS 6).
+	// Only the person can turn it on, in the phone's accessibility
+	// settings. Clients that do not know it treat it as CompanionOff.
+	CompanionManual CompanionState = "manual"
+	// CompanionManualOn: installed and current, and its service is on on a
+	// phone where only the person can turn it on (CompanionManual): they
+	// did, and Pinky leaves it on after tasks, until they turn it off on
+	// the phone. The phone's apps, banking apps among them, can see it
+	// while it is on. Clients that do not know it treat it as CompanionOn.
+	CompanionManualOn CompanionState = "manual_on"
 )
 
 // CompanionInstaller installs or updates the phone's companion app from the
@@ -968,6 +989,12 @@ const (
 	// CompanionStartNotUnlocked: the phone has not been unlocked since it
 	// started, and Android starts the service only after that.
 	CompanionStartNotUnlocked = "not_unlocked"
+	// CompanionStartSettingIgnored: the phone took the change to
+	// enabled_accessibility_services without an error and kept nothing of
+	// it, so it does not let Pinky turn the service on over USB debugging
+	// (vivo's OriginOS 6); only the person can, in the phone's
+	// accessibility settings. CompanionState says CompanionManual then.
+	CompanionStartSettingIgnored = "setting_ignored"
 )
 
 // AppManager installs, updates, uninstalls and stops apps for agents
@@ -1026,7 +1053,7 @@ func (e *packageError) Is(target error) bool { return target == ErrPackage }
 // WorkWatcher is told whether an agent works on the phone: from the start
 // of a task to its end, except while the person is in control. A driver
 // keeps on, only while one does, what agents need and the phone's apps can
-// see: Android's Pinky Companion, whose accessibility service banking apps
+// see: Pinky on the phone, whose accessibility service banking apps
 // refuse to sign in next to. The gateway calls AgentWorking right after it
 // opens the device and whenever the answer changes; it must return at once
 // and do any work in the background.
@@ -1457,7 +1484,37 @@ var (
 	// attempt was used.
 	ErrPINNotEntered = errors.New("the PIN was not entered")
 	ErrNotFound      = errors.New("not found")
+	// ErrBusy: another agent drives the phone, so this one may not act on
+	// it until that one is done (BusyError says who).
+	ErrBusy = errors.New("another agent is using the phone")
+	// ErrStoppedOnPhone: the person stopped the agent's task on the phone
+	// itself (Stop on Pinky on the phone's pill), and the task must end. A
+	// driver returns it from Observe and the actions until the agent stops
+	// working (WorkWatcher).
+	ErrStoppedOnPhone = errors.New("the person stopped this task on the phone")
 )
+
+// BusyError is ErrBusy with who holds the phone: By "phone" for Pinky on
+// the phone running a task of its own, Task that task's name when it has
+// one. A driver returns it from Observe and the actions while an agent
+// works on a phone another agent holds; nothing was done.
+type BusyError struct {
+	By   string // "phone" (Pinky on the phone) or "computer" (another computer)
+	Task string
+}
+
+func (e *BusyError) Error() string {
+	who := "Pinky on another computer is using the phone"
+	if e.By == "phone" {
+		who = "Pinky on the phone is running a task"
+	}
+	if e.Task != "" {
+		who += fmt.Sprintf(" (%q)", e.Task)
+	}
+	return who + "; nothing was done, and the phone stays busy until that task ends"
+}
+
+func (e *BusyError) Is(target error) bool { return target == ErrBusy }
 
 // SetupError is a Provider.Open that failed because the phone waits for the
 // person to do a step first, the way Info.Setup and Info.Detail name a step
@@ -1517,7 +1574,7 @@ const (
 	CheckADB          = "adb"           // Android: the adb server answers
 	CheckConnection   = "connection"    // the phone is connected and answers
 	CheckAuthorized   = "authorized"    // the phone allows this computer (USB debugging allowed, trusted)
-	CheckCompanion    = "companion"     // Android: Pinky Companion is installed, current and on
+	CheckCompanion    = "companion"     // Android: Pinky on the phone is installed, current and on
 	CheckInput        = "input"         // taps, swipes and keys reach the phone
 	CheckScreen       = "screen"        // screenshots and the live picture
 	CheckBackground   = "background"    // agents can work on a background display
@@ -1531,7 +1588,7 @@ const (
 	FixAuthorize        = "authorize"          // allow this computer on the phone (Allow USB debugging, Trust)
 	FixUSBPermission    = "usb_permission"     // Linux: the computer may not open the phone's USB device (udev rules)
 	FixUSBDriver        = "usb_driver"         // Windows: the phone's USB debugging has no driver
-	FixInstallCompanion = "install_companion"  // install Pinky Companion
+	FixInstallCompanion = "install_companion"  // install Pinky on the phone
 	FixUpdateCompanion  = "update_companion"   // update it to the version Pinky carries
 	FixTurnOnCompanion  = "turn_on_companion"  // turn its accessibility service on
 	FixInputPermission  = "input_permission"   // the phone refuses input from the computer (Xiaomi's USB debugging (Security settings), ColorOS's permission monitoring)
@@ -1545,6 +1602,11 @@ const (
 	FixRestart          = "restart"            // restart the phone: a setting it has takes effect only then
 	FixSameNetwork      = "same_network"       // put the phone on the same Wi-Fi as this computer, one that lets devices reach each other
 	FixWiFiSetting      = "wifi_setting"       // turn on Use iPhones and iPads over Wi-Fi in Settings › Phones
+
+	// FixTurnOnCompanionByHand: turn Pinky on the phone's accessibility
+	// service on in the phone's accessibility settings, by hand: the phone
+	// does not let Pinky do it over USB debugging (CompanionManual).
+	FixTurnOnCompanionByHand = "turn_on_companion_by_hand"
 )
 
 // Setup steps of Android phones, in Info.Setup with the Setup constants:

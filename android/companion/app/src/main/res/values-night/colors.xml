@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Desktop Pinky's dark palette (ui/style.go, darkPalette). -->
+<resources>
+    <color name="pinky_bg">#1C1C1F</color>
+    <color name="pinky_group">#232327</color>
+    <color name="pinky_line">#2E2E34</color>
+    <color name="pinky_bg3">#2B2B30</color>
+    <color name="pinky_ink">#EDEDF2</color>
+    <color name="pinky_ink2">#B3B3BC</color>
+    <color name="pinky_ink3">#A3A3AD</color>
+    <color name="pinky_accent">#9895FF</color>
+    <color name="pinky_accent_button">#5B57E0</color>
+    <color name="pinky_accent_tint">#262549</color>
+    <color name="pinky_red">#F87A60</color>
+    <color name="pinky_red_tint">#3A1E19</color>
+    <color name="pinky_green">#4CC38A</color>
+    <color name="pinky_amber">#F7A74E</color>
+    <color name="pinky_brand">#FF8A9B</color>
+
+    <bool name="pinky_light_bars">false</bool>
+</resources>

@@ -74,6 +74,15 @@ type muxState struct {
 	pairFn   func(udid string) (netmux.PairInfo, error)
 	probeFn  func(ctx context.Context, addr netip.Addr) bool
 	dir      string // where the socket goes instead of a new folder
+	pairs    string // where the pair records are instead of netmux.LockdownDir
+}
+
+// pairDir is where the system's usbmuxd keeps pair records.
+func (m *muxState) pairDir() string {
+	if m.pairs != "" {
+		return m.pairs
+	}
+	return netmux.LockdownDir
 }
 
 // wifiMux starts the usbmuxd of its own and the search when Pinky uses
@@ -187,6 +196,7 @@ func removeOldMuxDirs(base string) {
 func (p *Provider) serveMuxLocked(upstream string, l net.Listener, addr string) {
 	m := &p.nmux
 	m.mux = netmux.New(upstream, p.logger())
+	m.mux.PairDir = m.pairDir()
 	go m.mux.Serve(l)
 	os.Setenv("USBMUXD_SOCKET_ADDRESS", addr)
 	os.Setenv(ownMuxVar, addr) // so that the processes it starts forget it
@@ -209,7 +219,7 @@ func ownMuxOS() bool {
 // seen, but not those the person removed. Under Only, only those phones.
 func (p *Provider) pairedUDIDs() []string {
 	ids := map[string]bool{}
-	for _, id := range netmux.PairedUDIDs(netmux.LockdownDir) {
+	for _, id := range netmux.PairedUDIDs(p.nmux.pairDir()) {
 		ids[id] = true
 	}
 	p.mu.Lock()

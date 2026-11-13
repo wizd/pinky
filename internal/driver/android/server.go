@@ -49,6 +49,10 @@ const (
 	// program started it, or one Pinky started again cannot either
 	// (offnet.go).
 	hostADBNoNetwork = "adb_no_network"
+	// hostADBOtherServer: another program's adb server, on another port,
+	// holds a phone on a cable that the server Pinky uses cannot reach
+	// (otherserver.go); Detail names the port and the phone's model.
+	hostADBOtherServer = "adb_other_server"
 )
 
 // serverWatch decides when List starts an adb server, and keeps what

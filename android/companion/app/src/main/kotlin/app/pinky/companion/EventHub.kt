@@ -283,6 +283,32 @@ class EventHub(private val labels: AppLabels, private val displays: Displays) {
         }
     }
 
+    /**
+     * Sends who drives the phone now (CompanionServer's claims) to the
+     * subscribers of claim events, or only to one that just subscribed. No
+     * holder means the phone is free. The subscriber of a claim that Pinky on
+     * the phone just stopped gets the event with stopped.
+     */
+    fun claim(holder: CompanionServer.Holder?, only: Subscriber? = null, stopped: Subscriber? = null) {
+        val line = claimLine(holder, false)
+        for (s in if (only != null) listOf(only) else subscribers) {
+            if (!s.accepts(KIND_CLAIM, Display.INVALID_DISPLAY)) continue
+            s.offer(if (s === stopped) claimLine(holder, true) else line)
+        }
+    }
+
+    private fun claimLine(holder: CompanionServer.Holder?, stopped: Boolean): String {
+        val j = Json()
+        j.beginObject()
+        j.field("event", KIND_CLAIM)
+        j.field("time", System.currentTimeMillis())
+        j.field("display", Display.INVALID_DISPLAY)
+        holder?.write(j)
+        j.flag("stopped", stopped)
+        j.endObject()
+        return j.toString()
+    }
+
     /** A connection that receives events, of one display or of all. */
     inner class Subscriber(private val conn: Connection, val kinds: Set<String>, private val display: Int?) {
         private val queue = LinkedBlockingQueue<String>(QUEUE_CAPACITY)
@@ -300,9 +326,9 @@ class EventHub(private val labels: AppLabels, private val displays: Displays) {
             }
         }
 
-        /** Notifications belong to the phone and pass any display filter. */
+        /** Notifications and claims belong to the phone and pass any display filter. */
         fun accepts(kind: String, d: Int): Boolean =
-            kind in kinds && (display == null || kind == KIND_NOTIFICATION || d == display)
+            kind in kinds && (display == null || kind == KIND_NOTIFICATION || kind == KIND_CLAIM || d == display)
 
         fun offer(line: String) {
             if (!closed && !queue.offer(line)) dropped.incrementAndGet()
@@ -343,7 +369,10 @@ class EventHub(private val labels: AppLabels, private val displays: Displays) {
         const val KIND_TOAST = "toast"
         const val KIND_NOTIFICATION = "notification"
 
-        val ALL_KINDS = setOf(KIND_WINDOW, KIND_WINDOWS, KIND_CONTENT, KIND_TOAST, KIND_NOTIFICATION)
+        // Who drives the phone (CompanionServer's claims), only when asked for.
+        const val KIND_CLAIM = "claim"
+
+        val ALL_KINDS = setOf(KIND_WINDOW, KIND_WINDOWS, KIND_CONTENT, KIND_TOAST, KIND_NOTIFICATION, KIND_CLAIM)
         val DEFAULT_KINDS = setOf(KIND_WINDOW, KIND_TOAST, KIND_NOTIFICATION)
 
         /** Converts an event's uptime timestamp to wall-clock milliseconds. */

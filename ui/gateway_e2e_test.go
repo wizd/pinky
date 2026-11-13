@@ -769,7 +769,7 @@ func TestGatewayRound3(t *testing.T) {
 	ga.selectPhone(pixel)
 	tt := mg.NewTester(ga.view, 1280, 820)
 	tt.Frame()
-	if hasText(tt, "Pinky Companion") {
+	if hasText(tt, "Install Pinky on the phone") {
 		t.Errorf("a companion card for a phone without one: %q", tt.Texts())
 	}
 

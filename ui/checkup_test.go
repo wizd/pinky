@@ -40,7 +40,7 @@ func TestCheckupOfXiaomiPhone(t *testing.T) {
 	ta.frameUntil(t, tt, "the checkup", func() bool { r := ta.checkupOf("redmi-k80"); return r != nil && r.have })
 	for _, want := range []string{"Checkup: Redmi K80", "2 items to fix", "System: HyperOS 2.0",
 		"Tapping and typing", locales.CheckInputRefused(), locales.CheckInputXiaomi(), locales.CheckInputXiaomiNote(),
-		"Pinky Companion", locales.CheckCompanionMissing(), "Seeing the screen", "Working in the background", "Wi-Fi"} {
+		"Pinky on the phone", locales.CheckCompanionMissing(), "Seeing the screen", "Working in the background", "Wi-Fi"} {
 		if !hasText(tt, want) {
 			t.Errorf("the checkup lacks %q: %q", want, tt.Texts())
 		}
@@ -89,7 +89,7 @@ func TestCheckupOfXiaomiPhone(t *testing.T) {
 // the app's language, until the companion is installed.
 func TestXiaomiThatRefusesUSBInstalls(t *testing.T) {
 	ta := newTestApp(t, fakeapi.Checkup)
-	const apk = "/Applications/Pinky.app/Contents/Resources/pinky-companion.apk"
+	const apk = "/Applications/Pinky.app/Contents/Resources/pinky-android.apk"
 	ta.opt.CompanionAPK = func() (string, int, error) { return apk, 480, nil }
 	var revealed, opened []string
 	ta.reveal = func(p string) { revealed = append(revealed, p) }
@@ -99,7 +99,7 @@ func TestXiaomiThatRefusesUSBInstalls(t *testing.T) {
 	ta.sync()
 	ta.sel = "redmi-k80"
 	tt := mg.NewTester(ta.view, 1280, 820)
-	ta.frameUntil(t, tt, "the companion card", func() bool { return hasText(tt, "Install Pinky Companion") })
+	ta.frameUntil(t, tt, "the companion card", func() bool { return hasText(tt, "Install Pinky on the phone") })
 	if hasText(tt, locales.CompanionShowAPK()) || hasText(tt, locales.CompanionByHandHow()) {
 		t.Errorf("the APK shows before an install failed: %q", tt.Texts())
 	}
@@ -139,7 +139,7 @@ func TestXiaomiThatRefusesUSBInstalls(t *testing.T) {
 		t.Errorf("the card after the refusal: %q", tt.Texts())
 	}
 	ta.api.SetInstallError("redmi-k80", nil)
-	if err := tt.Click("Install Pinky Companion on Redmi K80"); err != nil {
+	if err := tt.Click("Install Pinky on Redmi K80"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -344,6 +344,9 @@ func TestCompanionErrors(t *testing.T) {
 		{fmt.Errorf("%w (and restoring the setting failed: x)", noAnswer), "xiaomi", false, locales.CompanionErrNoAnswer(noAnswer.Detail)},
 		{&driver.CompanionStartError{Reason: driver.CompanionStartUIAutomation, Detail: "x"}, "", false, locales.CompanionErrUIAutomation()},
 		{&driver.CompanionStartError{Reason: driver.CompanionStartNotUnlocked, Detail: "x"}, "", false, locales.CompanionErrNotUnlocked()},
+		// Issue #94: vivo's OriginOS 6 takes the change and keeps nothing.
+		{&driver.CompanionStartError{Reason: driver.CompanionStartSettingIgnored, Detail: "x"}, "vivo", false, locales.CompanionErrSettingIgnored()},
+		{fmt.Errorf("%w (and restoring the setting failed: x)", &driver.CompanionStartError{Reason: driver.CompanionStartSettingIgnored}), "", false, locales.CompanionErrSettingIgnored()},
 		{restricted, "xiaomi", false, locales.CompanionErrRestrictedXiaomi()},
 		{restricted, "", false, locales.CompanionErrRestricted()},
 		{restricted, "vivo", false, locales.CompanionErrRestricted()},
@@ -420,6 +423,25 @@ func TestAddAndroidHostProblem(t *testing.T) {
 	}
 }
 
+// TestAddAndroidOtherServer: Add phone › Android says which port the adb
+// server that holds the phone is on, in Chinese too.
+func TestAddAndroidOtherServer(t *testing.T) {
+	inLanguage(t, "zh-Hans")
+	ta := newTestAppWith(t, fakeapi.Options{Scenario: fakeapi.NoPhones, Speed: 50, HoldSetup: true})
+	ta.app.api = hostAPI{ta.api, driver.HostCheck{Missing: "adb_other_server",
+		Detail: "Another program's adb server, on port 5049, holds Redmi K70 over USB, so the adb server Pinky uses cannot reach it."}}
+	ta.sync()
+	ta.page = pageAddPhone
+	ta.add.reset(ta.app)
+	ta.add.step = "android"
+	tt := mg.NewTester(func(c *mg.Context) { ta.addPhonePage(c) }, 1280, 900)
+	inLanguage(t, "zh-Hans", tt)
+	ta.frameUntil(t, tt, "the host check", func() bool { return ta.droid.host.Missing != "" })
+	if !hasText(tt, locales.CheckHostADBOtherServer("5049")) || !strings.Contains(locales.CheckHostADBOtherServer("5049"), "端口 5049") {
+		t.Errorf("no word of the other adb server: %q", tt.Texts())
+	}
+}
+
 func TestCheckupHostWords(t *testing.T) {
 	ta := newTestApp(t, fakeapi.ThreePhones)
 	ta.sync()
@@ -431,6 +453,29 @@ func TestCheckupHostWords(t *testing.T) {
 	w = ta.checkWords(android, gateway.CheckupView{}, driver.Check{ID: driver.CheckHost, Status: driver.CheckFail, Fix: "adb_no_network", Detail: "no route to 192.168.1.42:41000"})
 	if w.title != locales.CheckADBTitle() || w.text != locales.CheckHostADBNoNetwork() || !w.detail {
 		t.Errorf("a server cut off from the network: %+v", w)
+	}
+	// Another program's adb server holds a phone on a cable: its port in
+	// the words, and first among the steps of an Android phone that is not
+	// connected.
+	held := driver.Check{ID: driver.CheckHost, Status: driver.CheckFail, Fix: "adb_other_server",
+		Detail: "Another program's adb server, on port 5049, holds Redmi K70 over USB, so the adb server Pinky uses cannot reach it."}
+	w = ta.checkWords(android, gateway.CheckupView{}, held)
+	if w.title != locales.CheckADBTitle() || w.text != locales.CheckHostADBOtherServer("5049") || !strings.Contains(w.text, "adb -P 5049 kill-server") || !w.detail {
+		t.Errorf("another adb server: %+v", w)
+	}
+	conn := driver.Check{ID: driver.CheckConnection, Status: driver.CheckFail}
+	w = ta.checkWords(android, gateway.CheckupView{Checks: []driver.Check{held, conn}}, conn)
+	if len(w.steps) != 3 || w.steps[0] != locales.CheckConnectionAndroidStepOtherServer("5049") {
+		t.Errorf("a phone another adb server may hold: %+v", w)
+	}
+	w = ta.checkWords(android, gateway.CheckupView{Checks: []driver.Check{conn}}, conn)
+	if len(w.steps) != 2 {
+		t.Errorf("a phone not connected: %+v", w)
+	}
+	// A Detail without the port: the driver's own words.
+	w = ta.checkWords(android, gateway.CheckupView{}, driver.Check{ID: driver.CheckHost, Status: driver.CheckFail, Fix: "adb_other_server", Detail: "Some other words."})
+	if w.text != "Some other words." {
+		t.Errorf("another adb server without its port: %+v", w)
 	}
 	// iPhones' codes have their own words (checkup_iphone.go); codes no
 	// client knows show their driver's.

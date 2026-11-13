@@ -16,19 +16,22 @@ import (
 )
 
 // helperUsage is how `pinky helper` is used.
-const helperUsage = "usage: pinky helper install [--team ID] [--bundle-id ID] [--local-signing] [phone id or name]"
+const helperUsage = "usage: pinky helper install [--team ID] [--bundle-id ID] [--local-signing] [--helper-only] [phone id or name]"
 
 // runHelper is `pinky helper install`: it builds the WebDriverAgent helper
 // with Xcode, gives it Pinky's name and icon, signs it with the person's
 // team and installs it on an iPhone (internal/driver/ios/helperinstall.go).
+// A release installs Pinky's iPhone app with WebDriverAgent in it instead
+// (appinstall.go), unless --helper-only.
 // Run again to sign it anew once its signature runs out.
 func runHelper(args []string) error {
 	if len(args) == 0 || args[0] != "install" {
 		return errors.New(helperUsage)
 	}
 	fs := flag.NewFlagSet("pinky helper install", flag.ContinueOnError)
-	team := fs.String("team", "", "Apple developer `team ID` to sign with (default: the team of the helper on the phone, or the only one on this Mac)")
-	bundleID := fs.String("bundle-id", "", "the helper's `bundle id` (default: the one on the phone)")
+	team := fs.String("team", "", "Apple developer `team ID` to sign with (default: the team of Pinky Helper on the phone, or the only one on this Mac)")
+	bundleID := fs.String("bundle-id", "", "Pinky Helper's `bundle id` (default: the one on the phone)")
+	helperOnly := fs.Bool("helper-only", false, "install the older Pinky Helper, not Pinky on the iPhone, to host WebDriverAgent")
 	local := fs.Bool("local-signing", false, "sign only with the profiles on this Mac; never let Xcode register the phone or make a profile")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
@@ -50,6 +53,7 @@ func runHelper(args []string) error {
 		Team:         *team,
 		BundleID:     *bundleID,
 		LocalSigning: *local,
+		HelperOnly:   *helperOnly,
 		Out:          os.Stdout,
 	})
 	var teams *driver.HelperTeamsError

@@ -23,7 +23,7 @@
 //	androidctl [-s serial] companion-install [-force] (install or update the companion app)
 //	androidctl [-s serial] companion-state
 //	androidctl [-s serial] checkup [-json]   (what the phone needs for Pinky, item by item)
-//	androidctl [-s serial] bg [-app APP] [-out FILE.h264] [-seconds N] [STEP...]
+//	androidctl [-s serial] bg [-app APP] [-out FILE.h264] [-seconds N] [-input scrcpy|companion] [STEP...]
 //	androidctl wifi-search [-seconds N]
 //	androidctl pair-qr FILE.png
 //	androidctl pair-code ADDR CODE
@@ -31,6 +31,8 @@
 //	androidctl wifi-reconnect [-seconds N]
 //
 // Steps for run and bg: tap:X,Y  longtap:X,Y  swipe:X1,Y1,X2,Y2[,MS]
+// drag:X1,Y1,X2,Y2[,MS]  dragr:X1,Y1,X2,Y2[,MS] (a drag that holds the
+// finger down on the way, as drags that follow the page do)
 // pinch:CX,CY,FROM,TO[,MS[,ANGLE[,ROTATE]]] (fingers FROM then TO pixels
 // apart around CX,CY)  key:NAME  type:TEXT  launch:APP  sleep:MS  observe
 // shot:FILE.png  state (bg: the phone's own screen)
@@ -132,8 +134,9 @@ commands:
   companion-install [-force]      install or update the companion app and turn
                                   its service on (setup only)
   companion-state                 on, off, missing, outdated or no_apk
-  bg [-app APP] [-seconds N] [-out FILE.h264] [STEP...]
-                                  open a virtual display and run steps on it
+  bg [-app APP] [-seconds N] [-out FILE.h264] [-input scrcpy|companion] [STEP...]
+                                  open a virtual display and run steps on it;
+                                  -input says how taps and keys reach it
 
 Wi-Fi (no phone needed; the adb server is $ADB_SERVER_SOCKET's):
   wifi-search [-seconds N]        search the network for wireless debugging
@@ -146,7 +149,8 @@ Wi-Fi (no phone needed; the adb server is $ADB_SERVER_SOCKET's):
                                   Wireless debugging shows
   wifi-reconnect [-seconds N]     list phones every 2 s with reconnecting on
 
-steps: tap:X,Y longtap:X,Y swipe:X1,Y1,X2,Y2[,MS] key:NAME type:TEXT
+steps: tap:X,Y longtap:X,Y swipe:X1,Y1,X2,Y2[,MS] drag:X1,Y1,X2,Y2[,MS]
+       dragr:X1,Y1,X2,Y2[,MS] (holds the finger down on the way) key:NAME type:TEXT
        launch:APP sleep:MS observe shot:FILE.png state (bg only: whether
        the phone's own screen is on and locked)
 `)
@@ -640,17 +644,18 @@ func runSteps(ctx context.Context, d stepper, st statser, steps []string) error 
 				}
 				err = d.Swipe(ctx, screen.Point{X: v[0], Y: v[1]}, screen.Point{X: v[2], Y: v[3]}, dur)
 			}
+		case "drag":
+			err = dragStep(ctx, d, arg, false)
+		case "dragr":
+			err = dragStep(ctx, d, arg, true)
 		case "pinch":
 			err = pinchStep(ctx, d, arg)
 		case "key":
 			err = d.Key(ctx, driver.Key(arg))
+			printNote(d)
 		case "type":
 			err = d.Type(ctx, arg, driver.TypeOptions{})
-			if n, ok := d.(driver.InputNoter); ok {
-				if note := n.TakeInputNote(); note != "" {
-					fmt.Println("note:", note)
-				}
-			}
+			printNote(d)
 		case "launch":
 			err = d.Launch(ctx, arg)
 		case "sleep":
@@ -816,9 +821,10 @@ func background(ctx context.Context, d *android.Device, args []string) error {
 	secs := fs.Float64("seconds", 2, "seconds to keep streaming after the steps")
 	decor := fs.Bool("decorations", false, "show the status bar, taskbar and launcher on the display")
 	keep := fs.Bool("keep", false, "move every app on the display to the main display when it closes")
+	input := fs.String("input", android.InputAuto, "how taps and keys reach the display: scrcpy, companion, or empty to pick per phone")
 	fs.Parse(args)
 	start := time.Now()
-	b, err := d.OpenDisplay(ctx, android.DisplayOptions{App: *app, SystemDecorations: *decor, KeepContent: *keep})
+	b, err := d.OpenDisplay(ctx, android.DisplayOptions{App: *app, SystemDecorations: *decor, KeepContent: *keep, Input: *input})
 	if err != nil {
 		return err
 	}
@@ -906,4 +912,58 @@ func reorder(args []string) []string {
 		}
 	}
 	return append(flags, rest...)
+}
+
+// printNote prints what the driver could not make sure of about the last
+// Type or Key (driver.InputNoter).
+func printNote(d stepper) {
+	if n, ok := d.(driver.InputNoter); ok {
+		if note := n.TakeInputNote(); note != "" {
+			fmt.Println("note:", note)
+		}
+	}
+}
+
+// dragStep drags from X1,Y1 to X2,Y2: a long press to pick up, the move in
+// MS (default 600) and a rest before the finger lifts. With held it moves
+// a tenth of the way first and keeps the finger down there for half a
+// second before it goes on, as Pinky's drags that follow the page do
+// (driver.DragReplanner).
+func dragStep(ctx context.Context, d stepper, arg string, held bool) error {
+	v, err := atois(strings.Split(arg, ","))
+	if err != nil {
+		return err
+	}
+	if len(v) < 4 {
+		return errors.New("drag needs X1,Y1,X2,Y2[,MS]")
+	}
+	move := 600 * time.Millisecond
+	if len(v) > 4 {
+		move = time.Duration(v[4]) * time.Millisecond
+	}
+	g := driver.Drag{
+		From:  screen.Point{X: v[0], Y: v[1]},
+		Hold:  600 * time.Millisecond,
+		Stops: []driver.DragStop{{Point: screen.Point{X: v[2], Y: v[3]}, Move: move, Pause: 200 * time.Millisecond}},
+	}
+	if held {
+		rr, ok := d.(driver.DragReplanner)
+		if !ok {
+			return fmt.Errorf("dragr: %w", driver.ErrUnsupported)
+		}
+		pick := screen.Point{X: v[0] + (v[2]-v[0])/10, Y: v[1] + (v[3]-v[1])/10}
+		g.Stops = append([]driver.DragStop{{Point: pick, Move: 150 * time.Millisecond, Pause: 100 * time.Millisecond}}, g.Stops...)
+		return rr.DragReplan(ctx, g, 0, func(ctx context.Context) []driver.DragStop {
+			select {
+			case <-time.After(500 * time.Millisecond):
+			case <-ctx.Done():
+			}
+			return nil
+		})
+	}
+	dr, ok := d.(driver.Dragger)
+	if !ok {
+		return fmt.Errorf("drag: %w", driver.ErrUnsupported)
+	}
+	return dr.Drag(ctx, g)
 }

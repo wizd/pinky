@@ -2,7 +2,8 @@ name: Release
 run-name: Release ${{ inputs.tag || github.ref_name }}
 
 # A tag v<version>, which `scripts/release.sh tag` pushes with its commit,
-# is a release: this builds the companion APK, Pinky for Windows and Linux
+# is a release: this builds the companion APK (Pinky for Android, one APK
+# with Pinky's core, built with the runner's Android NDK), Pinky for Windows and Linux
 # (Ubuntu, with the FFmpeg and adb that scripts/ffmpeg.sh and
 # scripts/adb.sh build in containers) and Pinky.app for Apple silicon and
 # Intel (macOS: signed with the Developer ID, both disk images notarized at
@@ -120,11 +121,11 @@ jobs:
           # The certificate the release is signed with, for the log: the
           # same in every release, or installed Companions cannot update.
           bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$bt/apksigner" verify --print-certs "$RUNNER_TEMP/companion/pinky-companion.apk" 2>/dev/null | grep -E 'DN|SHA-256' || true
+          "$bt/apksigner" verify --print-certs "$RUNNER_TEMP/companion/pinky-android.apk" 2>/dev/null | grep -E 'DN|SHA-256' || true
       - uses: actions/upload-artifact@v7
         with:
           name: companion
-          path: ${{ runner.temp }}/companion/pinky-companion.apk
+          path: ${{ runner.temp }}/companion/pinky-android.apk
           if-no-files-found: error
           retention-days: 3
 
@@ -163,7 +164,7 @@ jobs:
       - name: Build
         env:
           STRICT: "1"
-          COMPANION_APK: ${{ runner.temp }}/companion/pinky-companion.apk
+          COMPANION_APK: ${{ runner.temp }}/companion/pinky-android.apk
           GH_TOKEN: ${{ github.token }} # scripts/adb.sh, when github.com's release downloads fail
         run: |
           go run ./scripts/release stamp "${TAG#v}"
@@ -312,12 +313,19 @@ jobs:
       - name: Build, sign and notarize
         env:
           STRICT: "1"
-          COMPANION_APK: ${{ runner.temp }}/companion/pinky-companion.apk
+          COMPANION_APK: ${{ runner.temp }}/companion/pinky-android.apk
           SIGN: ${{ vars.MACOS_SIGN_IDENTITY }}
           GH_TOKEN: ${{ github.token }} # scripts/adb.sh, when github.com's release downloads fail
         run: |
           go run ./scripts/release stamp "${TAG#v}"
           scripts/dist.sh darwin "$RUNNER_TEMP/dist"
+      # The iPhone app kit, from which desktop Pinky builds Pinky's iPhone
+      # app with the person's team to host WebDriverAgent
+      # (internal/driver/ios/appinstall.go).
+      - name: Pack the iPhone app kit
+        run: |
+          command -v xcodegen >/dev/null || brew install --quiet xcodegen
+          ios/build.sh kit "$RUNNER_TEMP/dist/pinky-iphone-${TAG#v}.tar.gz" "${TAG#v}"
       - name: Check that the apps' adb runs a server
         run: |
           for arch in arm64 amd64; do
@@ -364,6 +372,12 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: macos
+          path: ${{ runner.temp }}/dist
+      # Pinky for Android on its own too: the feed's android-arm64, which the
+      # app updates itself from, and a download that needs no computer.
+      - uses: actions/download-artifact@v8
+        with:
+          name: companion
           path: ${{ runner.temp }}/dist
       - name: Publish the release
         env:

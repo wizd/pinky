@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The task screen's input keeps what the person typed when the
+         screen is made again (rotation, dark mode). -->
+    <item name="task_input" type="id" />
+    <!-- The same for the message to the running task and Continue's. -->
+    <item name="steer_input" type="id" />
+    <item name="continue_input" type="id" />
+</resources>

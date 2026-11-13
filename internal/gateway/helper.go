@@ -37,7 +37,7 @@ func (g *Gateway) InstallHelper(ctx context.Context, deviceID, team string, prog
 		g.mu.Unlock()
 		var ok bool
 		if hi, ok = p.(driver.HelperInstaller); !ok || virtual {
-			return fmt.Errorf("%s needs no helper installed: %w", d.name(), driver.ErrUnsupported)
+			return fmt.Errorf("%s needs nothing installed on it: %w", d.name(), driver.ErrUnsupported)
 		}
 		if leased {
 			return ErrPhoneInUse
@@ -50,7 +50,7 @@ func (g *Gateway) InstallHelper(ctx context.Context, deviceID, team string, prog
 			}
 		}
 		if hi == nil {
-			return fmt.Errorf("installing the iPhone helper: %w", driver.ErrUnsupported)
+			return fmt.Errorf("installing Pinky on the iPhone: %w", driver.ErrUnsupported)
 		}
 	}
 	var once sync.Once
@@ -59,7 +59,7 @@ func (g *Gateway) InstallHelper(ctx context.Context, deviceID, team string, prog
 		// go of it now rather than at the next discovery.
 		once.Do(func() {
 			if d != nil {
-				g.setOffline(d, "installing the Pinky helper")
+				g.setOffline(d, "installing Pinky on the iPhone")
 				g.emit(Event{Kind: EventDevices, DeviceID: d.id})
 			}
 		})

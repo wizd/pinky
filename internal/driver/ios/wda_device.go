@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -65,6 +66,7 @@ type WDADevice struct {
 	framesAfter atomic.Int64
 
 	closeOnce sync.Once
+	idle      wdaIdle // rest_wda.go
 
 	logs    appLogs // the apps whose logs a task reads (logs.go)
 	procMu  sync.Mutex
@@ -112,6 +114,8 @@ func openWDA(ctx context.Context, info driver.Info, c *wdaClient, entry goios.De
 		d.info.OSVersion = st.OS.Version
 	}
 	c.gone = d.gone
+	c.enter = d.idle.enter
+	d.idle.init()
 	return d, nil
 }
 
@@ -203,7 +207,7 @@ func startWDAFor(ctx context.Context, info driver.Info) (*wdaStart, error) {
 		return nil, err
 	}
 	if app.BundleID == "" {
-		return nil, fmt.Errorf("the WebDriverAgent helper is not installed on %s: %w", info.ID, driver.ErrNotFound)
+		return nil, fmt.Errorf("Pinky on the iPhone is not installed on %s: %w", info.ID, driver.ErrNotFound)
 	}
 	l, err := dialLinkEntry(ctx, base)
 	if err != nil {
@@ -594,13 +598,18 @@ func (d *WDADevice) noteSlowRead(start time.Time, tm wdaTimes, root *wdaNode, oc
 	d.log.Info("iphone: slow screen read through WebDriverAgent", args...)
 }
 
-// appInfo names the app in front: WDA's active app, with the name from the
-// app list (WDA leaves SpringBoard's empty).
+// appInfo names the app in front: by the name the app list knows (the home
+// screen's, in the phone's language) once it has been read, else WDA's
+// active app's, else its element's label, else the app list's (WDA leaves
+// SpringBoard's empty).
 func (d *WDADevice) appInfo(ctx context.Context, a wdaApp, root *wdaNode) screen.App {
 	if a.BundleID == springBoard {
 		return screen.App{Name: "Home Screen", ID: springBoard}
 	}
-	out := screen.App{ID: a.BundleID, Name: a.Name}
+	out := screen.App{ID: a.BundleID, Name: d.cachedAppName(a.BundleID)}
+	if out.Name == "" {
+		out.Name = a.Name
+	}
 	if out.Name == "" && root != nil {
 		out.Name = strings.TrimSpace(strOr(root.Label))
 	}
@@ -614,6 +623,25 @@ func (d *WDADevice) appInfo(ctx context.Context, a wdaApp, root *wdaNode) screen
 		}
 	}
 	return out
+}
+
+// cachedAppName is the name of an app in the app list already read, without
+// reading it again; "" when it is not there.
+func (d *WDADevice) cachedAppName(id string) string {
+	d.appMu.Lock()
+	c := d.apps
+	d.appMu.Unlock()
+	if c == nil || id == "" {
+		return ""
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, a := range c.apps {
+		if a.ID == id {
+			return a.Name
+		}
+	}
+	return ""
 }
 
 // Screenshot implements driver.Device.
@@ -837,7 +865,8 @@ func (d *WDADevice) resolveApp(ctx context.Context, app string) (string, error) 
 		}
 	}
 	for _, a := range apps {
-		if strings.EqualFold(a.Name, app) || strings.EqualFold(a.ID, app) {
+		if strings.EqualFold(a.Name, app) || strings.EqualFold(a.ID, app) ||
+			slices.ContainsFunc(a.Aliases, func(n string) bool { return strings.EqualFold(n, app) }) {
 			return a.ID, nil
 		}
 	}
@@ -919,6 +948,7 @@ func (d *WDADevice) Stream(ctx context.Context, opt driver.StreamOptions) (drive
 	}
 	if fs, ok := s.(*frameStream); ok {
 		go d.followRotation(fs.done)
+		d.idle.watch(fs.done)
 	}
 	d.videoMu.Lock()
 	d.video = s
@@ -1021,6 +1051,7 @@ func (d *WDADevice) videoSize() (int, int) {
 // the test run Pinky started; WDA itself stays installed.
 func (d *WDADevice) Close() error {
 	d.closeOnce.Do(func() {
+		d.idle.close()
 		d.StopAppLogs()
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		d.c.deleteSession(ctx)

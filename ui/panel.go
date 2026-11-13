@@ -417,7 +417,7 @@ func (a *app) panelAnswered(c *mg.Context, x answer) {
 				}
 			}
 			mg.Row(c).Gap(8).AlignItems(mg.Center).Children(func() {
-				mg.Icon(c, ic).FontSize(18).TextColor(col)
+				mg.Icon(c, ic).FontSize(iconLarge).TextColor(col)
 				mg.Text(c, title).FontWeight(fwSemibold)
 			})
 			mg.Text(c, detail).FontSize(fsSmall).TextColor(p.ink2)
@@ -442,6 +442,6 @@ func arrowButton(c *mg.Context, ic *mg.SVG, label string, disabled bool) mg.Elem
 		b.Background(p.line)
 		col = p.ink
 	}
-	b.TextColor(col).Children(func() { mg.Icon(c, ic).FontSize(15) })
+	b.TextColor(col).Children(func() { mg.Icon(c, ic).FontSize(iconBody) })
 	return b
 }

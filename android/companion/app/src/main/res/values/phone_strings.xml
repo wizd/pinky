@@ -1,0 +1,507 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pinky on the phone itself: the task screen (TaskActivity), its
+     settings (SettingsActivity) and the controls over other apps
+     (Overlays). Every string is in values-b+zh+Hans and values-ja too, and
+     the wording follows desktop Pinky's (cmd/pinky/locales: ask*,
+     settingsAsk*, needs*). Release builds do not show these screens yet
+     (on_phone_ui). -->
+<resources>
+    <!-- Not words: the language these strings are in, as a BCP 47 tag. The
+         core says the gateway's steps, approvals and status lines in it
+         (CoreClient.speak). -->
+    <string name="phone_core_locale">en</string>
+    <string name="phone_settings">Settings</string>
+    <string name="phone_save">Save</string>
+    <string name="phone_cancel">Cancel</string>
+
+    <!-- The task screen: what Pinky needs before it can work. -->
+    <string name="phone_off_body">Pinky works on this phone through its accessibility service. Open Accessibility settings, choose Pinky and turn it on.</string>
+    <string name="phone_open_accessibility">Open Accessibility settings</string>
+    <string name="phone_restricted">If Android says the setting is restricted, open App info, tap ⋮, choose Allow restricted settings and try again.</string>
+    <string name="phone_app_info">App info</string>
+    <string name="phone_core_starting">Starting Pinky…</string>
+    <string name="phone_core_failed">Pinky couldn\'t start on this phone.</string>
+    <string name="phone_no_core_title">This phone can\'t run tasks by itself</string>
+    <string name="phone_no_core_body">Pinky runs tasks on the phone only on phones with a 64-bit ARM processor. Here Pinky works with a computer: connect this phone to a computer that runs Pinky, and agents there can use it.</string>
+    <string name="phone_core_failed_hint">Restart the phone and open Pinky again. If that doesn\'t help, reinstall Pinky.</string>
+    <string name="phone_setup_title">Set up Pinky</string>
+    <string name="phone_setup_service">Turn on Pinky in Accessibility settings</string>
+    <string name="phone_setup_model_step">Choose the AI model and add its API key</string>
+    <string name="phone_setup_model_body">Pinky thinks with a model you choose and pays for: Claude through Anthropic\'s API, or another one through a service compatible with OpenAI\'s.</string>
+    <string name="phone_task_footer">Pinky leaves this screen and works in the other apps. You can watch it, answer when it asks, and stop it at any time.</string>
+    <string name="phone_setup">Pinky can do simple tasks on your phone by itself, with an AI model you choose.</string>
+    <string name="phone_setup_key">Add an API key</string>
+    <string name="phone_setup_model">Choose a model</string>
+
+    <!-- The task screen: while Pinky on a computer uses the phone (its claim). -->
+    <string name="phone_computer_title">Pinky on your computer is using this phone</string>
+    <string name="phone_computer_detail">You can start a task here when it\'s done.</string>
+
+    <!-- The task screen: a task, while it runs and once it ended. -->
+    <string name="phone_task_hint">What should Pinky do on this phone?</string>
+    <string name="phone_start">Start</string>
+    <string name="phone_task_limit">Up to %1$s a task</string>
+    <string name="phone_task_working">Pinky is working on it</string>
+    <string name="phone_waiting_for">Waiting for you: %1$s</string>
+    <string name="phone_waiting_hint">Answer on the card at the bottom of the screen.</string>
+    <string name="phone_stop">Stop</string>
+    <string name="phone_dismiss">Dismiss</string>
+    <string name="phone_task_steps">Steps</string>
+    <string name="phone_activity">Activity</string>
+
+    <!-- The task screen: the person's messages to Pinky while a task runs
+         (steer), and going on with a task that ended (continue). -->
+    <string name="phone_steer_label">Message for Pinky</string>
+    <string name="phone_steer_hint">Add or change instructions…</string>
+    <string name="phone_steer_send">Send</string>
+    <string name="phone_steer_pending">Pinky reads this at its next step</string>
+    <string name="phone_steer_edit">Edit</string>
+    <string name="phone_steer_withdraw">Withdraw</string>
+    <string name="phone_steer_read">Pinky has already read it.</string>
+    <string name="phone_continue_label">Next message for Pinky</string>
+    <string name="phone_continue_hint">Tell Pinky what to do next…</string>
+    <string name="phone_continue">Continue</string>
+    <string name="phone_steer_failed">Couldn\'t send: %1$s</string>
+    <string name="phone_continue_unread">Pinky didn\'t read these before the task ended. Continue to send them.</string>
+
+    <!-- The history: Activity on the task screen, HistoryActivity and
+         PastTaskActivity (desktop: activity*, day*). -->
+    <string name="phone_history_all">Show all</string>
+    <string name="phone_history_more">Show more</string>
+    <string name="phone_history_empty">No finished tasks yet.</string>
+    <string name="phone_history_failed">Couldn\'t read Activity.</string>
+    <string name="phone_history_gone">This task is no longer in Activity.</string>
+    <string name="phone_today">Today</string>
+    <string name="phone_yesterday">Yesterday</string>
+
+    <!-- How a task ended (desktop: ui/ask.go, pilotEndIn). -->
+    <string name="phone_end_done">Done</string>
+    <string name="phone_end_stopped">Stopped</string>
+    <string name="phone_end_failed">Couldn\'t finish</string>
+    <string name="phone_end_not_started">Couldn\'t start</string>
+    <string name="phone_end_line">%1$s. %2$s</string>
+    <plurals name="phone_limit_steps">
+        <item quantity="one">Reached the limit of %1$d step.</item>
+        <item quantity="other">Reached the limit of %1$d steps.</item>
+    </plurals>
+    <plurals name="phone_limit_minutes">
+        <item quantity="one">Reached the limit of %1$d minute.</item>
+        <item quantity="other">Reached the limit of %1$d minutes.</item>
+    </plurals>
+    <string name="phone_limit_cost">Reached the limit of %1$s.</string>
+    <plurals name="phone_limit_tokens">
+        <item quantity="one">Reached the limit of %1$s token.</item>
+        <item quantity="other">Reached the limit of %1$s tokens.</item>
+    </plurals>
+    <string name="phone_refused">The model declined this task.</string>
+    <string name="phone_no_key">No API key is saved. Add one in Settings.</string>
+    <string name="phone_bad_key">The service didn\'t accept the API key. Check it in Settings.</string>
+
+    <!-- Why Start did not start a task (internal/standalone, the Code constants). -->
+    <string name="phone_err_no_device">Pinky is off. Turn it on in Accessibility settings.</string>
+    <string name="phone_err_no_model">Choose a model in Settings first.</string>
+    <string name="phone_err_busy">Pinky is already working on a task.</string>
+    <string name="phone_err_computer">Pinky on your computer is using this phone. Try again when it\'s done.</string>
+    <string name="phone_err_start">Couldn\'t start the task. Try again.</string>
+    <string name="phone_err_key_lost">The saved API key can\'t be read any more. Add it again in Settings.</string>
+
+    <!-- Amounts and times (desktop: ui/format.go, elapsedIn). -->
+    <plurals name="phone_steps">
+        <item quantity="one">%1$d step</item>
+        <item quantity="other">%1$d steps</item>
+    </plurals>
+    <plurals name="phone_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <plurals name="phone_tokens">
+        <item quantity="one">%1$s token</item>
+        <item quantity="other">%1$s tokens</item>
+    </plurals>
+    <string name="phone_dollars">US$%1$s</string>
+    <string name="phone_time_seconds">%1$d s</string>
+    <string name="phone_time_minutes">%1$d min %2$s s</string>
+    <string name="phone_time_hours">%1$d h %2$s min</string>
+
+    <!-- Overlays: the Working pill and the card for an approval or a handoff. -->
+    <string name="phone_pill_working">Working · %1$s</string>
+    <string name="phone_pill_starting">Starting</string>
+    <string name="phone_pill_waiting">Waiting for you</string>
+    <!-- Short: the pill stays over the screen Pinky on a computer works on. -->
+    <string name="phone_pill_computer">In use by your computer</string>
+    <string name="phone_close">Close</string>
+    <string name="phone_asks">Pinky asks</string>
+    <string name="phone_rule">Rule: %1$s</string>
+    <string name="phone_deadline">Denied in %1$d s if you don\'t answer</string>
+    <string name="phone_deny">Deny</string>
+    <string name="phone_allow_task">Allow for this task</string>
+    <string name="phone_allow_once">Allow</string>
+    <string name="phone_decline">Decline</string>
+    <string name="phone_hand_back">Done</string>
+    <string name="phone_err_answer">Couldn\'t send your answer. Try again.</string>
+
+    <!-- Settings: the AI model. -->
+    <string name="phone_section_model">AI model</string>
+    <string name="phone_service">Service</string>
+    <string name="phone_service_desc">Who runs the model. Each service keeps its own API key, model and address.</string>
+    <string name="phone_service_anthropic">Anthropic-compatible API</string>
+    <string name="phone_service_openai">OpenAI-compatible API</string>
+    <string name="phone_key">API key</string>
+    <string name="phone_key_saved">Saved</string>
+    <string name="phone_key_add">Add</string>
+    <string name="phone_key_desc">Kept encrypted on this phone and sent only to the service.</string>
+    <string name="phone_key_change">Change the API key</string>
+    <string name="phone_key_remove">Remove the API key</string>
+    <string name="phone_key_hint">Paste the API key</string>
+    <string name="phone_key_saved_toast">API key saved</string>
+    <string name="phone_key_removed_toast">API key removed</string>
+    <string name="phone_key_err_save">Couldn\'t save the key. Try again.</string>
+    <string name="phone_model">Model</string>
+    <string name="phone_model_claude_desc">Opus is the most capable; Sonnet and Haiku cost less.</string>
+    <string name="phone_model_desc">The model\'s name as the service gives it. It must read images and use tools.</string>
+    <string name="phone_model_none">None</string>
+    <string name="phone_model_hint">Model name</string>
+    <string name="phone_url">API address</string>
+    <string name="phone_url_default">Default</string>
+    <string name="phone_url_desc_anthropic">Leave it for Anthropic\'s API, or give the address of a service compatible with it.</string>
+    <string name="phone_url_desc_openai">The address of the service\'s OpenAI-compatible API, such as https://…/v1. OpenAI\'s own by default.</string>
+    <string name="phone_url_err">Enter an address that starts with https:// or http://.</string>
+
+    <!-- The model's check and what it used (desktop: ui/ask.go, askCheckRow and askUsage). -->
+    <string name="phone_service_region">%1$s (%2$s)</string>
+    <string name="phone_region_china">China</string>
+    <string name="phone_region_global">International</string>
+    <string name="phone_key_optional_desc">Only if you set one up on the server. Kept encrypted on this phone and sent only to the server.</string>
+    <string name="phone_key_none">None</string>
+    <string name="phone_model_suggested_desc">Models that read images and use tools, as Pinky needs. Choose Other… for another model of the service.</string>
+    <string name="phone_model_local_desc">The name of a model the server runs. It must read images and use tools.</string>
+    <string name="phone_model_other">Other…</string>
+    <string name="phone_url_desc_service">The service\'s own address by default. Change it only to go through another address, such as a proxy.</string>
+    <string name="phone_url_desc_local">The server\'s address on your network, such as http://192.168.1.10:11434/v1: the computer that runs it, not this phone.</string>
+    <string name="phone_check">Check</string>
+    <string name="phone_check_desc">Sends the model one tiny request to see that it answers and uses tools. Pinky does it when you save a key, model or address.</string>
+    <string name="phone_check_now">Check</string>
+    <string name="phone_check_again">Check Again</string>
+    <string name="phone_checking">Checking…</string>
+    <string name="phone_check_ok">The model answered and used a tool, in %1$s s.</string>
+    <string name="phone_check_detail">The service said: %1$s</string>
+    <string name="phone_check_core_down">Turn on Pinky to check the model.</string>
+    <string name="phone_check_no_model">Choose a model first.</string>
+    <string name="phone_check_no_key">Add an API key first.</string>
+    <string name="phone_check_bad_key">The service didn\'t accept the API key. Check that it is a key of this service.</string>
+    <string name="phone_check_no_credit">The service says the account has no credit left. Top it up on the service\'s site.</string>
+    <string name="phone_check_not_found">The service doesn\'t know this model or address. Check the model\'s name and the API address.</string>
+    <string name="phone_check_busy">The service is busy or limited the request. Try again in a moment.</string>
+    <string name="phone_check_rejected">The service refused the request.</string>
+    <string name="phone_check_no_tools">The model answered but didn\'t use a tool. Pinky works through tools, so choose a model that uses them.</string>
+    <string name="phone_check_unreachable">Pinky couldn\'t reach the API address. Check it, and that the service or server is running.</string>
+    <string name="phone_check_bad_answer">The address answered, but not as an API Pinky knows. Check the API address.</string>
+    <string name="phone_section_usage">Usage</string>
+    <string name="phone_usage_desc">The tokens Pinky\'s own agent used, as the services reported them, and what they cost where Pinky knows the prices. Kept on this phone only.</string>
+    <string name="phone_usage_week">Last 7 days</string>
+    <string name="phone_usage_month">Last 30 days</string>
+    <string name="phone_usage_none">Nothing yet.</string>
+    <string name="phone_usage_today_line">Today: %1$s</string>
+    <plurals name="phone_usage_requests">
+        <item quantity="one">%1$d request</item>
+        <item quantity="other">%1$d requests</item>
+    </plurals>
+
+    <!-- Settings: the limits of a task. -->
+    <string name="phone_section_limits">Limits</string>
+    <string name="phone_steps_limit">Steps per task</string>
+    <string name="phone_steps_limit_desc">Each action on the phone is a step.</string>
+    <string name="phone_time_limit">Time per task</string>
+    <string name="phone_time_limit_desc">Time spent waiting for you doesn\'t count.</string>
+    <string name="phone_cost_limit">Cost per task</string>
+    <string name="phone_cost_limit_desc">Counted from what the service reports, at the prices it publishes.</string>
+    <string name="phone_cost_limit_desc_tokens">Pinky doesn\'t know this model\'s prices, so it counts a million tokens as US$1.</string>
+
+    <!-- Settings: when Pinky asks (policy.Preset). -->
+    <string name="phone_section_ask">When should Pinky ask you?</string>
+    <string name="phone_preset_commits">Ask before payments, messages and deletions</string>
+    <string name="phone_preset_commits_desc">Also asks before calls, account changes and installing apps.</string>
+    <string name="phone_preset_payments">Ask before payments only</string>
+    <string name="phone_preset_payments_desc">Messages and deletions go through without asking.</string>
+    <string name="phone_preset_every">Ask before every action</string>
+    <string name="phone_preset_every_desc">Slower, but you see every tap first.</string>
+    <string name="phone_preset_core_down">Turn on Pinky to change this.</string>
+
+    <!-- Settings: this phone, and about Pinky. -->
+    <string name="phone_section_phone">This phone</string>
+    <string name="phone_accessibility">Accessibility service</string>
+    <string name="phone_on">On</string>
+    <string name="phone_off">Off</string>
+    <string name="phone_accessibility_desc">Pinky reads the screen and acts on it through this service.</string>
+    <string name="phone_app_info_desc">Battery use and restricted settings for Pinky.</string>
+    <string name="phone_battery_title">Keep Pinky running</string>
+    <string name="phone_battery_body">Android may stop Pinky in the background during a long task. Let Pinky use the battery without restrictions.</string>
+    <string name="phone_battery_allow">Allow</string>
+    <string name="phone_autostart_body">This phone also stops apps that aren\'t allowed to start on their own. Turn on Autostart for Pinky.</string>
+    <string name="phone_autostart_open">Open Autostart</string>
+    <string name="phone_battery">Battery</string>
+    <string name="phone_battery_unrestricted">Unrestricted</string>
+    <string name="phone_battery_optimized">Optimized</string>
+    <string name="phone_battery_desc">Unrestricted keeps Pinky running through a long task.</string>
+    <string name="phone_autostart">Autostart</string>
+    <string name="phone_autostart_desc">Lets Pinky start again when this phone stops it.</string>
+    <string name="phone_section_about">About</string>
+    <string name="phone_version">Version</string>
+    <string name="phone_update_check">Check for updates</string>
+    <string name="phone_update_checking">Checking…</string>
+    <string name="phone_update_current">Pinky is up to date.</string>
+    <string name="phone_update_available">Pinky %1$s is available</string>
+    <string name="phone_update_download">Download</string>
+    <string name="phone_update_later">Later</string>
+    <string name="phone_update_failed">Couldn\'t check for updates. Try again later.</string>
+    <string name="phone_update_offline">Couldn\'t check for updates. Check the internet connection and try again.</string>
+    <string name="phone_update_dev">Development builds don\'t update.</string>
+    <string name="phone_update_downloading">Downloading the update…</string>
+    <string name="phone_update_download_offline">Couldn\'t download the update. Check the internet connection and try again.</string>
+    <string name="phone_update_mismatch">The download isn\'t Pinky\'s release, so Pinky didn\'t install it. Try again later.</string>
+    <string name="phone_update_install_failed">Couldn\'t install the update. Try again later.</string>
+
+    <!-- A task's steps in Activity, worded as desktop Pinky words them
+         (ui/extras.go, stepDisplay). %1$s is what a step asked for, in the
+         gateway's own English ("tap “Pay”"), or the question it asked. -->
+    <string name="phone_step_waiting">Waiting for you: %1$s</string>
+    <string name="phone_step_answered">You answered: %1$s</string>
+    <string name="phone_step_denied">You denied: %1$s</string>
+    <string name="phone_step_declined">You declined</string>
+    <string name="phone_step_said_no">You said no: %1$s</string>
+    <string name="phone_step_handed_back">You handed it back</string>
+    <string name="phone_step_agreed">You agreed: %1$s</string>
+    <string name="phone_step_asked">Asked: “%1$s”</string>
+    <string name="phone_step_took_over">Not done: you took over</string>
+    <string name="phone_step_in_control">Not done: you were in control</string>
+    <string name="phone_step_stopped">Not done: stopped</string>
+    <string name="phone_step_stale">Not done: the screen changed while it waited</string>
+    <string name="phone_step_maybe">May have happened</string>
+    <string name="phone_step_not_used">Allowed, but Pinky did not come back for it</string>
+    <string name="phone_step_locked">The phone was locked</string>
+    <string name="phone_step_offline">The phone went offline</string>
+    <string name="phone_step_needs_setup">The phone needed setup first</string>
+    <string name="phone_step_failed">Failed: %1$s</string>
+    <!-- Why a step failed, after "Failed: ". -->
+    <string name="phone_code_lease_held">lease held</string>
+    <string name="phone_code_scope_denied">scope denied</string>
+    <string name="phone_code_not_found">not found</string>
+    <string name="phone_code_unsupported">unsupported</string>
+    <string name="phone_code_invalid_argument">invalid argument</string>
+    <string name="phone_code_internal">internal</string>
+
+    <!-- Settings › Background screen (BackgroundActivity): tasks run on a
+         hidden second screen, shown in a floating window, so the person
+         keeps using the phone. Developer options, Wireless debugging and
+         "Pair device with pairing code" are Android's own names. -->
+    <string name="phone_bg_title">Background screen</string>
+    <string name="phone_bg_row_desc">Run tasks on a hidden second screen while you keep using the phone.</string>
+    <string name="phone_bg_intro">Pinky runs your tasks on a hidden second screen and shows it in a small floating window, so you can keep using the phone. Pinky needs Wireless debugging for it: you turn it on and pair Pinky once, here.</string>
+    <string name="phone_bg_switch">Use the background screen</string>
+    <string name="phone_bg_needs_13">Needs Android 13 or later. Tasks run on the phone\'s screen.</string>
+    <string name="phone_bg_core_down">Turn on Pinky to change this.</string>
+    <string name="phone_bg_unavailable">This version of Pinky can\'t use a background screen.</string>
+    <string name="phone_bg_status_off">Off. Tasks run on the phone\'s screen.</string>
+    <string name="phone_bg_status_unpaired">Pair Pinky with Wireless debugging to finish.</string>
+    <string name="phone_bg_status_no_port">Wireless debugging is off. Tasks run on the phone\'s screen until you turn it on.</string>
+    <string name="phone_bg_status_ready">Ready. Tasks run on the background screen.</string>
+    <string name="phone_bg_status_connected">Connected. Tasks run on the background screen.</string>
+    <string name="phone_bg_status_refused">The phone no longer knows Pinky. Pair Pinky again.</string>
+    <string name="phone_bg_status_failed">Couldn\'t connect: %1$s. Tasks run on the phone\'s screen.</string>
+    <string name="phone_bg_steps">Set up</string>
+    <string name="phone_bg_step_dev">Developer options</string>
+    <string name="phone_bg_step_dev_desc">If it\'s off: in About phone, tap Build number seven times.</string>
+    <string name="phone_bg_step_wireless">Wireless debugging</string>
+    <string name="phone_bg_step_wireless_desc">Turn it on in Developer options. It needs Wi-Fi.</string>
+    <string name="phone_bg_step_pair">Pair Pinky</string>
+    <string name="phone_bg_step_pair_desc">In Wireless debugging, tap Pair device with pairing code, then type the code into Pinky\'s notification.</string>
+    <string name="phone_bg_paired_short">Paired</string>
+    <string name="phone_bg_pairing">Pairing…</string>
+    <string name="phone_bg_pair_toast">Tap Pair device with pairing code, then enter the code in Pinky\'s notification.</string>
+    <string name="phone_bg_no_notify">Notifications are off: enter the code here, with Settings and Pinky side by side in split screen.</string>
+    <string name="phone_bg_enter_code">Enter pairing code</string>
+    <string name="phone_bg_code_desc">Or type the code here, with Wireless debugging open beside Pinky in split screen.</string>
+    <string name="phone_bg_code_dialog_desc">The six-digit code from Pair device with pairing code. Keep that dialog open.</string>
+    <string name="phone_bg_code_hint">Six-digit code</string>
+    <string name="phone_bg_not_a_code">The code has six digits.</string>
+    <string name="phone_bg_wrong_code">That code didn\'t work. Check the code in the dialog and try again.</string>
+    <string name="phone_bg_no_dialog">Pinky couldn\'t find the pairing dialog. Open Pair device with pairing code and keep it open while you enter the code.</string>
+    <string name="phone_bg_pair_failed">Pairing failed: %1$s</string>
+    <string name="phone_bg_paired">Paired. Pinky can use the background screen.</string>
+    <string name="phone_bg_pair_channel">Pairing</string>
+    <string name="phone_bg_pair_notify_title">Pair Pinky</string>
+    <string name="phone_bg_pair_notify_body">In Wireless debugging, tap Pair device with pairing code, then enter the code here.</string>
+    <string name="phone_bg_forget">Forget pairing</string>
+    <string name="phone_bg_forget_desc">Pinky deletes its key. To remove Pinky from the phone too, tap it under Paired devices in Wireless debugging.</string>
+    <string name="phone_bg_forget_confirm">Pinky deletes its pairing key and drops its connection. You\'ll need to pair again to use the background screen.</string>
+    <string name="phone_bg_confirm_title">Use Wireless debugging?</string>
+    <string name="phone_bg_confirm_body">Wireless debugging gives Pinky the access a computer has when it debugs this phone. Pinky uses it only to run its screen helper, which opens the hidden second screen, starts apps on it, and shows and controls it. It doesn\'t use it to install apps, read your files or change settings. Pinky connects only while this is on and drops the connection when you turn it off.</string>
+    <string name="phone_bg_confirm_ok">Turn on</string>
+    <string name="phone_bg_safety">What Pinky does with Wireless debugging</string>
+    <string name="phone_bg_safety_body">Pinky pairs with this phone only, and keeps its key in its own storage. While the background screen is on, Pinky holds a debugging connection to the phone and uses it only to run its screen helper: it opens the hidden second screen, starts the task\'s apps there, and shows and controls that screen. Approvals and taking over work as on the phone\'s screen. Turn this off and Pinky drops the connection; Forget pairing deletes the key. Android turns Wireless debugging off when the phone leaves Wi-Fi: tasks then run on the phone\'s screen.</string>
+
+    <!-- The floating window of a task on the background screen (AgentWindow). -->
+    <string name="phone_bg_window_working">Pinky is working · tap to take over</string>
+    <string name="phone_bg_window_yours">You have control</string>
+    <string name="phone_bg_window_larger">Larger</string>
+    <string name="phone_bg_window_smaller">Smaller</string>
+    <string name="phone_bg_take_over">Take over</string>
+    <string name="phone_bg_hand_back">Hand back</string>
+
+    <!-- Quick ways to Pinky (QuickEntry, AskActivity, QuickTiles.kt). -->
+    <string name="phone_bubble">Pinky floating button</string>
+    <string name="phone_floating">Floating button</string>
+    <string name="phone_floating_desc">A Pinky button over other apps. Tap to open Pinky, double-tap to ask about the screen, touch and hold to speak. It hides while Pinky works.</string>
+    <string name="phone_tile_task">Pinky task</string>
+    <string name="phone_tile_bubble">Pinky button</string>
+    <string name="phone_ask">Ask</string>
+    <string name="phone_ask_open">Open Pinky</string>
+    <string name="phone_ask_not_ready">Pinky isn\'t ready on this phone yet. Open Pinky to see why.</string>
+    <string name="phone_ask_screen_title">Ask about this screen</string>
+    <string name="phone_ask_screen_note">Pinky reads this screen as it reads any, so blocked apps and hidden codes stay hidden, and sends it only to your own model.</string>
+    <string name="phone_ask_screen_hint">What do you want to know? Leave it empty to have the screen explained.</string>
+    <string name="phone_ask_screen_default">Explain what my screen shows.</string>
+    <string name="phone_ask_share_title">Share to Pinky</string>
+    <string name="phone_ask_share_hint">What should Pinky do with it? Leave it empty to have it explained.</string>
+    <string name="phone_ask_share_default">Tell me about what I shared.</string>
+    <string name="phone_ask_task_title">New task</string>
+    <string name="phone_ask_first_pictures">Only the first %1$d pictures go with the task.</string>
+    <string name="phone_ask_nothing">Nothing Pinky can use was shared: only text, links and pictures.</string>
+    <string name="phone_ask_picture_failed">A picture couldn\'t be read.</string>
+    <string name="phone_voice">Speak</string>
+    <string name="phone_voice_none">This phone has no speech recognition.</string>
+
+    <!-- Scheduled tasks on the phone (SchedulesActivity, ScheduleEditActivity,
+         ScheduleNotices), worded as desktop Pinky's (cmd/pinky/locales: sched*). -->
+    <string name="phone_schedules">Scheduled tasks</string>
+    <string name="phone_sched_note">Pinky runs a scheduled task while this phone is unlocked and you haven\'t touched it for a minute. With the background screen set up (Settings › Background screen), it also runs one while the phone is locked. It never unlocks the phone or turns its screen on: otherwise it skips the time and tells you. A scheduled task never pays, and a step that needs your approval waits for you with a notification.</string>
+    <string name="phone_sched_allow">So that they run on time</string>
+    <string name="phone_sched_notifications">Notifications</string>
+    <string name="phone_sched_notifications_desc">Pinky tells you how each scheduled task went, and when one waits for your approval.</string>
+    <string name="phone_sched_exact">Alarms &amp; reminders</string>
+    <string name="phone_sched_exact_desc">Lets Pinky start a scheduled task on time. Without it, Android may start it some minutes late.</string>
+    <string name="phone_sched_battery_desc">Unrestricted lets Pinky wake up for a scheduled task while the phone is idle.</string>
+    <string name="phone_sched_list">Scheduled</string>
+    <string name="phone_sched_empty">No scheduled tasks yet.</string>
+    <string name="phone_sched_new">New schedule</string>
+    <string name="phone_sched_core_down">Pinky on this phone isn\'t running, so its scheduled tasks can\'t be read or changed now.</string>
+    <string name="phone_sched_sum_condition">%1$s · only if %2$s</string>
+    <string name="phone_sched_paused">Paused</string>
+    <string name="phone_sched_title_new">Schedule a task</string>
+    <string name="phone_sched_title_edit">Scheduled task</string>
+    <string name="phone_sched_task">Task</string>
+    <string name="phone_sched_task_hint">Check the weather</string>
+    <string name="phone_sched_repeat">Repeat</string>
+    <string name="phone_sched_once">Once</string>
+    <string name="phone_sched_daily">Every day</string>
+    <string name="phone_sched_weekdays">Weekdays</string>
+    <string name="phone_sched_weekly">On certain days</string>
+    <string name="phone_sched_interval">Every few hours</string>
+    <string name="phone_sched_date">Date</string>
+    <string name="phone_sched_time">Time</string>
+    <string name="phone_sched_start_at">Starting at</string>
+    <string name="phone_sched_add_time">Add a time</string>
+    <string name="phone_sched_change">Change</string>
+    <string name="phone_sched_remove">Remove</string>
+    <string name="phone_sched_days">Days</string>
+    <string name="phone_sched_every">Every</string>
+    <plurals name="phone_sched_hours">
+        <item quantity="one">Every hour</item>
+        <item quantity="other">Every %d hours</item>
+    </plurals>
+    <string name="phone_sched_condition">Tell me only if</string>
+    <string name="phone_sched_condition_desc">Leave it empty to hear of every run. Otherwise Pinky checks it each time and tells you only when it holds.</string>
+    <string name="phone_sched_condition_hint">it will rain (optional)</string>
+    <string name="phone_sched_cooldown">Tell me</string>
+    <string name="phone_sched_cooldown_always">Each time it holds</string>
+    <string name="phone_sched_cooldown_hour">At most once an hour</string>
+    <string name="phone_sched_cooldown_day">At most once a day</string>
+    <string name="phone_sched_next">Next runs</string>
+    <string name="phone_sched_no_next">It won\'t run again.</string>
+    <string name="phone_sched_run_now">Run now</string>
+    <string name="phone_sched_pause">Pause</string>
+    <string name="phone_sched_resume">Resume</string>
+    <string name="phone_sched_delete">Delete</string>
+    <string name="phone_sched_delete_q">Delete this scheduled task?</string>
+    <string name="phone_sched_runs">Last runs</string>
+    <string name="phone_sched_no_runs">It hasn\'t run yet.</string>
+    <string name="phone_sched_run_manual">%s · Run now</string>
+    <!-- Between the items of a list: days, times. -->
+    <string name="phone_sched_list_sep">", "</string>
+    <string name="phone_sched_moment">%1$s, %2$s</string>
+    <string name="phone_sched_err_no_task">Type a task.</string>
+    <string name="phone_sched_err_long">The task is too long.</string>
+    <string name="phone_sched_err_no_time">Add a time.</string>
+    <string name="phone_sched_err_time">Write times as hours and minutes, like 08:00 or 20:30.</string>
+    <plurals name="phone_sched_err_too_many">
+        <item quantity="one">%d time a day at most.</item>
+        <item quantity="other">%d times a day at most.</item>
+    </plurals>
+    <string name="phone_sched_err_date">Choose a date.</string>
+    <string name="phone_sched_err_past">That time has passed.</string>
+    <string name="phone_sched_err_no_days">Choose at least one day.</string>
+    <string name="phone_sched_err_not_found">This scheduled task no longer exists.</string>
+    <string name="phone_sched_err_other">Couldn\'t save the scheduled task. Try again.</string>
+    <string name="phone_sched_notify_title">Scheduled: %s</string>
+    <string name="phone_sched_waiting_title">Pinky is waiting for you</string>
+    <string name="phone_sched_waiting_text">The scheduled task “%1$s” needs you: %2$s</string>
+    <string name="phone_sched_down_title">A scheduled task couldn\'t run</string>
+    <string name="phone_sched_down_text">Pinky on this phone wasn\'t running. Open Pinky to start it again.</string>
+    <string name="phone_sched_channel">Scheduled tasks</string>
+    <string name="phone_sched_channel_desc">How each scheduled task went.</string>
+    <string name="phone_sched_waiting_channel">Scheduled tasks waiting for you</string>
+    <string name="phone_sched_waiting_channel_desc">An approval or a step a scheduled task needs from you.</string>
+    <string name="phone_sched_skipped">Skipped</string>
+    <string name="phone_sched_running">Running…</string>
+    <string name="phone_sched_met">Condition met</string>
+    <string name="phone_sched_not_met">Condition not met</string>
+    <string name="phone_sched_interrupted">Pinky stopped before the task ended.</string>
+    <string name="phone_sched_skip_locked">The phone was locked or its screen was off.</string>
+    <string name="phone_sched_skip_in_use">You were using the phone.</string>
+    <string name="phone_sched_skip_busy">Another task had the phone.</string>
+    <string name="phone_sched_skip_offline">Pinky\'s accessibility service wasn\'t on.</string>
+    <string name="phone_sched_skip_no_key">No API key or model was set. Add them in Settings.</string>
+    <string name="phone_sched_skip_off">Pinky on this phone was turned off.</string>
+    <plurals name="phone_sched_skip_not_running">
+        <item quantity="one">Pinky on this phone wasn\'t running then.</item>
+        <item quantity="other">Pinky on this phone wasn\'t running: %d times were missed.</item>
+    </plurals>
+    <string name="phone_sched_sum_once">%1$s at %2$s</string>
+    <string name="phone_sched_sum_daily">Every day at %s</string>
+    <string name="phone_sched_sum_weekdays">Weekdays at %s</string>
+    <string name="phone_sched_sum_weekly">%1$s at %2$s</string>
+    <plurals name="phone_sched_sum_interval">
+        <item quantity="one">Every hour from %2$s</item>
+        <item quantity="other">Every %1$d hours from %2$s</item>
+    </plurals>
+    <!-- Pinky's memory (MemoryActivity, and the end card's question):
+         the notes the person keeps for tasks on this phone, as desktop
+         Pinky's settingsMemory* and askMemory*. -->
+    <string name="phone_memory">Memory</string>
+    <string name="phone_memory_desc">What Pinky remembers between tasks</string>
+    <string name="phone_memory_intro">What Pinky remembers for its tasks on this phone: what you told it, and ways of doing things you said yes to after a task. Nothing is kept without your yes, and never passwords, codes, card or ID numbers, or addresses. Pinky on a computer keeps its own.</string>
+    <string name="phone_memory_use">Use memory</string>
+    <string name="phone_memory_use_desc">Tasks read these notes and may suggest new ones. Turned off, the notes stay until you delete them.</string>
+    <string name="phone_memory_notes">Remembered</string>
+    <string name="phone_memory_empty">Nothing yet. After a task, Pinky may suggest something to remember; you decide.</string>
+    <string name="phone_memory_read_failed">Couldn\'t read the memory. Pinky may still be starting.</string>
+    <string name="phone_memory_add">Add…</string>
+    <string name="phone_memory_edit">Edit</string>
+    <string name="phone_memory_delete">Delete</string>
+    <string name="phone_memory_delete_all">Delete All</string>
+    <string name="phone_memory_delete_all_title">Delete all of Pinky\'s memory?</string>
+    <string name="phone_memory_delete_all_message">Every note on this phone is deleted. Pinky on a computer keeps its own.</string>
+    <string name="phone_memory_hint">For example: Prefers window seats</string>
+    <string name="phone_memory_from_you">From you</string>
+    <string name="phone_memory_learned">Learned on a task</string>
+    <string name="phone_memory_learned_in">Learned in %1$s</string>
+    <string name="phone_memory_err_sensitive">Memory never keeps passwords, codes, card, account, ID or phone numbers, email or street addresses.</string>
+    <string name="phone_memory_err_long">A note has at most %1$d characters.</string>
+    <string name="phone_memory_err_full">Memory keeps at most %1$d notes. Delete one first.</string>
+    <string name="phone_memory_err_failed">Couldn\'t save the note.</string>
+    <string name="phone_memory_ask">Remember for later tasks?</string>
+    <string name="phone_memory_keep">Remember</string>
+    <string name="phone_memory_drop">Don\'t</string>
+    <string name="phone_memory_kept">Remembered</string>
+    <string name="phone_memory_dropped">Not remembered</string>
+</resources>

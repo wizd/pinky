@@ -116,6 +116,30 @@ func (w Window) covers() []screen.Rect {
 	return nil
 }
 
+// OverlaysOf returns what the accessibility overlays of the app pkg cover:
+// Pinky's own pill and approval card while Pinky on a computer holds the
+// phone in on-phone mode. A tap there lands on them, not on the app below.
+// They send no nodes (accessibilityDataSensitive) and often no package, so
+// they are known by their title, the app's package.
+func (t *Tree) OverlaysOf(pkg string) []screen.Rect {
+	full := screen.Rect{W: t.Display.Width, H: t.Display.Height}
+	var out []screen.Rect
+	for _, w := range t.Windows {
+		if w.Type != WindowAccessibilityOverlay || (w.Package != pkg && w.Title != pkg) {
+			continue
+		}
+		for _, r := range w.covers() {
+			if !full.Empty() {
+				r = clipTo(r, full)
+			}
+			if !r.Empty() {
+				out = append(out, r)
+			}
+		}
+	}
+	return out
+}
+
 // foreground picks the app the person is looking at: the top-most focused
 // or active application window, or a focused full-screen system window
 // such as the notification shade, else the top-most application window.
@@ -249,13 +273,14 @@ func (cv *converter) emit(n *Node, path, label string, check *Node) {
 	}
 	role := roleOf(n, check)
 	cv.out = append(cv.out, screen.Element{
-		Role:   role,
-		Label:  label,
-		Bounds: b,
-		States: states(n, role, check),
-		Source: screen.SourceTree,
-		Path:   path,
-		ID:     n.ID,
+		Role:    role,
+		Label:   label,
+		Bounds:  b,
+		States:  states(n, role, check),
+		Source:  screen.SourceTree,
+		Path:    path,
+		ID:      n.ID,
+		Content: inputContent(n),
 	})
 }
 
@@ -370,6 +395,16 @@ func inputLabel(n *Node) string {
 		return clean(firstNonEmpty(n.Hint, n.Desc))
 	}
 	return clean(firstNonEmpty(n.Text, n.Hint, n.Desc))
+}
+
+// inputContent is the text typed into an editable field, as inputLabel
+// shows it: "" while it shows its hint (the companion sends no text then)
+// and for passwords.
+func inputContent(n *Node) string {
+	if !n.Editable || n.Password || strings.TrimSpace(n.Text) == "" {
+		return ""
+	}
+	return clean(n.Text)
 }
 
 // roleOf maps a node onto the screen model's roles. check is the node whose

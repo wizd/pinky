@@ -20,9 +20,10 @@ const statusJSON = `{
   "MagicDNSSuffix": "tail1234.ts.net",
   "CurrentTailnet": {"Name": "someone@example.com", "MagicDNSSuffix": "tail1234.ts.net", "MagicDNSEnabled": true},
   "Self": {
-    "ID": "nSelf", "HostName": "Someone's MacBook", "DNSName": "macbook.tail1234.ts.net.", "OS": "macOS",
+    "ID": "nSelf", "UserID": 42, "HostName": "Someone's MacBook", "DNSName": "macbook.tail1234.ts.net.", "OS": "macOS",
     "TailscaleIPs": ["fd7a:115c:a1e0::1", "100.101.1.1"], "Online": true
   },
+  "User": {"42": {"ID": 42, "LoginName": "someone@example.com", "DisplayName": "Someone"}},
   "Peer": {
     "nodekey:bb": {
       "ID": "nPixel", "HostName": "pixel-9", "DNSName": "pixel-9.tail1234.ts.net.", "OS": "android",
@@ -49,7 +50,7 @@ func TestParse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.State != Running || !st.Running() || st.Tailnet != "someone@example.com" || st.Detail != "" {
+	if st.State != Running || !st.Running() || st.Tailnet != "someone@example.com" || st.Owner != "someone@example.com" || st.Detail != "" {
 		t.Fatalf("status = %+v", st)
 	}
 	if st.Self.Name != "Someone's MacBook" || st.Self.DNSName != "macbook.tail1234.ts.net" ||
@@ -178,5 +179,19 @@ func TestReader(t *testing.T) {
 	nr := &Reader{Find: func() (string, error) { return "", ErrNotInstalled }}
 	if st, err := nr.Status(ctx); !errors.Is(err, ErrNotInstalled) || st.State != NotInstalled {
 		t.Fatalf("not installed: %+v, %v", st, err)
+	}
+}
+
+// A tagged computer belongs to no person: it has no owner, even though
+// Tailscale names a user for its tags.
+func TestParseTaggedOwner(t *testing.T) {
+	st, err := Parse([]byte(`{"BackendState": "Running",
+  "Self": {"ID": "nSelf", "UserID": 7, "Tags": ["tag:server"], "DNSName": "box.tail1234.ts.net."},
+  "User": {"7": {"ID": 7, "LoginName": "tagged-devices"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Owner != "" {
+		t.Fatalf("Owner = %q, want none", st.Owner)
 	}
 }

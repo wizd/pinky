@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Makes Pinky Companion's release signing key, keeps a copy in 1Password
+# Makes the release signing key of Pinky for Android (app.pinky.companion,
+# called Pinky Companion before November 2026), keeps a copy in 1Password
 # and sets the release workflow's secrets COMPANION_KEYSTORE and
 # COMPANION_KEYSTORE_PASSWORD with it (docs/RELEASING.md › Setting it up):
 #
@@ -17,8 +18,9 @@
 #
 # OP_ACCOUNT (rsshub) and OP_VAULT (Employee) say where 1Password keeps the
 # copy, REPO (DIYgod/pinky) the repository. A new key replaces the one in
-# the secrets: Companions signed with the old one cannot be updated by
-# releases signed with the new one, so Pinky replaces each of them once.
+# the secrets: copies of Pinky for Android signed with the old one cannot
+# be updated by releases signed with the new one, so Pinky replaces each of
+# them once.
 set -eu -o pipefail
 cd "${0:A:h}/.."
 account=${OP_ACCOUNT:-rsshub}

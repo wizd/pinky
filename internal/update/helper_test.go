@@ -57,11 +57,11 @@ func newHelperWorld(t *testing.T) *helperWorld {
 	programs := t.TempDir()
 	w := &helperWorld{t: t, dir: filepath.Join(programs, "Pinky"), newVersion: "up"}
 	writeTree(t, w.dir, map[string]string{
-		"Pinky.exe":                     "2026.1107.1",
-		"Uninstall.exe":                 "uninstall 2026.1107.1",
-		"resources/pinky-companion.apk": "apk 1",
-		"avcodec-63.dll":                "the person's FFmpeg",
-		"resources/notes.txt":           "the person's",
+		"Pinky.exe":                   "2026.1107.1",
+		"Uninstall.exe":               "uninstall 2026.1107.1",
+		"resources/pinky-android.apk": "apk 1",
+		"avcodec-63.dll":              "the person's FFmpeg",
+		"resources/notes.txt":         "the person's",
 	})
 	work, err := os.MkdirTemp(programs, workPrefix(w.dir))
 	if err != nil {
@@ -122,9 +122,9 @@ func (w *helperWorld) ops() helperOps {
 				v = w.job.Version
 			}
 			writeTree(w.t, dir, map[string]string{
-				"Pinky.exe":                     v,
-				"Uninstall.exe":                 "uninstall " + v,
-				"resources/pinky-companion.apk": "apk 2",
+				"Pinky.exe":                   v,
+				"Uninstall.exe":               "uninstall " + v,
+				"resources/pinky-android.apk": "apk 2",
 			})
 			return w.setupErr
 		},
@@ -194,11 +194,11 @@ func (w *helperWorld) marks() []string {
 
 var (
 	oldInstall = map[string]string{
-		"Pinky.exe": "2026.1107.1", "Uninstall.exe": "uninstall 2026.1107.1", "resources/pinky-companion.apk": "apk 1",
+		"Pinky.exe": "2026.1107.1", "Uninstall.exe": "uninstall 2026.1107.1", "resources/pinky-android.apk": "apk 1",
 		"avcodec-63.dll": "the person's FFmpeg", "resources/notes.txt": "the person's",
 	}
 	newInstall = map[string]string{
-		"Pinky.exe": "2026.1107.2", "Uninstall.exe": "uninstall 2026.1107.2", "resources/pinky-companion.apk": "apk 2",
+		"Pinky.exe": "2026.1107.2", "Uninstall.exe": "uninstall 2026.1107.2", "resources/pinky-android.apk": "apk 2",
 		"avcodec-63.dll": "the person's FFmpeg", "resources/notes.txt": "the person's",
 	}
 )

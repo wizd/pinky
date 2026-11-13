@@ -3,8 +3,6 @@ package ios
 import (
 	"context"
 	"fmt"
-
-	goios "github.com/danielpaulus/go-ios/ios"
 )
 
 // Locked implements driver.LockReporter, best effort. It reads lockdown's
@@ -19,13 +17,7 @@ func (d *Device) Locked(ctx context.Context) (bool, error) {
 	}
 	ch := make(chan result, 1)
 	go func() {
-		conn, err := goios.ConnectLockdownWithSession(d.l.base)
-		if err != nil {
-			ch <- result{err: err}
-			return
-		}
-		defer conn.Close()
-		v, err := conn.GetValue("PasswordProtected")
+		v, err := d.cur().lockdownValue("PasswordProtected")
 		if err != nil {
 			ch <- result{err: err}
 			return

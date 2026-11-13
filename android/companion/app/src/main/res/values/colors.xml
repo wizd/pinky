@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Desktop Pinky's palette (ui/style.go, lightPalette) for Pinky's own
+     screens on the phone (Look); values-night holds the dark one. -->
+<resources>
+    <color name="pinky_bg">#FFFFFF</color>
+    <color name="pinky_group">#F7F7F9</color>
+    <color name="pinky_line">#EBEBEF</color>
+    <color name="pinky_bg3">#EFEFF2</color>
+    <color name="pinky_ink">#1D1D22</color>
+    <color name="pinky_ink2">#5B5B64</color>
+    <color name="pinky_ink3">#6C6C75</color>
+    <color name="pinky_accent">#5450D6</color>
+    <color name="pinky_accent_button">#5450D6</color>
+    <color name="pinky_accent_tint">#F1F0FD</color>
+    <color name="pinky_red">#C32C18</color>
+    <color name="pinky_red_tint">#FEF0ED</color>
+    <color name="pinky_green">#2F9E5A</color>
+    <color name="pinky_amber">#975800</color>
+    <color name="pinky_brand">#EE4D6C</color>
+
+    <!-- Dark icons on the bars over the light page. -->
+    <bool name="pinky_light_bars">true</bool>
+</resources>

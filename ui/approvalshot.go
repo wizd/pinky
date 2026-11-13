@@ -538,7 +538,7 @@ func (a *app) missingShotNote(c *mg.Context, n gateway.NeedView) {
 	}
 	p := pal(c)
 	mg.Row(c).Margin(12, 0, 0, 0).Padding(9, 12).Radius(10).Background(trayColor(p)).Gap(8).AlignItems(mg.Center).Children(func() {
-		mg.Icon(c, ic).FontSize(16).TextColor(p.ink3).Shrink(0)
+		mg.Icon(c, ic).FontSize(iconBody).TextColor(p.ink3).Shrink(0)
 		mg.Text(c, text).FontSize(fsSmall).TextColor(p.ink2).MaxLines(2)
 	})
 }
@@ -572,7 +572,7 @@ func (a *app) shotViewer(c *mg.Context, n gateway.NeedView, w, h float32, fill b
 				b.Background(p.bg3)
 				ink = p.ink
 			}
-			b.TextColor(ink).Children(func() { mg.Icon(c, icX).FontSize(17) })
+			b.TextColor(ink).Children(func() { mg.Icon(c, icX).FontSize(iconBody) })
 			if b.Clicked() {
 				close()
 			}

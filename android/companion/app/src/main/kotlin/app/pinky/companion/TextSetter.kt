@@ -351,7 +351,7 @@ class TextSetter(private val service: PinkyAccessibilityService) {
      * without a focused field so gives `not_found` rather than the field
      * behind it.
      */
-    private fun focusedOn(windows: List<AccessibilityWindowInfo>): AccessibilityNodeInfo {
+    fun focusedOn(windows: List<AccessibilityWindowInfo>): AccessibilityNodeInfo {
         service.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.let { n ->
             if (windows.any { it.id == n.windowId }) return n
             TreeDumper.recycle(n)

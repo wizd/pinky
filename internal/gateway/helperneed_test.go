@@ -48,7 +48,7 @@ func TestDeviceMovesToTheHelper(t *testing.T) {
 	s, _ := connect(t, g, "Test the landscape layout")
 	// A read says so, settled with the phone's battery and storage or
 	// unsupported without them.
-	if res := s.Device(ctx, DeviceRequest{}); !strings.Contains(res.Message, "a change moves the task to the helper by itself") {
+	if res := s.Device(ctx, DeviceRequest{}); !strings.Contains(res.Message, "a change moves the task to Pinky on the iPhone by itself") {
 		t.Fatalf("read over CoreDevice: %+v", res)
 	}
 	if b := backendOf(g); b != wayCoreDevice {
@@ -56,7 +56,7 @@ func TestDeviceMovesToTheHelper(t *testing.T) {
 	}
 	res := s.Device(ctx, DeviceRequest{Rotation: driver.RotationLandscape})
 	mustStatus(t, res, StatusSettled)
-	if !strings.Contains(res.Message, "Pinky moved this task to the WebDriverAgent helper for turning the screen") {
+	if !strings.Contains(res.Message, "Pinky moved this task to Pinky on the iPhone for turning the screen") {
 		t.Fatalf("turn: %q", res.Message)
 	}
 	if b := backendOf(g); b != wayHelper {

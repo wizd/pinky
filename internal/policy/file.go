@@ -21,8 +21,13 @@ type File struct {
 	ReadOnlyDevices []string `yaml:"read_only_devices"`
 	// MaskCodes masks one-time codes on the screen and in events, and
 	// covers them in screenshots (codes.go). Default true.
-	MaskCodes *bool  `yaml:"mask_codes"`
-	Rules     []Rule `yaml:"rules"`
+	MaskCodes *bool `yaml:"mask_codes"`
+	// VirtualCredentials lets agents type into password and one-time-code
+	// fields, and tap an app's own passcode keypad, on virtual phones (an
+	// emulator or a Simulator on this computer), for signing in with test
+	// accounts. Phones are refused as ever. Default false.
+	VirtualCredentials bool   `yaml:"virtual_credentials,omitempty"`
+	Rules              []Rule `yaml:"rules"`
 	// AlwaysAllow holds the person's "Always allow" answers to approvals
 	// (see Exemption), oldest first.
 	AlwaysAllow []Exemption `yaml:"always_allow,omitempty"`

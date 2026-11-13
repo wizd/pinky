@@ -27,8 +27,8 @@ import (
 // footer offers a newer version with its notes, Update now and Later.
 // With Settings › Advanced › Update automatically on, Pinky also installs
 // it by itself once nobody has used Pinky for a while and no agent works
-// (update.Idle), and updates Pinky Companion on Android phones that are
-// free. After an update a card offers What's new: the changelog entries
+// (update.Idle), and updates Pinky's app on phones that are free.
+// After an update a card offers What's new: the changelog entries
 // newer than the version that ran before, and the companion updates.
 
 // companionUpdater updates a phone's companion app without asking
@@ -92,8 +92,8 @@ type compAuto struct {
 var retryDelays = []time.Duration{time.Hour, 4 * time.Hour, 24 * time.Hour}
 
 var (
-	icUpdate  = icon(`<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/>`)
-	icSparkle = icon(`<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4"/><path d="M17 19h4"/>`)
+	icUpdate  = mingcute("download_2_line")
+	icSparkle = mingcute("sparkles_line")
 )
 
 // startUpdates begins checking for updates once the main window exists.
@@ -474,7 +474,7 @@ func cardClose(c *mg.Context, label string) bool {
 	if x.Hovered() {
 		x.Background(p.bg3)
 	}
-	x.TextColor(p.ink3).Children(func() { mg.Icon(c, icX).FontSize(12) })
+	x.TextColor(p.ink3).Children(func() { mg.Icon(c, icX).FontSize(iconMicro) })
 	return x.Clicked()
 }
 
@@ -494,7 +494,7 @@ func (a *app) companionByHandCards(c *mg.Context) {
 		title := locales.UpdateCompanionByHandTitle()
 		sideCard(c, "companion-by-hand-"+id, title, func() {
 			mg.Row(c).Gap(7).AlignItems(mg.Center).Children(func() {
-				mg.Icon(c, icAndroid).FontSize(15).TextColor(p.accentInk)
+				mg.Icon(c, icAndroid).FontSize(iconBody).TextColor(p.accentInk)
 				mg.Text(c, title).FontSize(fsBody).FontWeight(fwSemibold).Grow(1).MinWidth(0)
 				if cardClose(c, locales.UpdateCompanionByHandDismissLabel()) {
 					a.seenRefusal(id)
@@ -508,7 +508,7 @@ func (a *app) companionByHandCards(c *mg.Context) {
 
 func sideCard(c *mg.Context, key, label string, fn func()) {
 	p := pal(c)
-	mg.Column(c.Key(key)).Padding(12).Radius(10).Background(p.panel).Border(1, p.line).Gap(6).Margin(0, 0, 8, 0).
+	raised(c, mg.Column(c.Key(key)).Padding(sp3).Radius(rCard).Background(p.card).Border(1, p.line).Gap(6).Margin(0, 0, sp2, 0)).
 		Label(label).Children(fn)
 }
 
@@ -529,7 +529,7 @@ func (a *app) updateCard(c *mg.Context) {
 	sideCard(c, "update", locales.UpdateCardLabel(), func() {
 		head := func(title string) {
 			mg.Row(c).Gap(7).AlignItems(mg.Center).Children(func() {
-				mg.Icon(c, icUpdate).FontSize(15).TextColor(p.accentInk)
+				mg.Icon(c, icUpdate).FontSize(iconBody).TextColor(p.accentInk)
 				mg.Text(c, title).FontSize(fsBody).FontWeight(fwSemibold).Grow(1).MinWidth(0)
 			})
 		}
@@ -573,7 +573,10 @@ func (a *app) updateCard(c *mg.Context) {
 				}
 			})
 		default:
-			head(locales.UpdateAvailable(v))
+			head(locales.UpdateAvailableTitle())
+			// The version on a line of its own, under the title, which
+			// would otherwise break inside it in the narrow sidebar.
+			mg.Text(c, locales.UpdateAvailableVersion(v)).FontSize(fsSmall).TextColor(p.ink2).Margin(-2, 0, 0, 22)
 			if s.rel.NotesIn(i18n.Locale()) != "" {
 				if linkButton(c, locales.UpdateWhatsNew()).AlignSelf(mg.Start).Label(locales.UpdateWhatsNewIn(v)).Clicked() {
 					s.notesOpen = true
@@ -604,7 +607,7 @@ func (a *app) updateActions(c *mg.Context) {
 				mygo.Clipboard.WriteText(loc.Command)
 				a.toasts = append(a.toasts, locales.UpdateCopiedCommand(loc.Command))
 			}
-			b.TextColor(p.ink2).Children(func() { mg.Icon(c, icCopy).FontSize(13) })
+			b.TextColor(p.ink2).Children(func() { mg.Icon(c, icCopy).FontSize(iconSmall) })
 		})
 		if quietButton(c, locales.UpdateLater()).Clicked() {
 			a.laterUpdate()
@@ -673,7 +676,7 @@ func (a *app) news(all bool) (title, line, md string, show bool) {
 	appUpdated := update.IsRelease(st.NotesFrom)
 	if len(st.Changes) > 0 && !all || len(st.Changes) > 0 && appUpdated {
 		var b strings.Builder
-		b.WriteString("### Pinky Companion\n")
+		b.WriteString("### " + locales.UpdateNewsCompanionHeading() + "\n")
 		for _, ch := range st.Changes {
 			line := locales.UpdateNewsCompanionLine(ch.Device, ch.To)
 			if ch.Kind == "companion-replaced" {
@@ -723,7 +726,7 @@ func (a *app) newsCard(c *mg.Context) {
 	}
 	sideCard(c, "news", locales.UpdateWhatsNew(), func() {
 		mg.Row(c).Gap(7).AlignItems(mg.Center).Children(func() {
-			mg.Icon(c, icSparkle).FontSize(15).TextColor(p.accentInk)
+			mg.Icon(c, icSparkle).FontSize(iconBody).TextColor(p.accentInk)
 			mg.Text(c, card).FontSize(fsBody).FontWeight(fwSemibold).Grow(1).MinWidth(0)
 			if cardClose(c, locales.UpdateNewsDismissLabel()) {
 				a.dismissNews()
@@ -751,7 +754,7 @@ func (a *app) updateDialogs(c *mg.Context) {
 	if s.notesOpen && s.rel != nil {
 		r := s.rel
 		sheet(c.Key("release-notes"), &s.notesOpen, func() {
-			a.notesDialog(c, "Pinky "+r.Version, r.Date, r.NotesIn(i18n.Locale()), func() {
+			a.notesDialog(c, "Pinky "+r.Version, releaseDay(r.Version, r.Date), r.NotesIn(i18n.Locale()), func() {
 				if s.phase == updIdle || s.phase == updFailed {
 					if button(c, locales.UpdateNowButton(), btnOpt{kind: btnPrimary}).Clicked() {
 						s.notesOpen = false
@@ -792,13 +795,38 @@ func (a *app) updateDialogs(c *mg.Context) {
 	}
 }
 
+// releaseDay is the day a release came out as its version says it,
+// YEAR.MDD.N, the day in Asia/Shanghai (docs/RELEASING.md): the day the
+// changelog's heading gives it, which What's new shows. It is that day's
+// midnight in UTC, as the changelog's dates are, so it reads the same by
+// every clock. The feed's time does not: by a clock far enough west of
+// Shanghai's, a release made early in the Shanghai day came out the day
+// before. A version that says no day falls back to the feed's time by the
+// local clock.
+func releaseDay(version string, date time.Time) time.Time {
+	if v, ok := update.Parse(version); ok && len(v) == 3 && v[0] >= 2000 {
+		y, m, d := v[0], time.Month(v[1]/100), v[1]%100
+		day := time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+		if ty, tm, td := day.Date(); ty == y && tm == m && td == d {
+			return day
+		}
+	}
+	if date.IsZero() {
+		return date
+	}
+	return date.Local()
+}
+
+// notesDialog shows release notes: a title, the day (none when date is
+// zero), which it writes as the day date falls on in its own location
+// (releaseDay), the Markdown, and Close with extra's buttons beside it.
 func (a *app) notesDialog(c *mg.Context, title string, date time.Time, md string, extra func(), done func()) {
 	p := pal(c)
 	mg.Column(c).Width(520).MaxWidth(640).Gap(sp4).Children(func() {
 		mg.Column(c).Gap(2).Children(func() {
 			mg.Text(c, title).FontSize(fsTitle3).FontWeight(fwSemibold).Role(mg.RoleHeading)
 			if !date.IsZero() {
-				mg.Text(c, locales.DayOtherYear(date.Local())).FontSize(fsSmall).TextColor(p.ink2)
+				mg.Text(c, locales.DayOtherYear(date)).FontSize(fsSmall).TextColor(p.ink2)
 			}
 		})
 		mg.Scroll(c).MaxHeight(420).Children(func() { markdown.View(c, md, nil) })

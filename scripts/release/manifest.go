@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -34,6 +35,44 @@ type Asset struct {
 	URL    string `json:"url"`
 	SHA256 string `json:"sha256"`
 	Size   int64  `json:"size"`
+	// VersionCode is the Android APK's versionCode: the APK changes only
+	// when the app does, so Pinky on the phone offers an update only for a
+	// higher one (UpdateCheck). The apps' assets have none.
+	VersionCode int `json:"version_code,omitempty"`
+}
+
+// The Android app, one APK for every phone (scripts/androidcore.sh), by a
+// name without the version so that releases/latest/download/ always has
+// it. Pinky on the phone reads it as androidPlatform (UpdateCheck.ASSET);
+// desktop Pinky reads only its own platform.
+const (
+	androidPlatform = "android-arm64"
+	androidAPK      = "pinky-android.apk"
+)
+
+// apkVersionCode reads the versionCode the APK's build wrote into
+// assets/pinky-companion.json.
+func apkVersionCode(path string) (int, error) {
+	z, err := zip.OpenReader(path)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", filepath.Base(path), err)
+	}
+	defer z.Close()
+	f, err := z.Open("assets/pinky-companion.json")
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", filepath.Base(path), err)
+	}
+	defer f.Close()
+	var info struct {
+		VersionCode int `json:"version_code"`
+	}
+	if err := json.NewDecoder(f).Decode(&info); err != nil {
+		return 0, fmt.Errorf("%s: assets/pinky-companion.json: %w", filepath.Base(path), err)
+	}
+	if info.VersionCode <= 0 {
+		return 0, fmt.Errorf("%s: assets/pinky-companion.json has no version_code", filepath.Base(path))
+	}
+	return info.VersionCode, nil
 }
 
 // archives names the file of each platform that the updater installs, by
@@ -79,7 +118,8 @@ func fileSum(path string) (string, int64, error) {
 }
 
 // BuildManifest returns the manifest of the release of version in dir,
-// which holds every platform's archive. A partial manifest (a dry run's)
+// which holds every platform's archive and the Android APK (androidAPK).
+// A partial manifest (a dry run's)
 // leaves out the platforms whose archives are missing, and names them.
 func BuildManifest(dir, version, repo, notes string, now time.Time, partial bool) (m *Manifest, missing []string, err error) {
 	v, err := ParseVersion(version)
@@ -104,6 +144,19 @@ func BuildManifest(dir, version, repo, notes string, now time.Time, partial bool
 			return nil, nil, err
 		}
 		m.Assets[a.platform] = Asset{URL: downloadURL(repo, m.Tag, name), SHA256: sum, Size: size}
+	}
+	apk := filepath.Join(dir, androidAPK)
+	switch sum, size, err := fileSum(apk); {
+	case os.IsNotExist(err):
+		missing = append(missing, androidAPK)
+	case err != nil:
+		return nil, nil, err
+	default:
+		code, err := apkVersionCode(apk)
+		if err != nil {
+			return nil, nil, err
+		}
+		m.Assets[androidPlatform] = Asset{URL: downloadURL(repo, m.Tag, androidAPK), SHA256: sum, Size: size, VersionCode: code}
 	}
 	if len(missing) > 0 && !partial {
 		return nil, missing, fmt.Errorf("%s lacks %s", dir, strings.Join(missing, ", "))

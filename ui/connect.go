@@ -209,7 +209,9 @@ func (a *app) connectAgents(c *mg.Context) {
 	if a.opt.AgentSetup != nil {
 		c.After(10 * time.Second)
 	}
-	mg.Column(c).Gap(10).Label(locales.ConnectTitle()).Children(func() {
+	// Keyed, as Ask Pinky is: the two change places when the first agent
+	// connects (settingsAgents).
+	mg.Column(c.Key("connect-agents")).Gap(10).Label(locales.ConnectTitle()).Children(func() {
 		intro := locales.ConnectIntro()
 		if a.opt.AgentSetup == nil {
 			intro = locales.ConnectIntroByHand()
@@ -528,7 +530,7 @@ func (a *app) agentCard(c *mg.Context) {
 func cardHead(c *mg.Context, title string) {
 	p := pal(c)
 	mg.Row(c).Gap(7).AlignItems(mg.Center).Children(func() {
-		mg.Icon(c, icPlug).FontSize(15).TextColor(p.accentInk)
+		mg.Icon(c, icPlug).FontSize(iconBody).TextColor(p.accentInk)
 		mg.Text(c, title).FontSize(fsBody).FontWeight(fwSemibold).Grow(1).MinWidth(0)
 	})
 }

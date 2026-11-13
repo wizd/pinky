@@ -160,6 +160,37 @@ func (e *Engine) SetHideCodes(on bool) error {
 	return e.saveRulesLocked()
 }
 
+// VirtualCredentials reports whether agents may type credentials on
+// virtual phones (File.VirtualCredentials).
+func (e *Engine) VirtualCredentials() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.file.VirtualCredentials
+}
+
+// SetVirtualCredentials lets agents type credentials on virtual phones, or
+// not, and saves the rules file.
+func (e *Engine) SetVirtualCredentials(on bool) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.syncLocked(&e.rulesDisk); err != nil {
+		return err
+	}
+	if e.file.VirtualCredentials == on {
+		return nil
+	}
+	e.file.VirtualCredentials = on
+	return e.saveRulesLocked()
+}
+
+// CredentialTypingAllowed reports whether the credentials rule is lifted
+// for a phone: a virtual one, while VirtualCredentials is on.
+func (e *Engine) CredentialTypingAllowed(virtual bool) bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return virtual && e.file.VirtualCredentials
+}
+
 // rulesHeader starts a saved rules file.
 const rulesHeader = `# Pinky policy rules. Settings writes this file; you may edit it too.
 # preset: 1 = payments, messages, deletions and other commits ask,
@@ -169,6 +200,8 @@ const rulesHeader = `# Pinky policy rules. Settings writes this file; you may ed
 # always_allow holds your "Always allow" answers to approvals: in that app,
 # those rules no longer ask (never a deny or read-only mode; not with preset
 # 3). Settings > Safety lists them.
+# virtual_credentials: true lets agents type passwords and one-time codes on
+# emulators and Simulators, never on phones.
 # The bundled defaults, with every field explained, are in Pinky's source:
 # internal/policy/defaults.yaml.
 
@@ -408,7 +441,7 @@ func (e *Engine) setOverridesLocked(o AppOverrides) {
 
 // blockedLocked is Blocked with e.mu held.
 func (e *Engine) blockedLocked(app screen.App) (string, bool) {
-	if IsStandalone(app) {
+	if IsPinkyScreen(app) {
 		return RulePinkyApps, true
 	}
 	cats := e.apps.Categories(app)

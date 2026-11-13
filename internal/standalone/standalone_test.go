@@ -25,8 +25,9 @@ import (
 	"github.com/DIYgod/pinky/internal/policy"
 )
 
-// model is a Messages API whose turns a test scripts: each gets the text
-// the request ends with and returns the tool to call; the last repeats.
+// model is a Messages API, and a Chat Completions one, whose turns a test
+// scripts: each gets the text the request ends with and returns the tool
+// to call; the last repeats.
 type model struct {
 	mu    sync.Mutex
 	n     int
@@ -54,6 +55,16 @@ func (m *model) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return // cancelled
 	}
 	w.Header().Set("Content-Type", "application/json")
+	if strings.HasSuffix(r.URL.Path, "/chat/completions") {
+		// The same turn as Chat Completions answers it.
+		args, _ := json.Marshal(use["input"])
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{
+			"message": map[string]any{"role": "assistant", "tool_calls": []any{map[string]any{"id": use["id"], "type": "function",
+				"function": map[string]any{"name": use["name"], "arguments": string(args)}}}},
+			"finish_reason": "tool_calls"}},
+			"usage": map[string]any{"prompt_tokens": 100, "completion_tokens": 10}})
+		return
+	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"id": "msg_1", "type": "message", "role": "assistant",
 		"model": "fake", "stop_reason": "tool_use", "content": []any{use},
 		"usage": map[string]any{"input_tokens": 100, "output_tokens": 10}})
@@ -119,14 +130,16 @@ type harness struct {
 	sock string
 }
 
-func newHarness(t *testing.T) *harness {
+// newHarness starts a core on a demo phone, with tune's changes to its
+// options.
+func newHarness(t *testing.T, tune ...func(*Options)) *harness {
 	t.Helper()
 	dev := demo.NewDevice("pixel", "Pixel 9", driver.Android)
-	dev.AddApp(policy.StandaloneApp, "Pinky Standalone")
+	dev.AddApp("app.pinky.companion", "Pinky")
 	h := &harness{dev: dev, api: &model{}}
 	srv := httptest.NewServer(h.api)
 	h.url = srv.URL
-	c, err := New(Options{
+	o := Options{
 		Providers: []driver.Provider{demo.NewProvider(driver.Android, dev)},
 		Device:    "pixel",
 		Version:   "test",
@@ -135,7 +148,11 @@ func newHarness(t *testing.T) *harness {
 			PollInterval: 5 * time.Millisecond, MaxBlock: 50 * time.Millisecond, DiscoverEvery: 20 * time.Millisecond},
 		Pilot: pilot.Options{HTTPClient: srv.Client()},
 		Log:   quiet,
-	})
+	}
+	for _, f := range tune {
+		f(&o)
+	}
+	c, err := New(o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,6 +192,22 @@ func newHarness(t *testing.T) *harness {
 		}
 	}
 	return h
+}
+
+// key is the API key the core holds.
+func (h *harness) key() string {
+	h.core.mu.Lock()
+	defer h.core.mu.Unlock()
+	return h.core.key
+}
+
+func eventually(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	for deadline := time.Now().Add(3 * time.Second); !cond(); time.Sleep(5 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting until %s", what)
+		}
+	}
 }
 
 // conn is a connection to the control socket, as Pinky's screens open it.
@@ -248,7 +281,7 @@ func TestTaskThroughTheControlSocket(t *testing.T) {
 			if !strings.HasPrefix(last, "settled") {
 				t.Errorf("after the approval:\n%s", last)
 			}
-			return call("t2", "phone_launch", map[string]any{"app": "Pinky Standalone"})
+			return call("t2", "phone_launch", map[string]any{"app": "Pinky"})
 		},
 		func(last string, _ *http.Request) map[string]any {
 			if !strings.HasPrefix(last, "blocked_by_policy") {
@@ -263,8 +296,12 @@ func TestTaskThroughTheControlSocket(t *testing.T) {
 		t.Fatalf("state: %+v", st)
 	}
 	if r := ctl.do(map[string]any{"cmd": "start", "task": "Order lunch", "base_url": h.url}); r.OK ||
-		!strings.Contains(r.Error, "API key") {
+		!strings.Contains(r.Error, "API key") || r.Code != CodeNoKey {
 		t.Fatalf("start without a key: %+v", r)
+	}
+	if r := ctl.do(map[string]any{"cmd": "start", "task": "Order lunch", "key": "sk-test", "provider": "openai",
+		"base_url": h.url}); r.OK || r.Code != CodeNoModel {
+		t.Fatalf("start without a model: %+v", r)
 	}
 	sub := h.dial(t)
 	sub.send(map[string]any{"cmd": "subscribe"})
@@ -285,6 +322,11 @@ func TestTaskThroughTheControlSocket(t *testing.T) {
 	if st.Agent.End != "done" || st.Agent.Summary != "Ordered." || st.Agent.Steps != 2 || len(st.Needs) != 0 {
 		t.Fatalf("agent: %+v", st.Agent)
 	}
+	// The defaults, and a model whose prices Pinky does not know.
+	if a := st.Agent; a.MaxSteps != pilot.DefaultMaxSteps || a.MaxMinutes != int(pilot.DefaultMaxTime/time.Minute) ||
+		a.MaxCost != pilot.DefaultMaxCost || a.Priced || a.TokenLimit != 2_000_000 {
+		t.Fatalf("limits: %+v", a)
+	}
 	if st.Task == nil || st.Task.Title != "Order lunch" {
 		t.Fatalf("task: %+v", st.Task)
 	}
@@ -295,9 +337,7 @@ func TestTaskThroughTheControlSocket(t *testing.T) {
 	if !blocked {
 		t.Fatalf("opening Pinky was not blocked: %+v", st.Task.Steps)
 	}
-	if h.core.key != "" {
-		t.Fatal("the key outlived the task")
-	}
+	eventually(t, "the key is gone with the task", func() bool { return h.key() == "" })
 
 	// A second task shows only its own steps, and Stop ends it.
 	asked := make(chan struct{})
@@ -312,13 +352,20 @@ func TestTaskThroughTheControlSocket(t *testing.T) {
 	}
 	h.api.mu.Unlock()
 	if r := ctl.do(map[string]any{"cmd": "start", "task": "Look around", "key": "sk-test", "base_url": h.url,
-		"model": "fake"}); !r.OK {
+		"model": "claude-sonnet-5-5", "max_steps": 7, "max_minutes": 3, "max_cost": 0.5}); !r.OK {
 		t.Fatalf("start: %+v", r)
 	}
 	<-asked
 	st = sub.until("the second task", func(s State) bool { return s.Task != nil })
 	if st.Task.Title != "Look around" || !st.Agent.Running {
 		t.Fatalf("second task: %+v %+v", st.Task, st.Agent)
+	}
+	if a := st.Agent; a.MaxSteps != 7 || a.MaxMinutes != 3 || a.MaxCost != 0.5 || !a.Priced {
+		t.Fatalf("limits: %+v", a)
+	}
+	if r := ctl.do(map[string]any{"cmd": "start", "task": "Again", "key": "sk-test", "base_url": h.url,
+		"model": "fake"}); r.OK || r.Code != CodeBusy {
+		t.Fatalf("start while a task runs: %+v", r)
 	}
 	if r := ctl.do(map[string]any{"cmd": "stop"}); !r.OK {
 		t.Fatalf("stop: %+v", r)

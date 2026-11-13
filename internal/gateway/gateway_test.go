@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1081,6 +1082,30 @@ func TestIdlePhoneLockShows(t *testing.T) {
 	}
 }
 
+// TestIdleWiFiPhoneLockSlower reads an idle phone over Wi-Fi that nobody
+// watches only every idleLockEveryWiFi: each read is a lockdown session
+// over the network (GitHub issue #96).
+func TestIdleWiFiPhoneLockSlower(t *testing.T) {
+	saved, savedWiFi := idleLockEvery, idleLockEveryWiFi
+	idleLockEvery, idleLockEveryWiFi = 10*time.Millisecond, time.Hour
+	t.Cleanup(func() { idleLockEvery, idleLockEveryWiFi = saved, savedWiFi })
+	x := newExtraDev("iphone", "iPhone 16 Pro")
+	x.conn.Store("wifi")
+	g := newExtraGateway(t, x)
+	status := func() DeviceStatus { return g.Devices()[0].Status }
+	for deadline := time.Now().Add(3 * time.Second); len(g.Devices()) == 0 || status() != DeviceIdle; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the phone did not come online")
+		}
+	}
+	time.Sleep(100 * time.Millisecond) // the first read, at once
+	x.SetLocked(true)
+	time.Sleep(300 * time.Millisecond)
+	if s := status(); s != DeviceIdle {
+		t.Fatalf("an idle phone over Wi-Fi was read again within the hour: %q", s)
+	}
+}
+
 // TestDefaultAsksBeforePaymentsOnly runs the bundled policy as it ships:
 // a message goes out without asking, a payment still asks.
 func TestDefaultAsksBeforePaymentsOnly(t *testing.T) {
@@ -1110,16 +1135,23 @@ func TestDefaultAsksBeforePaymentsOnly(t *testing.T) {
 	}
 }
 
-// notingProvider opens phones whose Type leaves a note for the agent, as
-// an iPhone does when it cannot read the field back.
-type notingProvider struct{ driver.Provider }
+// notingProvider opens phones whose Type and back key leave a note for
+// the agent, as an iPhone's Type does when it cannot read the field back.
+type notingProvider struct {
+	driver.Provider
+	opened *atomic.Pointer[notingPhone] // the phone Open returned last, when set
+}
 
 func (p notingProvider) Open(ctx context.Context, id string) (driver.Device, error) {
 	dev, err := p.Provider.Open(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return &notingPhone{Device: dev}, nil
+	np := &notingPhone{Device: dev}
+	if p.opened != nil {
+		p.opened.Store(np)
+	}
+	return np, nil
 }
 
 type notingPhone struct {
@@ -1128,11 +1160,22 @@ type notingPhone struct {
 	note string
 }
 
-func (p *notingPhone) Type(ctx context.Context, text string, opt driver.TypeOptions) error {
+func (p *notingPhone) leave(note string) {
 	p.mu.Lock()
-	p.note = "Pinky could not read the field back to check the text."
+	p.note = note
 	p.mu.Unlock()
+}
+
+func (p *notingPhone) Type(ctx context.Context, text string, opt driver.TypeOptions) error {
+	p.leave("Pinky could not read the field back to check the text.")
 	return p.Device.Type(ctx, text, opt)
+}
+
+func (p *notingPhone) Key(ctx context.Context, k driver.Key) error {
+	if k == driver.KeyBack {
+		p.leave("Back may not have reached the app.")
+	}
+	return p.Device.Key(ctx, k)
 }
 
 func (p *notingPhone) TakeInputNote() string {
@@ -1143,12 +1186,37 @@ func (p *notingPhone) TakeInputNote() string {
 	return n
 }
 
+// TestKeyNote: the driver's note about a key the phone may have dropped
+// reaches the agent with the result, and a note an earlier input left,
+// such as the person's typing, does not come with a key.
+func TestKeyNote(t *testing.T) {
+	dev := demo.NewDevice("pixel", "Pixel 9", driver.Android)
+	var opened atomic.Pointer[notingPhone]
+	g, _ := newTestGateway(t, func(o *Options) {
+		o.Providers = []driver.Provider{notingProvider{Provider: demo.NewProvider(driver.Android, dev), opened: &opened}}
+	})
+	s, _ := connect(t, g, "Chat")
+	dev.Show("chats")
+	tap(s, ref(t, s.Observe(context.Background(), ObserveRequest{}), "Sam"))
+	opened.Load().leave("Pinky could not read the field back to check the text.")
+	res := s.Act(context.Background(), Call{}, Action{Tool: "key", Key: "tab"})
+	mustStatus(t, res, StatusSettled)
+	if strings.Contains(res.Message, "could not read") {
+		t.Fatalf("an earlier note came with the key: %q", res.Message)
+	}
+	res = s.Act(context.Background(), Call{}, Action{Tool: "key", Key: "back"})
+	mustStatus(t, res, StatusSettled)
+	if !strings.Contains(res.Message, "may not have reached the app") {
+		t.Fatalf("key result: %q", res.Message)
+	}
+}
+
 // TestTypeNote: the driver's note about a Type that worked reaches the
 // agent with the settled result, and only that one.
 func TestTypeNote(t *testing.T) {
 	dev := demo.NewDevice("pixel", "Pixel 9", driver.Android)
 	g, _ := newTestGateway(t, func(o *Options) {
-		o.Providers = []driver.Provider{notingProvider{demo.NewProvider(driver.Android, dev)}}
+		o.Providers = []driver.Provider{notingProvider{Provider: demo.NewProvider(driver.Android, dev)}}
 	})
 	s, _ := connect(t, g, "Chat")
 	dev.Show("chats")

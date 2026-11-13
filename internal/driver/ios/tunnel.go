@@ -399,6 +399,9 @@ func (t *Tunnel) Stats() TunnelStats {
 func (t *Tunnel) Close() error {
 	t.closeOnce.Do(func() {
 		close(t.done)
+		if t.listener == nil { // a test's tunnel, with nothing behind it
+			return
+		}
 		t.listener.Close()
 		t.conn.Close()
 		t.link.Close()

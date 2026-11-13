@@ -38,9 +38,7 @@ func screenAwake(state string) (bool, error) {
 
 // ScreenOn implements driver.Waker.
 func (d *Device) ScreenOn(ctx context.Context) (bool, error) {
-	d.svcMu.Lock()
-	svc := d.info2
-	d.svcMu.Unlock()
+	svc := d.infoSvc()
 	if svc == nil {
 		return false, fmt.Errorf("display info: %w", driver.ErrOffline)
 	}

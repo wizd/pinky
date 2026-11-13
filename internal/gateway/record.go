@@ -295,7 +295,10 @@ func (g *Gateway) endLeaseLocked(l *lease, outcome, summary string) {
 	if d.lease == l {
 		// Person control stays with the device until HandBack.
 		d.lease = nil
+		d.leaseGen++
+		d.leaseEnded = time.Now()
 		d.events = nil
+		d.busy = nil
 		if d.inflight != nil {
 			d.inflight()
 		}

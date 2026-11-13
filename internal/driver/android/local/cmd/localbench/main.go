@@ -1,7 +1,8 @@
-// Command localbench measures the standalone prototype's actions on the
-// phone it runs on, through the service's local socket only: no adb input,
+// Command localbench measures the actions Pinky's core takes on the phone
+// it runs on, through the Android app's local socket only: no adb input,
 // no screencap. Run it on the phone (adb push, then adb shell, whose uid the
-// service accepts) while Pinky Standalone's accessibility service is on.
+// service accepts) while Pinky's accessibility service is on; -dev picks
+// the development build (app.pinky.companion.dev).
 //
 // It opens Settings, scrolls it, taps its search field, types into it,
 // long-presses it, goes back and home, and prints each action's latency.
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/DIYgod/pinky/internal/driver"
+	"github.com/DIYgod/pinky/internal/driver/android/companion"
 	"github.com/DIYgod/pinky/internal/driver/android/local"
 	"github.com/DIYgod/pinky/internal/screen"
 )
@@ -30,6 +32,7 @@ var (
 	app     = flag.String("app", "com.android.settings", "app to act on")
 	search  = flag.String("search", "search", "text of the label of the field to tap and type into (case-insensitive)")
 	text    = flag.String("text", "pinky", "text to type")
+	dev     = flag.Bool("dev", false, "use the development build of Pinky's app")
 	results = map[string][]time.Duration{}
 	order   []string
 )
@@ -47,8 +50,12 @@ func main() {
 }
 
 func run(ctx context.Context) error {
+	pinky := companion.Release
+	if *dev {
+		pinky = companion.Dev
+	}
 	t0 := time.Now()
-	d, err := local.Open(ctx, local.Standalone)
+	d, err := local.Open(ctx, pinky)
 	if err != nil {
 		return err
 	}
@@ -69,7 +76,7 @@ func run(ctx context.Context) error {
 	fmt.Printf("apps: %d launchable\n", len(apps))
 
 	// The service refuses to open Pinky itself.
-	if err := d.Launch(ctx, local.Standalone.Package); !errors.Is(err, local.ErrOwnUI) {
+	if err := d.Launch(ctx, pinky.Package); !errors.Is(err, local.ErrOwnUI) {
 		return fmt.Errorf("launching Pinky itself: want ErrOwnUI, got %v", err)
 	}
 	fmt.Println("own UI: launching Pinky itself refused")

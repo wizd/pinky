@@ -521,6 +521,9 @@ func appFailedVerb(op policy.Op) string {
 
 // appError turns a driver's error into a result.
 func (g *Gateway) appError(l *lease, err error, what string) *Result {
+	if res := g.onPhoneResult(l, err); res != nil {
+		return res
+	}
 	none := map[bool]string{true: "Nothing was installed.", false: "Nothing was done."}[strings.HasPrefix(what, "Install") || strings.HasPrefix(what, "Reading")]
 	switch {
 	case errors.Is(err, driver.ErrPackage):

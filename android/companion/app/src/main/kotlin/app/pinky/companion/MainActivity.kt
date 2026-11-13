@@ -117,7 +117,8 @@ class MainActivity : Activity() {
                         R.string.status_socket_answering,
                         CompanionServer.SOCKET_NAME,
                         ping.optInt("protocol"),
-                        ping.optInt("connections") - 1,
+                        // This page's own connection counts only in on-phone mode.
+                        ping.optInt("connections") - if (ping.optBoolean("on_phone")) 1 else 0,
                     )
                 } else {
                     getString(R.string.status_socket_closed, CompanionServer.SOCKET_NAME)

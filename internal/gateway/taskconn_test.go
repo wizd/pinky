@@ -105,7 +105,7 @@ func (p *twoWayPhone) Connections(_ context.Context, id string) driver.Connectio
 	defer p.mu.Unlock()
 	wda := driver.Connection{ID: wayHelper, Available: !p.noHelper}
 	if p.noHelper {
-		wda.Reason, wda.Detail = "not_installed", "The WebDriverAgent helper is not installed on this iPhone."
+		wda.Reason, wda.Detail = "not_installed", "Pinky is not installed on this iPhone."
 	}
 	return driver.Connections{Chosen: p.way, Current: p.backendLocked(),
 		Ways: []driver.Connection{{ID: "", Available: true}, {ID: wayCoreDevice, Available: true}, wda}}
@@ -192,7 +192,7 @@ func TestConnectAsksForTheHelper(t *testing.T) {
 	defer s.Close()
 	res := s.Connect(context.Background(), ConnectRequest{Task: "Balances", Connection: "helper"})
 	mustStatus(t, res, StatusSettled)
-	if !strings.Contains(res.Message, "WebDriverAgent helper") || res.Screen == nil {
+	if !strings.Contains(res.Message, "Pinky on the iPhone") || res.Screen == nil {
 		t.Fatalf("connect: %q, screen %v", res.Message, res.Screen != nil)
 	}
 	if b := backendOf(g); b != wayHelper {
@@ -288,7 +288,7 @@ func TestRefusedLaunchKeepsConnection(t *testing.T) {
 
 	s, _ = connect(t, g, "Bookkeeping again")
 	res := launchAllowed(g, s, "cmb.pb")
-	if res.Error != "" || !strings.Contains(res.Message, "WebDriverAgent helper") {
+	if res.Error != "" || !strings.Contains(res.Message, "Pinky on the iPhone") {
 		t.Fatalf("allowed launch: %+v", res)
 	}
 	if b := backendOf(g); b != wayHelper {

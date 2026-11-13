@@ -83,7 +83,9 @@ func joinAddr(host string, port int) string {
 }
 
 // netStore keeps the phones reached over the network in a file, or in
-// memory when it has no path.
+// memory when it has no path. The same file keeps the address each phone
+// paired over Wireless debugging was last connected at (pairedAddr), for
+// the reconnector.
 type netStore struct {
 	path string
 	logf func(string, ...any)
@@ -91,10 +93,22 @@ type netStore struct {
 	mu     sync.Mutex
 	loaded bool
 	phones []netPhone
+	paired []pairedAddr
 }
 
 type netFile struct {
-	Phones []netPhone `json:"phones"`
+	Phones []netPhone   `json:"phones"`
+	Paired []pairedAddr `json:"paired,omitempty"`
+}
+
+// pairedAddr is where a phone paired over Wireless debugging was last
+// connected, by its guid ("adb-<serial>-<suffix>"). The reconnector tries
+// that address again while the phone does not show up on mDNS, which some
+// phones (HyperOS) stop announcing while their screen is off, so that such
+// a phone comes back after Pinky or the adb server restarted.
+type pairedAddr struct {
+	GUID string `json:"guid"`
+	Addr string `json:"addr"`
 }
 
 func (s *netStore) loadLocked() {
@@ -120,6 +134,11 @@ func (s *netStore) loadLocked() {
 	for _, n := range f.Phones {
 		if n.ID != "" && (n.LAN != "" || n.Tailnet != "") {
 			s.phones = append(s.phones, n)
+		}
+	}
+	for _, a := range f.Paired {
+		if a.GUID != "" && isAddr(a.Addr) && !slices.ContainsFunc(s.paired, func(b pairedAddr) bool { return b.GUID == a.GUID }) {
+			s.paired = append(s.paired, a)
 		}
 	}
 }
@@ -178,7 +197,7 @@ func (s *netStore) saveLocked() error {
 	if s.path == "" {
 		return nil
 	}
-	b, err := json.MarshalIndent(netFile{Phones: s.phones}, "", "  ")
+	b, err := json.MarshalIndent(netFile{Phones: s.phones, Paired: s.paired}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -190,6 +209,58 @@ func (s *netStore) saveLocked() error {
 		return err
 	}
 	return os.Rename(tmp, s.path)
+}
+
+// pairedAddr returns the address the paired phone guid was last connected
+// at, "" when none is kept.
+func (s *netStore) pairedAddr(guid string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.loadLocked()
+	for _, a := range s.paired {
+		if a.GUID == guid {
+			return a.Addr
+		}
+	}
+	return ""
+}
+
+// setPairedAddr keeps the address the paired phone guid was connected at
+// just now in place of the one before (Wireless debugging takes a new
+// port each time it comes on), and saves it; "" forgets it.
+func (s *netStore) setPairedAddr(guid, addr string) error {
+	if guid == "" || (addr != "" && !isAddr(addr)) {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.loadLocked()
+	i := slices.IndexFunc(s.paired, func(a pairedAddr) bool { return a.GUID == guid })
+	switch {
+	case i >= 0 && s.paired[i].Addr == addr, i < 0 && addr == "":
+		return nil
+	case addr == "":
+		s.paired = slices.Delete(s.paired, i, i+1)
+	case i >= 0:
+		s.paired[i].Addr = addr
+	default:
+		s.paired = append(s.paired, pairedAddr{GUID: guid, Addr: addr})
+	}
+	return s.saveLocked()
+}
+
+// keepPaired forgets the addresses of the paired phones keep says no to:
+// those no longer paired with the adb server, or removed from Pinky.
+func (s *netStore) keepPaired(keep func(guid string) bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.loadLocked()
+	n := len(s.paired)
+	s.paired = slices.DeleteFunc(s.paired, func(a pairedAddr) bool { return !keep(a.GUID) })
+	if len(s.paired) == n {
+		return nil
+	}
+	return s.saveLocked()
 }
 
 // --- the phone's side ---

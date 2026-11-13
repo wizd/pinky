@@ -35,7 +35,7 @@ func (p *Provider) SetPaused(id string, paused bool) {
 	// The gateway tells every provider and logs the pause itself, so this
 	// logs only what pausing stopped here: the id may be an Android phone's.
 	if stop != nil {
-		p.logger().Info("iphone: paused: stopping the helper's runner that waited for the passcode", "device", id)
+		p.logger().Info("iphone: paused: stopping the WDA runner that waited for the passcode", "device", id)
 		go stop.stop()
 	}
 }

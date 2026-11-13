@@ -65,7 +65,8 @@ func (d *Device) SetSwitch(ctx context.Context, name, value string) error {
 		return d.setRotation(ctx, value)
 	case driver.SwitchAppearance:
 		mode, ok := map[string]string{driver.AppearanceLight: "no", driver.AppearanceDark: "yes",
-			driver.AppearanceAuto: "auto", "custom": "custom"}[value]
+			driver.AppearanceAuto: "auto", "custom": "custom",
+			"custom_schedule": "custom_schedule", "custom_bedtime": "custom_bedtime"}[value]
 		if !ok {
 			return fmt.Errorf("android: appearance %q: %w", value, driver.ErrUnsupported)
 		}
@@ -191,7 +192,9 @@ func (d *Device) setRotation(ctx context.Context, value string) error {
 	return nil
 }
 
-// parseNightMode reads `cmd uimode night`: "Night mode: no".
+// parseNightMode reads `cmd uimode night`: "Night mode: no". Set times
+// read "custom" before Android 13 and "custom_schedule" or, for bedtime
+// mode, "custom_bedtime" since.
 func parseNightMode(out string) (string, error) {
 	_, v, ok := strings.Cut(strings.TrimSpace(out), "Night mode: ")
 	if !ok {
@@ -204,7 +207,7 @@ func parseNightMode(out string) (string, error) {
 		return driver.AppearanceDark, nil
 	case "auto":
 		return driver.AppearanceAuto, nil
-	case "custom":
+	case "custom", "custom_schedule", "custom_bedtime":
 		return v, nil // set times, put back as they were
 	}
 	return "", fmt.Errorf("android: read the night mode: %q", v)

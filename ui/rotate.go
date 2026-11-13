@@ -165,21 +165,19 @@ func (a *app) rotateMenu(c *mg.Context, d gateway.DeviceView, close func()) {
 	p := pal(c)
 	if !a.canRotate(d) {
 		if d.Info.Platform == driver.IOS && d.Status != gateway.DeviceOffline {
-			menuItem(c, locales.PhoneRotate(), p.ink3).Disabled(true).Tooltip(locales.PhoneRotateTooltip())
+			menuItem(c, icRotate, locales.PhoneRotate(), p.ink3).Disabled(true).Tooltip(locales.PhoneRotateTooltip())
 		}
 		return
 	}
 	cur := a.rotationOf(c, d)
 	id := d.Info.ID
 	mg.Column(c).Gap(6).Padding(6, 10).Children(func() {
-		mg.Column(c).Children(func() {
-			mg.Text(c, locales.PhoneRotate()).FontSize(14).TextColor(p.ink)
-			mg.Text(c, locales.PhoneRotateDesc()).FontSize(12.5).TextColor(p.ink2)
-		})
-		mg.Row(c).Gap(4).Children(func() {
+		menuText(c, icRotate, locales.PhoneRotate(), locales.PhoneRotateDesc(), p.ink)
+		// The picks line up with the words, past the icon.
+		mg.Row(c).Gap(4).Margin(0, 0, 0, menuIndent).Children(func() {
 			for _, r := range rotationsOf(d) {
 				on := r.value == cur
-				b := mg.ButtonBase(c.Key("rotate-"+id+"-"+r.value)).Size(40, 34).Radius(8).Center().
+				b := mg.ButtonBase(c.Key("rotate-"+id+"-"+r.value)).Size(40, 34).Radius(rControl).Center().
 					Label(r.name()).Tooltip(r.name()).Selected(on)
 				col := p.ink2
 				switch {
@@ -194,7 +192,7 @@ func (a *app) rotateMenu(c *mg.Context, d gateway.DeviceView, close func()) {
 					close()
 					a.setRotation(d, r.value)
 				}
-				b.TextColor(col).Children(func() { mg.Icon(c, r.icon).FontSize(20) })
+				b.TextColor(col).Children(func() { mg.Icon(c, r.icon).FontSize(iconLarge) })
 			}
 		})
 	})
@@ -207,5 +205,5 @@ var (
 	icRotLandscape  = icon(`<rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><rect x="2.5" y="9.5" width="2.6" height="5" rx="1" fill="currentColor"/>`)
 	icRotReverse    = icon(`<rect x="2.5" y="6.5" width="19" height="11" rx="2.5"/><rect x="18.9" y="9.5" width="2.6" height="5" rx="1" fill="currentColor"/>`)
 	icRotUpsideDown = icon(`<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><rect x="9.5" y="18.9" width="5" height="2.6" rx="1" fill="currentColor"/>`)
-	icRotAuto       = icon(`<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>`)
+	icRotAuto       = mingcute("refresh_2_line")
 )

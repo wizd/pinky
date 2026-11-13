@@ -55,6 +55,9 @@ func (g *Gateway) StartVirtual(ctx context.Context, platform driver.Platform, id
 			return err
 		}
 		g.log.Info("virtual phone started", "platform", platform, "id", id)
+		g.mu.Lock()
+		g.started[virtualKey(platform, id)] = true // kept once gone (keepEmulatorLocked)
+		g.mu.Unlock()
 		go g.watchVirtual(l, id)
 		return nil
 	})
@@ -72,6 +75,9 @@ func (g *Gateway) StopVirtual(ctx context.Context, platform driver.Platform, id 
 		return nil
 	})
 }
+
+// virtualKey names a virtual phone in Gateway.started.
+func virtualKey(platform driver.Platform, id string) string { return string(platform) + ":" + id }
 
 // withLauncher runs fn with the platform's providers that start virtual
 // phones, until one does not answer driver.ErrUnsupported.

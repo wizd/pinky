@@ -76,8 +76,16 @@ func (g *Gateway) backgroundLocked(d *device) bool {
 	return false
 }
 
+// ErrOwnScreen is what AgentStream answers, along with driver.ErrNotFound,
+// while a task works on the phone's own screen for the rest of it: it
+// moved there, or never had a background display. No display opens for
+// it, so a window showing the agent's screen stops asking until the next
+// task.
+var ErrOwnScreen = errors.New("the task works on the phone's own screen")
+
 // AgentStream returns the live video of the background display an agent
-// is working on, or driver.ErrNotFound when none is open.
+// is working on, or driver.ErrNotFound when none is open (with
+// ErrOwnScreen when none will open during this task).
 func (g *Gateway) AgentStream(ctx context.Context, deviceID string, opt driver.StreamOptions) (driver.Stream, error) {
 	d, err := g.device(deviceID)
 	if err != nil {
@@ -85,10 +93,15 @@ func (g *Gateway) AgentStream(ctx context.Context, deviceID string, opt driver.S
 	}
 	g.mu.Lock()
 	var bg driver.Device
+	own := false
 	if l := d.lease; l != nil {
 		bg = l.bg
+		own = !l.bgWanted || l.bgOff
 	}
 	g.mu.Unlock()
+	if bg == nil && own {
+		return nil, fmt.Errorf("no agent works on a background display of %s: %w (%w)", d.name(), ErrOwnScreen, driver.ErrNotFound)
+	}
 	if bg == nil {
 		return nil, fmt.Errorf("no agent works on a background display of %s: %w", d.name(), driver.ErrNotFound)
 	}

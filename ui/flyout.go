@@ -81,8 +81,8 @@ func (a *app) updateTray() {
 // fits one need and three phones.
 func (a *app) flyoutHeight() int {
 	h := 6 + 8 // padding
-	if len(a.needs) > 0 {
-		h += 26 + 36*min(len(a.needs), 4)
+	if n := min(len(a.needs), 4); n > 0 {
+		h += 26 + 36*n + flyNeedGap*(n-1)
 	}
 	h += 26 + 4 + 36*max(1, len(a.devices))
 	h += 13 + 36 // Open Pinky
@@ -97,11 +97,20 @@ func (a *app) toggleFlyout() {
 		a.flyout.Close()
 		return
 	}
-	a.flyout = mygo.NewFlyout(mygo.FlyoutOptions{
+	opt := mygo.FlyoutOptions{
 		Tray: a.tray, Placement: mygo.PlacementBottom, Gap: 4,
 		Width: 320, Height: a.flyoutHeight(), Focusable: true, Shadow: true,
 		Content: mg.View(a.flyoutView),
-	})
+	}
+	// On macOS it looks like the popovers of other menu bar apps: rounded,
+	// on the popover material, with a shadow that follows the corners.
+	// Windows 11 rounds it itself and Linux has no material: both keep the
+	// opaque panel.
+	if runtime.GOOS == "darwin" {
+		opt.Vibrancy = mygo.VibrancyPopover
+		opt.CornerRadius = flyoutRadius
+	}
+	a.flyout = mygo.NewFlyout(opt)
 	a.flyout.OnClosed(func() { a.flyout = nil })
 }
 
@@ -120,7 +129,17 @@ func (a *app) flyoutView(c *mg.Context) {
 	sec := func(text string) {
 		mg.Text(c, text).FontSize(fsCaption).FontWeight(fwSemibold).TextColor(p.ink3).Padding(6, 10, 4, 10)
 	}
-	mg.Column(c).Fill().Background(p.panel).Padding(6, 8, 8, 8).Children(func() {
+	// Over the material the flyout draws no background of its own, and
+	// its tints are translucent so the material shows through them.
+	root := mg.Column(c).Fill().Padding(6, 8, 8, 8)
+	needTint, rule := p.amberTint, p.line
+	if c.Vibrancy() {
+		c.Root().Background(mg.Transparent)
+		needTint, rule = flyTint(p, p.amberDot, 0.14, 0.18), flyTint(p, p.ink, 0.1, 0.12)
+	} else {
+		root.Background(p.panel)
+	}
+	root.Children(func() {
 		if len(a.needs) > 0 {
 			sec(locales.NeedsSection())
 			for i, n := range a.needs {
@@ -128,7 +147,20 @@ func (a *app) flyoutView(c *mg.Context) {
 					break
 				}
 				n := n
-				row := flyRow(c.Key("n-" + n.ID)).Background(p.amberTint)
+				if i > 0 {
+					mg.Box(c).Height(flyNeedGap).Shrink(0)
+				}
+				row := flyRow(c.Key("n-" + n.ID))
+				// The tint, darker under the pointer, as other rows'
+				// fills are.
+				switch {
+				case row.Pressed():
+					row.Background(needTint.Mix(p.amberDot, 0.22))
+				case row.Hovered():
+					row.Background(needTint.Mix(p.amberDot, 0.12))
+				default:
+					row.Background(needTint)
+				}
 				if row.Clicked() {
 					if a.flyout != nil {
 						a.flyout.Close()
@@ -177,7 +209,7 @@ func (a *app) flyoutView(c *mg.Context) {
 			})
 		}
 		mg.Spacer(c)
-		mg.Box(c).Height(1).Background(p.line).Margin(6, 6)
+		mg.Box(c).Height(1).Background(rule).Margin(6, 6)
 		open := flyRow(c).Label(locales.FlyoutOpenPinky())
 		if open.Clicked() {
 			if a.flyout != nil {
@@ -200,13 +232,41 @@ func (a *app) flyoutView(c *mg.Context) {
 	})
 }
 
+// flyNeedGap parts the tinted rows of what waits, which would otherwise
+// read as one block.
+const flyNeedGap = 2
+
 func flyRow(c *mg.Context) mg.Element {
 	p := pal(c)
-	row := mg.ButtonBase(c).MinHeight(36).Padding(6, 10).Radius(8).Gap(10).AlignItems(mg.Center).Justify(mg.Start).FillWidth()
-	if row.Hovered() {
-		row.Background(p.bg3)
+	row := mg.ButtonBase(c).MinHeight(36).Padding(6, 10).Radius(rControl).Gap(10).AlignItems(mg.Center).Justify(mg.Start).FillWidth()
+	pressed := row.Pressed()
+	if row.Hovered() || pressed {
+		switch {
+		case c.Vibrancy() && pressed:
+			row.Background(flyTint(p, p.ink, 0.11, 0.15))
+		case c.Vibrancy():
+			row.Background(flyTint(p, p.ink, 0.07, 0.1))
+		case pressed:
+			row.Background(p.sel)
+		default:
+			row.Background(p.bg3)
+		}
 	}
-	return row
+	return fillFade(row)
+}
+
+// flyoutRadius rounds the flyout's corners on macOS, as its menu bar
+// popovers are rounded.
+const flyoutRadius = 12
+
+// flyTint is col at the given opacity in light and in dark appearance, a
+// tint the flyout's material shows through.
+func flyTint(p *palette, col mg.Color, light, dark float32) mg.Color {
+	a := light
+	if p.dark {
+		a = dark
+	}
+	return col.Alpha(a)
 }
 
 // needShort is a need in a few words: "Pay $12.80".

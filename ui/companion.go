@@ -16,11 +16,12 @@ import (
 	"github.com/DIYgod/pinky/internal/update"
 )
 
-// Pinky Companion is the Android app that reads the screen and types for
-// Pinky. It ships inside Pinky; a phone without it, or with an older one,
-// gets an Install card on its page. Nothing is installed without the
-// person's click, except that with Update automatically on Pinky updates
-// an older companion by itself while the phone is free (companionTick in
+// Pinky on the phone (Pinky Companion before November 2026; the package is
+// still app.pinky.companion) is the Android app that reads the screen and
+// types for Pinky. It ships inside Pinky; a phone without it, or with an
+// older one, gets an Install card on its page. Nothing is installed without
+// the person's click, except that with Update automatically on Pinky
+// updates an older one by itself while the phone is free (companionTick in
 // update.go), and replaces one signed with another key. Its accessibility
 // service is on only while an agent works on the phone: the phone's apps
 // can see it then, and banking apps refuse to sign in next to one.
@@ -165,7 +166,8 @@ func (a *app) forgetRefused(id string) {
 // setCompanionState notes what CompanionState answered for a phone.
 func (a *app) setCompanionState(id string, cs driver.CompanionState) {
 	a.comp.state[id], a.comp.checked[id] = cs, time.Now()
-	if cs == driver.CompanionOn || cs == driver.CompanionOff || cs == driver.CompanionReady {
+	switch cs {
+	case driver.CompanionOn, driver.CompanionOff, driver.CompanionReady, driver.CompanionManual, driver.CompanionManualOn:
 		a.forgetRefused(id) // installed by hand, or the phone allows installs over USB now
 	}
 }
@@ -326,6 +328,10 @@ func companionError(err error, family string, timedOut bool) string {
 		return locales.CompanionErrUIAutomation()
 	case errors.As(err, &start) && start.Reason == driver.CompanionStartNotUnlocked:
 		return locales.CompanionErrNotUnlocked()
+	// The phone took the change to its accessibility settings and kept
+	// nothing of it (vivo's OriginOS 6): only the person can turn it on.
+	case errors.As(err, &start) && start.Reason == driver.CompanionStartSettingIgnored:
+		return locales.CompanionErrSettingIgnored()
 	case errors.As(err, &start):
 		return locales.CompanionErrNoAnswer(start.Detail)
 	}
@@ -364,6 +370,12 @@ func (a *app) companionCard(c *mg.Context, d gateway.DeviceView) {
 		title, action = locales.CompanionTurnOnTitle(), locales.CompanionTurnOn()
 		actionLabel = locales.CompanionTurnOnLabel(d.Info.Name)
 		body = locales.CompanionTurnOnBody()
+	case driver.CompanionManual:
+		// No Turn on: the phone ignores Pinky's change, so only the person
+		// can, on the phone. The body says why, which the error of an
+		// Install that ended here would say again.
+		title, body = locales.CompanionManualTitle(), locales.CompanionManualBody()
+		extra = companionManualWhere(a.chk.family[id])
 	default:
 		if !busy {
 			return // on, ready, unknown, or no app to install
@@ -377,7 +389,7 @@ func (a *app) companionCard(c *mg.Context, d gateway.DeviceView) {
 	mg.Column(c.Key("companion-"+id)).Padding(14).Radius(12).Background(p.bg2).Border(1, p.line).Gap(8).
 		Label(locales.CompanionCardLabel(d.Info.Name)).Children(func() {
 		mg.Row(c).Gap(8).AlignItems(mg.Center).Children(func() {
-			mg.Icon(c, icAndroid).FontSize(16).TextColor(p.ink2)
+			mg.Icon(c, icAndroid).FontSize(iconBody).TextColor(p.ink2)
 			mg.Text(c, title).FontSize(fsHeadline).FontWeight(fwSemibold).Grow(1).MinWidth(0)
 		})
 		if body != "" && !busy {
@@ -401,20 +413,33 @@ func (a *app) companionCard(c *mg.Context, d gateway.DeviceView) {
 			}
 			return
 		}
-		if msg := st.err[id]; msg != "" {
+		if msg := st.err[id]; msg != "" && cs != driver.CompanionManual {
 			mg.Text(c, msg).FontSize(fsSmall).TextColor(p.red).Role(mg.RoleStatus)
 		}
 		a.companionByHand(c, d)
 		mg.Row(c).Gap(12).AlignItems(mg.Center).Margin(4, 0, 0, 0).Children(func() {
-			if button(c, action, btnOpt{kind: btnPrimary}).Label(actionLabel).Clicked() {
+			if action != "" && button(c, action, btnOpt{kind: btnPrimary}).Label(actionLabel).Clicked() {
 				a.installCompanion(d)
 			}
 			if quietButton(c, locales.CompanionNotNow()).Clicked() {
 				st.later[id] = true
 			}
 		})
-		mg.Text(c, a.allowHint(id)).FontSize(fsCaption).TextColor(p.ink3)
+		if action != "" {
+			mg.Text(c, a.allowHint(id)).FontSize(fsCaption).TextColor(p.ink3)
+		}
 	})
+}
+
+// companionManualWhere says where a phone that does not let Pinky turn the
+// app's service on has its switch, for the maker's system (family, as the
+// checkup read it). OriginOS 6's menus could not be checked, so its words
+// describe the way rather than quote it.
+func companionManualWhere(family string) string {
+	if family == "vivo" {
+		return locales.CheckCompanionManualVivo()
+	}
+	return locales.CheckCompanionManualOther()
 }
 
 // allowHint says what to do on the phone while Pinky installs its app:
@@ -438,6 +463,11 @@ func companionLine(cs driver.CompanionState) string {
 		return locales.CompanionLineReady()
 	case driver.CompanionOff:
 		return locales.CompanionLineOff()
+	case driver.CompanionManual:
+		return locales.CompanionLineManual()
+	case driver.CompanionManualOn:
+		// The person turned it on, and Pinky leaves it on (issue #94).
+		return locales.CompanionLineManualOn()
 	case driver.CompanionMissing:
 		return locales.CompanionLineMissing()
 	case driver.CompanionOutdated:

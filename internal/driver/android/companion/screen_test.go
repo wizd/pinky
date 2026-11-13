@@ -200,6 +200,12 @@ func TestScreenInputsAndPasswords(t *testing.T) {
 	if strings.Contains(s.Render(), "hunter2") {
 		t.Fatal("password text leaked into the screen")
 	}
+	// Only typed text is content: not a hint, never a password.
+	for i, want := range []string{"", "你好，Pinky", "", ""} {
+		if c := s.Elements[i].Content; c != want {
+			t.Errorf("%q: content %q, want %q", s.Elements[i].Label, c, want)
+		}
+	}
 }
 
 func TestScreenKeyboardOccludes(t *testing.T) {

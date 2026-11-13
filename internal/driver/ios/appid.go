@@ -3,6 +3,7 @@ package ios
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -171,8 +172,8 @@ func (d *Device) appByName(ctx context.Context, name string) (driver.App, bool) 
 	return c.byName(name)
 }
 
-// byName returns the one listed app with this display name; none when two
-// share it.
+// byName returns the one listed app with this name or alias (the home
+// screen's name, or the bundle's own); none when two share it.
 func (c *appCatalog) byName(name string) (driver.App, bool) {
 	name = strings.TrimSpace(name)
 	c.mu.Lock()
@@ -180,7 +181,7 @@ func (c *appCatalog) byName(name string) (driver.App, bool) {
 	var found driver.App
 	n := 0
 	for _, a := range c.apps {
-		if a.Name == name {
+		if a.Name == name || slices.Contains(a.Aliases, name) {
 			found = a
 			n++
 		}

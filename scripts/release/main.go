@@ -40,6 +40,11 @@ const (
 	configFile          = "cmd/pinky/mygo.json"
 )
 
+// timeNow is the clock the next version is dated by. TestTag puts a fixed
+// one in its place: with the computer's, a run across midnight in
+// Asia/Shanghai would tag a version of the next day.
+var timeNow = time.Now
+
 func usage() {
 	fmt.Fprint(os.Stderr, `usage: go run ./scripts/release <command> [arguments]
 
@@ -178,7 +183,7 @@ func runNext(args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := Next(time.Now(), tags)
+	v, err := Next(timeNow(), tags)
 	if err != nil {
 		return err
 	}
@@ -239,7 +244,7 @@ func runTag(args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := Next(time.Now(), tags)
+	v, err := Next(timeNow(), tags)
 	if err != nil {
 		return err
 	}

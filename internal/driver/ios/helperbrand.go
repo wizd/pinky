@@ -212,7 +212,7 @@ func brandRunner(ctx context.Context, x xcode, app string) (bool, error) {
 		return false, nil
 	}
 	if len(assets.IOSIcon) == 0 {
-		return false, errors.New("this Pinky has no icon for the helper")
+		return false, errors.New("this Pinky has no icon for its iPhone app")
 	}
 	tmp, err := os.MkdirTemp("", "pinky-helper-icon-")
 	if err != nil {
@@ -231,7 +231,7 @@ func brandRunner(ctx context.Context, x xcode, app string) (bool, error) {
 	cmd := exec.CommandContext(ctx, x.tool("actool"), actoolArgs(info, cat, out, partialPath)...)
 	cmd.Env = x.env()
 	if b, err := cmd.CombinedOutput(); err != nil {
-		return false, fmt.Errorf("compiling the helper's icon with actool: %v: %s", err, strings.TrimSpace(string(b)))
+		return false, fmt.Errorf("compiling the icon of Pinky on the iPhone with actool: %v: %s", err, strings.TrimSpace(string(b)))
 	}
 	pb, err := os.ReadFile(partialPath)
 	if err != nil {

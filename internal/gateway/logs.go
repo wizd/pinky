@@ -215,10 +215,11 @@ func (g *Gateway) logsRefused(app driver.App) (string, bool) {
 }
 
 // pinkyApp reports whether an id is one of Pinky's own apps on the phone:
-// Pinky Companion, or the WebDriverAgent helper on an iPhone.
+// Pinky on the phone, Pinky's iPhone app (which may host WebDriverAgent for
+// a computer), or the WebDriverAgent helper on an iPhone.
 func pinkyApp(id string) bool {
 	return id == "app.pinky.companion" || strings.HasPrefix(id, "app.pinky.companion.") ||
-		strings.HasSuffix(id, ".xctrunner")
+		policy.IsPinkyApp(screen.App{ID: id})
 }
 
 // askForLogs asks the person before an agent reads an app's logs, unless

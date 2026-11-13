@@ -51,6 +51,9 @@ type helperOpt struct {
 	center bool   // centered, as on the Phone screen
 	note   bool   // the note on what the install does, under the button
 	done   func() // after the helper is installed
+	// fit: on a page that does not scroll, the teams to choose from scroll
+	// in the room it leaves them, with Cancel under them (helperInstall).
+	fit bool
 }
 
 // canInstallHelper reports whether Pinky can install the iPhone helper
@@ -187,6 +190,13 @@ func helperTeamLabel(t driver.HelperTeam) string {
 	return locales.HelperTeam(t.Name, t.ID)
 }
 
+// helperTeamsBar is the width of the scroll bar beside teams that scroll
+// (helperOpt.fit), and of the padding at either end of their list, which
+// keeps the bar off the ends of their buttons and the buttons centered.
+// It is less than the stage's padding (stagePad), which the list reaches
+// into.
+const helperTeamsBar = sp2
+
 // helperInstall draws the button that installs the helper on the phone
 // id (name in the messages), or the install under way with its step, the
 // teams to choose from, and why the last install failed. It draws nothing
@@ -209,7 +219,13 @@ func (a *app) helperInstall(c *mg.Context, id, name string, o helperOpt) bool {
 		}
 		return t
 	}
-	mg.Column(c.Key("helper-install-" + id)).Gap(8).AlignItems(align).FillWidth().Children(func() {
+	col := mg.Column(c.Key("helper-install-" + id)).Gap(8).AlignItems(align).FillWidth()
+	if o.fit && !running && r != nil && len(r.teams) > 0 {
+		// Lower than the teams take where the page has less room: their
+		// list gives it up (below).
+		col.MinHeight(0)
+	}
+	col.Children(func() {
 		switch {
 		case running:
 			text, waits := helperStepWords(r.step, name)
@@ -226,16 +242,39 @@ func (a *app) helperInstall(c *mg.Context, id, name string, o helperOpt) bool {
 			}
 		case r != nil && len(r.teams) > 0:
 			textAlign(mg.Text(c, locales.HelperChooseTeam()).FontSize(fsSmall).LineHeight(1.4))
-			mg.Row(c).Gap(8).Wrap().AlignItems(mg.Center).Justify(align).Children(func() {
-				for _, t := range r.teams {
-					if button(c, helperTeamLabel(t), btnOpt{small: o.small}).Clicked() {
-						a.startHelperInstall(id, name, t.ID, o.done)
-					}
-				}
+			cancel := func() {
 				if quietButton(c, locales.HelperCancel()).Clicked() {
 					delete(a.helper.runs, id)
 				}
-			})
+			}
+			teams := func(then func()) {
+				mg.Row(c).Gap(8).Wrap().AlignItems(mg.Center).Justify(align).FillWidth().Children(func() {
+					for _, t := range r.teams {
+						// No wider than the page: a name wider is cut.
+						b := button(c, helperTeamLabel(t), btnOpt{small: o.small, shrink: true})
+						if o.fit {
+							// The list they scroll in clips what is around them.
+							ringInside(c, b)
+						}
+						if b.Clicked() {
+							a.startHelperInstall(id, name, t.ID, o.done)
+						}
+					}
+					then()
+				})
+			}
+			if !o.fit {
+				teams(cancel)
+				break
+			}
+			// More teams than the page has room for scroll, and Cancel stays
+			// in view under them. The list reaches past the page's sides
+			// into the stage's padding, for its bar, which keeps showing
+			// that they scroll: over the ends of the buttons it would take
+			// the presses there.
+			mg.Scroll(c).AlignSelf(mg.Stretch).Margin(0, -helperTeamsBar).Padding(0, helperTeamsBar).KeepScrollbars(true).
+				ScrollbarStyle(mg.ScrollbarStyle{TrackWidth: helperTeamsBar}).Children(func() { teams(func() {}) })
+			cancel()
 		default:
 			if r != nil && r.err != "" {
 				textAlign(mg.Text(c, r.err).FontSize(fsSmall).LineHeight(1.4).TextColor(p.red).Role(mg.RoleStatus))
@@ -273,7 +312,7 @@ func (a *app) helperInstall(c *mg.Context, id, name string, o helperOpt) bool {
 func (a *app) helperInstallingPage(c *mg.Context, d gateway.DeviceView) {
 	p := pal(c)
 	mg.Column(c).AlignItems(mg.Center).Gap(sp2).Width(420).MaxWidth(420).Children(func() {
-		mg.Icon(c, icIphone).FontSize(28).TextColor(p.ink2)
+		mg.Icon(c, icIphone).FontSize(iconHero).TextColor(p.ink2)
 		stateTitle(c, locales.CheckHelperTitle())
 		a.helperInstall(c, d.Info.ID, d.Info.Name, helperOpt{center: true})
 	})

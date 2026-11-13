@@ -64,7 +64,7 @@ func TestReadAppInfos(t *testing.T) {
 	if len(l.apps) != 7 {
 		t.Errorf("apps %+v", l.apps)
 	}
-	if got := l.schemes["weixin"]; len(got) != 1 || got[0].ID != "com.tencent.xin" || len(got[0].Aliases) != 1 || got[0].Aliases[0] != "微信" {
+	if got := l.schemes["weixin"]; len(got) != 1 || got[0].ID != "com.tencent.xin" || got[0].Name != "微信" || len(got[0].Aliases) != 1 || got[0].Aliases[0] != "WeChat" {
 		t.Errorf("weixin: %+v", got)
 	}
 	if got := l.schemes["sms"]; len(got) != 2 || got[0].ID != "com.apple.MobileSMS" || got[1].ID != "com.example.copy" {
@@ -182,7 +182,7 @@ func TestDeviceLinkApp(t *testing.T) {
 	if app, err := d.LinkApp(ctx, "HTTPS://example.com"); err != nil || app.ID != safariID {
 		t.Errorf("https: %+v %v", app, err)
 	}
-	if app, err := d.LinkApp(ctx, "weixin://dl/scan"); err != nil || app.Name != "WeChat" {
+	if app, err := d.LinkApp(ctx, "weixin://dl/scan"); err != nil || app.Name != "微信" {
 		t.Errorf("weixin: %+v %v", app, err)
 	}
 	if _, err := d.LinkApp(ctx, "javascript alert"); !errors.Is(err, driver.ErrUnsupported) {

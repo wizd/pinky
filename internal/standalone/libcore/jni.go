@@ -20,13 +20,16 @@ import (
 	"unsafe"
 )
 
-// version is set by scripts/standalone.sh (-ldflags -X main.version=...).
+// version is set by scripts/androidcore.sh (-ldflags -X main.version=...).
 var version = "dev"
 
-//export Java_app_pinky_standalone_Core_nativeStart
-func Java_app_pinky_standalone_Core_nativeStart(env *C.JNIEnv, _ C.jclass, dataDir, companion, core C.jstring) C.jstring {
+// Java_app_pinky_companion_Core_nativeStart is Core.nativeStart in the
+// Android app (android/companion, Core.kt).
+//
+//export Java_app_pinky_companion_Core_nativeStart
+func Java_app_pinky_companion_Core_nativeStart(env *C.JNIEnv, _ C.jclass, dataDir, pkg, companion, core C.jstring) C.jstring {
 	msg := ""
-	if err := start(goString(env, dataDir), goString(env, companion), goString(env, core), version, logcat{}); err != nil {
+	if err := start(goString(env, dataDir), goString(env, pkg), goString(env, companion), goString(env, core), version, logcat{}); err != nil {
 		msg = err.Error()
 	}
 	cs := C.CString(msg)

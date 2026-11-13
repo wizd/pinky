@@ -1,37 +1,251 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Only for the debug page's test notification. Never requested at run time. -->
+    <!-- Pinky on the phone itself talks to the AI model the person chose,
+         and fetches its updates from Pinky's releases. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Installing an update from Pinky's releases (UpdateInstall), after
+         Android asks the person. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- How a scheduled task went, and an approval one waits for
+         (ScheduleNotices), asked for once the person has a schedule
+         (SchedulesActivity); the notification that takes the Wireless
+         debugging pairing code (Pairing), asked for when the person starts
+         pairing on Settings › Background screen; and the debug page's test
+         notification. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Lets the service resolve the display name of launchable apps. -->
+    <!-- Scheduled tasks on the phone (Schedules): an exact alarm at each
+         time due, once the person allows "Alarms & reminders" in Android's
+         settings (an inexact one until then), and the alarm set again
+         after the phone restarts. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Android's own dialog to lift Pinky's battery limits (Battery), so
+         that a long task on the phone is not stopped in the background.
+         Only Pinky's screens for tasks on the phone (on_phone_ui) ask.
+         Pinky is not in Google Play, whose policy limits this. -->
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+
+    <!-- Lets the service resolve the display name of launchable apps, and
+         Pinky on the phone list and open them. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Voice input in Pinky's task boxes: Android's own speech
+             recognizer, which records in its app and gives Pinky the text
+             (no microphone permission here). -->
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
     </queries>
 
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Pinky">
 
-        <!-- Its own process, like any app Pinky reads: the accessibility
-             cache does not refresh windows of the service's own process. -->
+        <!-- The debug page, for Pinky's device tests: no launcher entry
+             (am start -n <package>/app.pinky.companion.MainActivity). Its
+             own process, like any app Pinky reads: the accessibility cache
+             does not refresh windows of the service's own process. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:process=":debug">
+            android:process=":debug" />
+
+        <!-- Pinky's screen, its one launcher entry: tasks on the phone
+             itself. In its own process too: the service must see it to
+             keep agents off it. -->
+        <activity
+            android:name=".TaskActivity"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:process=":ui"
+            android:theme="@style/Theme.Pinky.Screen"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Its settings, opened only from it, in its process. -->
+        <activity
+            android:name=".SettingsActivity"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false"
+            android:label="@string/phone_settings"
+            android:process=":ui"
+            android:theme="@style/Theme.Pinky.Screen"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Its history and a task of it, opened only from it, in its
+             process. -->
+        <activity
+            android:name=".HistoryActivity"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false"
+            android:label="@string/phone_activity"
+            android:process=":ui"
+            android:theme="@style/Theme.Pinky.Screen" />
+        <activity
+            android:name=".MemoryActivity"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false"
+            android:label="@string/phone_memory"
+            android:process=":ui"
+            android:theme="@style/Theme.Pinky.Screen" />
+        <activity
+            android:name=".PastTaskActivity"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false"
+            android:label="@string/phone_activity"
+            android:process=":ui"
+            android:theme="@style/Theme.Pinky.Screen" />
+
+        <!-- Settings › Background screen, opened only from Settings, in its
+             process. -->
+        <activity
+            android:name=".BackgroundActivity"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false"
+            android:label="@string/phone_bg_title"
+            android:process=":ui"
+            android:theme="@style/Theme.Pinky.Screen"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Scheduled tasks and one of them, opened only from the task
+             screen and from the schedules' notifications, in its process.
+             The editor keeps its draft through a rotation. -->
+        <activity
+            android:name=".SchedulesActivity"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false"
+            android:label="@string/phone_schedules"
+            android:process=":ui"
+            android:theme="@style/Theme.Pinky.Screen" />
+        <activity
+            android:name=".ScheduleEditActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false"
+            android:label="@string/phone_schedules"
+            android:process=":ui"
+            android:theme="@style/Theme.Pinky.Screen"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Takes the pairing code typed into the pairing notification's
+             reply box (Pairing), in the screens' process. Only this app's
+             own PendingIntent reaches it. -->
+        <receiver
+            android:name=".PairingReceiver"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false"
+            android:process=":ui" />
+
+        <!-- The ask panel over the app in front (AskActivity): a question
+             about the screen from the floating button (QuickEntry), a new
+             task from a Quick Settings tile. Only Pinky opens it; its own
+             task, so that it neither clears nor shows Pinky's screen. -->
+        <activity
+            android:name=".AskActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:enabled="@bool/on_phone_ui"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:process=":ui"
+            android:taskAffinity="${applicationId}.ask"
+            android:theme="@style/Theme.Pinky.Ask"
+            android:windowSoftInputMode="adjustResize|stateVisible" />
+
+        <!-- Share to Pinky from other apps: text, links and pictures go
+             with a task (AskActivity, which tells this alias apart). -->
+        <activity-alias
+            android:name=".ShareToPinky"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:targetActivity=".AskActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Quick Settings tiles: a new task, and the floating button on
+             or off (QuickTiles.kt). -->
+        <service
+            android:name=".AskTileService"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_pinky"
+            android:label="@string/phone_tile_task"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:process=":ui">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".BubbleTileService"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_bubble"
+            android:label="@string/phone_tile_bubble"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:process=":ui">
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- The schedules' alarm, and what clears or moves it (Schedules).
+             In the service's process, where the core runs. -->
+        <receiver
+            android:name=".ScheduleReceiver"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Hears how an update from Pinky's releases went (UpdateInstall). -->
+        <receiver
+            android:name=".UpdateStatusReceiver"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="false" />
 
         <service
             android:name=".PinkyAccessibilityService"

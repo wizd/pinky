@@ -96,6 +96,7 @@ func main() {
 		Secrets:    &secret.Memory{},
 		AgentToken: demoToken,
 	})
+	api.Close() // the step screenshots it wrote
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

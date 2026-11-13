@@ -101,7 +101,7 @@ func (a *app) addAndroid(c *mg.Context) {
 	a.brandPicker(c, d)
 	// adb that does not work keeps any phone from showing up: say so first.
 	if h := a.androidHost(c); h.Missing != "" {
-		if words := hostWords(h.Missing); words != "" {
+		if words := hostWords(h.Missing, h.Detail); words != "" {
 			guideProblem(c, words, h.Detail)
 		}
 	}
@@ -197,7 +197,7 @@ func (a *app) brandPicker(c *mg.Context, d *gateway.DeviceView) {
 					msg = locales.AddAndroidRecognized(rd.Info.Name, run.view.System)
 				}
 				mg.Row(c).Gap(6).AlignItems(mg.Start).Children(func() {
-					mg.Icon(c, icCheck).FontSize(13).TextColor(p.green).Margin(2, 0, 0, 0)
+					mg.Icon(c, icCheck).FontSize(iconSmall).TextColor(p.green).Margin(2, 0, 0, 0)
 					mg.Text(c, msg).FontSize(fsSmall).TextColor(p.ink2).Grow(1).MinWidth(0)
 				})
 			}
@@ -298,7 +298,7 @@ func allowSketch(c *mg.Context, always, allow string) {
 		})
 		mg.Row(c).Gap(8).AlignItems(mg.Center).Children(func() {
 			mg.Box(c).Size(15, 15).Radius(4).Background(p.accent).Center().Shrink(0).Children(func() {
-				mg.Icon(c, icCheck).FontSize(11).TextColor(p.white)
+				mg.Icon(c, icCheck).FontSize(iconMicro).TextColor(p.white)
 			})
 			mg.Text(c, always).FontSize(fsSmall).Grow(1).MinWidth(0)
 		})

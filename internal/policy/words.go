@@ -220,7 +220,8 @@ var idCodeQualifiers = []string{
 
 var otpNegatives = []string{
 	"promo", "coupon", "discount", "gift", "referral", "invite", "invitation", "zip", "postal",
-	"postcode", "post code", "country", "area code", "voucher", "redeem", "qr", "source",
+	"postcode", "post code", "country", "area code", "voucher", "redeem", "qr", "source", "barcode", "bar code",
+	"strichcode", "código de barras", "codice a barre", "バーコード",
 	"优惠", "邀请", "邀請", "邮编", "郵編", "邮政", "兑换", "兌換", "礼品", "禮品", "推荐",
 	"クーポン", "招待", "郵便", "쿠폰", "초대", "우편", "promocional", "cupón", "cupom", "gutschein",
 	"postleitzahl", "cep", "sconto", "invito", "промокод", "купон", "индекс",

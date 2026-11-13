@@ -12,7 +12,7 @@ import (
 )
 
 // workDevice is a demo phone that hears whether an agent works on it, as
-// Android's driver does for Pinky Companion.
+// Android's driver does for Pinky on the phone.
 type workDevice struct {
 	*demo.Device
 	mu    sync.Mutex

@@ -27,9 +27,15 @@ type Info struct {
 	// Features lists additions to protocol 1 this app has on this phone,
 	// such as FeatureDisplays. Apps built before round 3 send none.
 	Features            []string `json:"features,omitempty"`
-	Connections         int      `json:"connections"` // open connections, this one included
+	Connections         int      `json:"connections"` // open connections, this one included; the app's own only in on-phone mode
 	IncludeNotImportant bool     `json:"include_not_important"`
 	IdleDisableMS       int64    `json:"idle_disable_ms"`
+	// Claim is who holds the phone (FeatureClaim); nil when it is free.
+	Claim *Claim `json:"claim,omitempty"`
+	// OnPhone: on-phone mode is on, so Pinky on the phone runs tasks and
+	// keeps the service on; a computer leaves it on. Absent before
+	// 2026-11-11.
+	OnPhone bool `json:"on_phone,omitempty"`
 }
 
 // FeatureDisplays means tree, set_text, events and wait_idle take displays
@@ -46,6 +52,25 @@ const FeatureDisplays = "displays"
 // reads otherwise than asked. An app without it reads the field back at
 // once, so its Verified may miss text that lands a moment later.
 const FeatureSetTextFallback = "set_text_fallback"
+
+// FeatureGesture means the app plays gestures (Client.Gesture) on the main
+// display: Android must allow it (canPerformGestures), which Pinky for
+// Android asks for in every build since 2026-11.
+const FeatureGesture = "gesture"
+
+// FeatureGlobal means the app presses back, home, recents, notifications
+// and the keyboard's action key (Client.Global).
+const FeatureGlobal = "global"
+
+// FeatureOwnUI means the app refuses gestures on Pinky's own windows and
+// overlays (error code own_ui), and enter in Pinky's own fields.
+const FeatureOwnUI = "own_ui"
+
+// FeatureDisplayInput means gestures, segments and global back and enter
+// take a display other than 0 (Android 11 and later): Pinky taps and swipes
+// on its background display through the app on phones that drop what adb
+// injects there.
+const FeatureDisplayInput = "display_input"
 
 // How set_text wrote the text (SetTextResult.Method).
 const (
@@ -180,6 +205,8 @@ type SetTextResult struct {
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	// Claim is who holds the phone, with CodeBusy.
+	Claim
 }
 
 func (e *Error) Error() string { return fmt.Sprintf("companion: %s: %s", e.Code, e.Message) }

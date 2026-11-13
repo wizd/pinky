@@ -122,17 +122,22 @@ func (p *prep) prepareDrag(a Action, cur *screen.Screen, platform driver.Platfor
 }
 
 // describeDrag says a drag for history: "Dragged “Maps”", or "Dragged
-// from 100,200 to 300,400" when nothing labelled is under the finger.
-// label is the target's, in quotes, or empty.
-func describeDrag(a Action, p *prep, label string) string {
+// from 100,200 to 300,400" when nothing labelled is under the finger; or,
+// when ask is set, in the imperative for an approval's title: "Drag from
+// 100,200 to 300,400". label is the target's, in quotes, or empty.
+func describeDrag(a Action, p *prep, label string, ask bool) string {
+	verb := "Dragged"
+	if ask {
+		verb = "Drag"
+	}
 	if label != "" {
-		return "Dragged " + label
+		return verb + " " + label
 	}
 	if p != nil && p.drag != nil {
-		return fmt.Sprintf("Dragged from %d,%d to %d,%d", p.from.X, p.from.Y, p.to.X, p.to.Y)
+		return fmt.Sprintf("%s from %d,%d to %d,%d", verb, p.from.X, p.from.Y, p.to.X, p.to.Y)
 	}
 	if a.From != nil && a.To != nil {
-		return fmt.Sprintf("Dragged from %d,%d to %d,%d", a.From.X, a.From.Y, a.To.X, a.To.Y)
+		return fmt.Sprintf("%s from %d,%d to %d,%d", verb, a.From.X, a.From.Y, a.To.X, a.To.Y)
 	}
-	return "Dragged"
+	return verb
 }

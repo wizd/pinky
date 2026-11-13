@@ -488,6 +488,14 @@ func (v *viewer) Err() error {
 
 func (v *viewer) release() { v.Close() }
 
+// RequestKeyFrame asks the phone for a key frame, when its stream can: a
+// viewer that could not decode a picture (the web mirror's browser) starts
+// again from one.
+func (v *viewer) RequestKeyFrame() {
+	<-v.h.ready
+	v.h.requestKeyFrame()
+}
+
 // Close leaves the hub; the device's stream closes after its last member.
 func (v *viewer) Close() error {
 	v.once.Do(func() {

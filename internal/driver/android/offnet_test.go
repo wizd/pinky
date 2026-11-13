@@ -53,6 +53,8 @@ func newCutOffFake(t *testing.T, own bool) *cutOffFake {
 	// The tests run reconnect themselves: List (ConnectWiFi, PairWithCode)
 	// must not start passes that outlive the test and read the globals.
 	c.p.wifi.running = true
+	// No kept address answers: these tests are about the search's.
+	c.p.wifi.probe = func(context.Context, string) error { return errors.New("connect: connection refused") }
 	c.p.dial = func(ctx context.Context, addr string) error {
 		c.dials.Add(1)
 		return nil // Pinky reaches every address

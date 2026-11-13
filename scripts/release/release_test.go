@@ -248,13 +248,38 @@ func TestStampConfig(t *testing.T) {
 	}
 }
 
-// writeArchives writes stand-ins for a release's archives in dir.
+// writeArchives writes stand-ins for a release's archives in dir, and an
+// Android APK with the version file its build writes (versionCode 1070).
 func writeArchives(t *testing.T, dir, version string) {
 	t.Helper()
 	for _, a := range archives {
 		if err := os.WriteFile(filepath.Join(dir, archiveName(a.platform, version)), []byte(a.platform), 0o644); err != nil {
 			t.Fatal(err)
 		}
+	}
+	writeAPK(t, filepath.Join(dir, androidAPK), `{"package":"app.pinky.companion","version_name":"`+version+`","version_code":1070}`)
+}
+
+// writeAPK writes a zip with assets/pinky-companion.json, as an APK has it.
+func writeAPK(t *testing.T, path, info string) {
+	t.Helper()
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	z := zip.NewWriter(f)
+	w, err := z.Create("assets/pinky-companion.json")
+	if err == nil {
+		_, err = io.WriteString(w, info+"\n")
+	}
+	if err == nil {
+		err = z.Close()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -269,8 +294,17 @@ func TestManifestAndCask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Version != "2026.1107.1" || m.Tag != "v2026.1107.1" || m.Date != "2026-11-07T08:09:10Z" || m.Notes != "- One." || len(m.Assets) != 4 {
+	if m.Version != "2026.1107.1" || m.Tag != "v2026.1107.1" || m.Date != "2026-11-07T08:09:10Z" || m.Notes != "- One." || len(m.Assets) != 5 {
 		t.Errorf("manifest = %+v", m)
+	}
+	// The Android APK, under a name without the version, with its versionCode.
+	apk := m.Assets["android-arm64"]
+	if apk.URL != "https://github.com/DIYgod/pinky/releases/download/v2026.1107.1/pinky-android.apk" ||
+		apk.VersionCode != 1070 || apk.Size == 0 || len(apk.SHA256) != 64 {
+		t.Errorf("android-arm64 = %+v", apk)
+	}
+	if m.Assets["darwin-arm64"].VersionCode != 0 {
+		t.Errorf("darwin-arm64 has a versionCode: %+v", m.Assets["darwin-arm64"])
 	}
 	// SHA-256 of "darwin-arm64".
 	arm := m.Assets["darwin-arm64"]
@@ -300,13 +334,20 @@ func TestManifestAndCask(t *testing.T) {
 			t.Errorf("an asset of latest.json has no %q: %s", key, data)
 		}
 	}
+	if _, ok := asset["version_code"]; ok {
+		t.Errorf("the Windows asset of latest.json has a version_code: %s", data)
+	}
+	// Pinky on the phone reads version_code (UpdateCheck.parse).
+	if code := raw["assets"].(map[string]any)["android-arm64"].(map[string]any)["version_code"]; code != float64(1070) {
+		t.Errorf("the Android asset's version_code is %v: %s", code, data)
+	}
 
 	if err := WriteChecksums(dir); err != nil {
 		t.Fatal(err)
 	}
 	sums, _ := os.ReadFile(filepath.Join(dir, checksumsName))
 	lines := strings.Split(strings.TrimSpace(string(sums)), "\n")
-	if len(lines) != 6 || !strings.HasSuffix(lines[0], "  latest.json") || !strings.HasSuffix(lines[1], "  pinky-2026.1107.1-arm64.dmg") {
+	if len(lines) != 7 || !strings.HasSuffix(lines[0], "  latest.json") || !strings.HasSuffix(lines[1], "  pinky-2026.1107.1-arm64.dmg") {
 		t.Errorf("SHA256SUMS = %s", sums)
 	}
 
@@ -342,8 +383,29 @@ func TestManifestAndCask(t *testing.T) {
 		t.Error("BuildManifest without the Windows installer: no error")
 	}
 	m, missing, err := BuildManifest(dir, "2026.1107.1", "DIYgod/pinky", "- One.", now, true)
-	if _, ok := m.Assets["windows-amd64"]; err != nil || ok || len(m.Assets) != 3 || len(missing) != 1 || missing[0] != "pinky-setup-2026.1107.1-amd64.exe" {
+	if _, ok := m.Assets["windows-amd64"]; err != nil || ok || len(m.Assets) != 4 || len(missing) != 1 || missing[0] != "pinky-setup-2026.1107.1-amd64.exe" {
 		t.Errorf("partial BuildManifest without the Windows installer = %+v, %v, %v", m, missing, err)
+	}
+
+	// Without the APK a release is incomplete; with one that has no
+	// versionCode, or is no zip, there is no manifest at all.
+	writeArchives(t, dir, "2026.1107.1")
+	os.Remove(filepath.Join(dir, androidAPK))
+	if _, _, err := BuildManifest(dir, "2026.1107.1", "DIYgod/pinky", "- One.", now, false); err == nil {
+		t.Error("BuildManifest without the APK: no error")
+	}
+	if m, missing, err := BuildManifest(dir, "2026.1107.1", "DIYgod/pinky", "- One.", now, true); err != nil || len(m.Assets) != 4 || len(missing) != 1 || missing[0] != androidAPK {
+		t.Errorf("partial BuildManifest without the APK = %+v, %v, %v", m, missing, err)
+	}
+	writeAPK(t, filepath.Join(dir, androidAPK), `{"package":"app.pinky.companion"}`)
+	if _, _, err := BuildManifest(dir, "2026.1107.1", "DIYgod/pinky", "- One.", now, true); err == nil || !strings.Contains(err.Error(), "version_code") {
+		t.Errorf("BuildManifest with an APK without a versionCode: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, androidAPK), []byte("apk"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := BuildManifest(dir, "2026.1107.1", "DIYgod/pinky", "- One.", now, true); err == nil {
+		t.Error("BuildManifest with an APK that is no zip: no error")
 	}
 }
 
@@ -352,7 +414,7 @@ func TestZipDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for name, body := range map[string]string{"Pinky.exe": "exe", "sub/pinky-companion.apk": "apk"} {
+	for name, body := range map[string]string{"Pinky.exe": "exe", "sub/pinky-android.apk": "apk"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -380,7 +442,7 @@ func TestZipDir(t *testing.T) {
 		r.Close()
 		got[f.Name] = string(b)
 	}
-	if len(got) != 3 || got["Pinky.exe"] != "exe" || got["sub/"] != "dir" || got["sub/pinky-companion.apk"] != "apk" {
+	if len(got) != 3 || got["Pinky.exe"] != "exe" || got["sub/"] != "dir" || got["sub/pinky-android.apk"] != "apk" {
 		t.Errorf("zip holds %v", got)
 	}
 }
@@ -436,7 +498,12 @@ func write(t *testing.T, path, text string) {
 
 func TestTag(t *testing.T) {
 	clone, remote := gitRepo(t)
-	want, err := Next(time.Now(), nil)
+	// The release is dated by a fixed clock: by the computer's, a run across
+	// midnight in Asia/Shanghai would tag another day than want's.
+	at := time.Date(2026, 11, 12, 10, 0, 0, 0, shanghai)
+	timeNow = func() time.Time { return at }
+	t.Cleanup(func() { timeNow = time.Now })
+	want, err := Next(at, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -37,14 +37,15 @@ import (
 )
 
 var (
-	addr    = flag.String("addr", ":8787", "address to listen on")
-	script  = flag.String("script", "settings", "settings, loop, attack, calc or calcloop")
-	minutes = flag.Float64("minutes", 10, "how long the loop script browses")
-	think   = flag.Duration("think", 1500*time.Millisecond, "delay before each answer, as a model's latency")
-	verbose = flag.Bool("v", false, "log the text of each tool result")
-	attackX = flag.Int("x", 0, "attack: where to tap, in screen pixels")
-	attackY = flag.Int("y", 0, "attack: where to tap, in screen pixels")
-	attackA = flag.String("app", "Settings", "attack: the app to open first (Calculator on real phones, where a missed tap must change nothing)")
+	addr     = flag.String("addr", ":8787", "address to listen on")
+	script   = flag.String("script", "settings", "settings, loop, attack, calc or calcloop")
+	minutes  = flag.Float64("minutes", 10, "how long the loop script browses")
+	think    = flag.Duration("think", 1500*time.Millisecond, "delay before each answer, as a model's latency")
+	verbose  = flag.Bool("v", false, "log the text of each tool result")
+	attackX  = flag.Int("x", 0, "attack: where to tap, in screen pixels")
+	attackY  = flag.Int("y", 0, "attack: where to tap, in screen pixels")
+	pinkyApp = flag.String("pinky", "Pinky", "the name of Pinky's app on the phone, which the scripts try to open: Pinky (dev) for a development build")
+	attackA  = flag.String("app", "Settings", "attack: the app to open first (Calculator on real phones, where a missed tap must change nothing)")
 )
 
 func main() {
@@ -215,7 +216,7 @@ func (s *state) next(last string) (string, map[string]any, string) {
 	case 3:
 		s.seen = append(s.seen, "dark theme off: "+status(last))
 		s.step++
-		return "phone_launch", map[string]any{"app": "Pinky Standalone"}, "Trying to open Pinky itself."
+		return "phone_launch", map[string]any{"app": *pinkyApp}, "Trying to open Pinky itself."
 	case 4:
 		s.seen = append(s.seen, "open Pinky: "+status(last))
 		s.step++
@@ -338,7 +339,7 @@ func (s *state) calc(last string) (string, map[string]any, string) {
 		return "phone_observe", map[string]any{}, ""
 	case s.step == len(keys)+2:
 		s.seen = append(s.seen, fmt.Sprintf("42 shown: %v", strings.Contains(last, "\"42\"")))
-		return "phone_launch", map[string]any{"app": "Pinky Standalone"}, "Trying to open Pinky itself."
+		return "phone_launch", map[string]any{"app": *pinkyApp}, "Trying to open Pinky itself."
 	case s.step == len(keys)+3:
 		s.seen = append(s.seen, "open Pinky: "+status(last))
 		return "phone_key", map[string]any{"key": "home"}, ""

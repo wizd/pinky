@@ -85,7 +85,7 @@ func (a *app) activityPage(c *mg.Context) {
 			a.exportHistory(nil, locales.ExportFolderAll())
 		}
 		mg.Row(c).Width(280).Height(32).Padding(0, 10).Radius(rControl).Background(p.bg2).Border(1, p.line).Gap(sp2).AlignItems(mg.Center).Children(func() {
-			mg.Icon(c, icSearch).FontSize(15).TextColor(p.ink3)
+			mg.Icon(c, icSearch).FontSize(iconBody).TextColor(p.ink3)
 			mg.TextInputBase(c.Key("act-search"), &s.query).Grow(1).Placeholder(locales.ActivitySearchPlaceholder()).Label(locales.ActivitySearchLabel()).FontSize(fsBody)
 		})
 	})
@@ -342,7 +342,7 @@ func (a *app) activityDetail(c *mg.Context, t gateway.TaskView) {
 						case you:
 							mg.Box(c).Size(stepRail, stepThumbH).Center().Children(func() {
 								mg.Box(c).Size(26, 26).Radius(13).Background(p.bg3).Border(2, p.bg).Center().Children(func() {
-									mg.Icon(c, icPerson).FontSize(14).TextColor(p.ink2)
+									mg.Icon(c, icPerson).FontSize(iconSmall).TextColor(p.ink2)
 								})
 							})
 						case shot:

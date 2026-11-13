@@ -117,6 +117,11 @@ func TestTapOnOCRTextAsks(t *testing.T) {
 	}()
 	res = s.Act(ctx, Call{}, Action{Tool: "swipe", From: &screen.Point{X: 150, Y: 930}, To: &screen.Point{X: 900, Y: 930}})
 	mustStatus(t, res, StatusDenied)
+
+	// A swipe up the page from the same text scrolls: it runs across the
+	// line, not along it.
+	res = s.Act(ctx, Call{}, Action{Tool: "swipe", From: &screen.Point{X: 300, Y: 930}, To: &screen.Point{X: 300, Y: 300}})
+	mustStatus(t, res, StatusSettled)
 }
 
 // The second read with OCR happens only where the tree says little about

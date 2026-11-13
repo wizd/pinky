@@ -20,6 +20,7 @@ import (
 	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/gateway"
 	"github.com/DIYgod/pinky/internal/pilot"
+	"github.com/DIYgod/pinky/internal/schedule"
 	"github.com/DIYgod/pinky/internal/secret"
 	"github.com/DIYgod/pinky/internal/telemetry"
 	"github.com/DIYgod/pinky/internal/update"
@@ -55,7 +56,8 @@ type Options struct {
 	Settings   *Settings
 	OnSettings func(old, s Settings)
 	// GatewaySettings reads again what the gateway keeps of Settings ›
-	// Safety (Preset, HideCodes, ReadOnly and BlockedApps), which hand
+	// Safety (Preset, HideCodes, VirtualCredentials, ReadOnly and
+	// BlockedApps), which hand
 	// edits of rules.yaml and apps.yaml change while Pinky runs. since is
 	// the version of the policy it returned last, -1 at first; ok is false
 	// while the policy is still at it. The client calls it off the main
@@ -108,6 +110,13 @@ type Options struct {
 	// agents listening at addr (Settings › Agents › Remote agents); nil
 	// leaves that out.
 	RemoteTailnet func(ctx context.Context, addr string) RemoteTailnet
+	// WebMirror shows the phones in a web browser (Settings › Phones ›
+	// Web mirror); nil leaves it out.
+	WebMirror WebMirror
+	// WebApprovals answers approvals in a browser on the person's phone,
+	// through the web mirror (Settings › Phones › Web mirror); nil leaves
+	// it out.
+	WebApprovals WebApprovals
 	// Log writes what the client does to the app's log: the log the
 	// person's feedback carries, and the one whoever fixes a broken live
 	// picture goes on. nil writes nothing, as before.
@@ -119,6 +128,10 @@ type Options struct {
 	// Vcorp pairs Pinky with a VCorp Super Agent account, whose cloud tasks
 	// then use the phones (Settings › Agents › VCorp); nil leaves it out.
 	Vcorp Vcorp
+	// Schedules keeps Ask Pinky's scheduled tasks, which the client runs
+	// while it runs, through a Pilot that also has StartScheduled
+	// (schedules.go); nil leaves them out.
+	Schedules *schedule.Store
 }
 
 // Pilot runs Pinky's own agent, one task a phone at a time, as
@@ -126,10 +139,38 @@ type Options struct {
 // returns at once.
 type Pilot interface {
 	Start(cfg pilot.Config, device, task string) error
+	// StartWith starts a task with what goes with it: a question about
+	// the screen the phone shows (pilot.Extra.Screen).
+	StartWith(cfg pilot.Config, device, task string, x pilot.Extra) error
 	Stop(device string)
 	StopAll()
 	Status(device string) (pilot.Status, bool)
 	Dismiss(device string)
+	// Steer, Edit and Withdraw are the person's messages to the task while
+	// it runs; Continue goes on with the task that ended (pilot.Runner).
+	Steer(device, text string) (pilot.Message, error)
+	Edit(device, id, text string) error
+	Withdraw(device, id string) error
+	Continue(device, text string) error
+	// Keep and Drop decide a note the task on device suggested, by its
+	// index in Status.Suggested; Memories are the notes kept (nil when
+	// the runner keeps none).
+	Keep(device string, i int) error
+	Drop(device string, i int) error
+	Memories() *pilot.Memories
+}
+
+// PilotChecker is a Pilot that can check a model before a task, as
+// pilot.Runner.Check does: one tiny request with one tool. Check blocks;
+// the client calls it off the main thread.
+type PilotChecker interface {
+	Check(ctx context.Context, cfg pilot.Config) pilot.CheckResult
+}
+
+// PilotUsage is a Pilot that counts the tokens its model used, as
+// pilot.Runner.Usage does: by day, service and model, newest first.
+type PilotUsage interface {
+	Usage(since string) []pilot.UsageRow
 }
 
 // Settings are what the Settings screen changes.
@@ -139,6 +180,9 @@ type Settings struct {
 	ReadOnly           bool
 	UnlockFromComputer bool
 	HideCodes          bool
+	// VirtualCredentials lets agents type passwords and one-time codes on
+	// virtual phones (policy.File.VirtualCredentials).
+	VirtualCredentials bool
 	KeepDays           int
 	Record             bool
 	DeveloperMode      bool
@@ -146,6 +190,16 @@ type Settings struct {
 	// that cannot start `pinky mcp`; each request needs the agent token.
 	RemoteAgents bool
 	RemoteAddr   string
+	// WebMirror shows the phones' screens in a web browser, on this
+	// computer and through Tailscale; each viewer needs the mirror's token.
+	WebMirror bool
+	// WebMirrorControl lets pages opened with the mirror's control token
+	// use the phone: taps, drags, Back and Home, as on the window mirror.
+	WebMirrorControl bool
+	// WebApprovals lets phones the person added answer approvals in a
+	// browser, through the web mirror and Tailscale, each answer confirmed
+	// with the phone's passkey (internal/webapproval). Off by default.
+	WebApprovals bool
 	// UsageStats shares anonymous usage statistics and crash reports
 	// (docs/TELEMETRY.md).
 	UsageStats bool
@@ -165,11 +219,19 @@ type Settings struct {
 	// AskPinky shows the box at the top of Tasks that gives Pinky's own
 	// agent a task (Options.Pilot).
 	AskPinky bool
-	// PilotProvider is the API Pinky's own agent reaches its model
-	// through, pilot.Anthropic or pilot.OpenAI. Each keeps its own model
-	// and address, so switching back finds them; empty ones are the
-	// defaults (pilot.Config.Normalize). The API keys are in the system's
-	// keychain (secret.ModelKeyAccount), never here.
+	// PilotService is the service Pinky's own agent reaches its model
+	// through (pilot.Services, by ID). Each service keeps its own model
+	// and address in PilotModels and PilotURLs, so switching back finds
+	// them; empty ones are the service's defaults (pilot.Config.Normalize).
+	// The API keys are in the system's keychain (secret.ModelKeyAccount of
+	// pilot.Config.KeyName), never here.
+	PilotService string
+	PilotModels  map[string]string `json:",omitempty"`
+	PilotURLs    map[string]string `json:",omitempty"`
+	// PilotProvider and the four after it are the settings of before
+	// there were services: the API, pilot.Anthropic or pilot.OpenAI, and
+	// each API's model and address. PilotConfig still reads them when
+	// PilotService, or its model or address, is not set.
 	PilotProvider       string
 	PilotAnthropicModel string
 	PilotAnthropicURL   string
@@ -180,18 +242,88 @@ type Settings struct {
 	PilotMaxSteps   int
 	PilotMaxMinutes int
 	PilotMaxCost    float64
+	// PilotNoMemory keeps tasks from reading and suggesting the person's
+	// notes (Settings › Agents › Ask Pinky › Memory); the notes stay.
+	PilotNoMemory bool
 }
 
 // PilotConfig is the pilot.Config of the settings.
 func (s Settings) PilotConfig() pilot.Config {
-	cfg := pilot.Config{
-		Provider: s.PilotProvider, Model: s.PilotAnthropicModel, BaseURL: s.PilotAnthropicURL,
-		MaxSteps: s.PilotMaxSteps, MaxTime: time.Duration(s.PilotMaxMinutes) * time.Minute, MaxCost: s.PilotMaxCost,
+	svc := s.pilotService()
+	if _, ok := pilot.ServiceByID(svc); !ok {
+		// A service this version does not know: the API of before.
+		s.PilotService = ""
+		svc = s.pilotService()
 	}
-	if s.PilotProvider == pilot.OpenAI {
-		cfg.Model, cfg.BaseURL = s.PilotOpenAIModel, s.PilotOpenAIURL
+	cfg := pilot.Config{
+		Service: svc, Model: s.pilotModel(svc), BaseURL: s.pilotURL(svc),
+		MaxSteps: s.PilotMaxSteps, MaxTime: time.Duration(s.PilotMaxMinutes) * time.Minute, MaxCost: s.PilotMaxCost,
+		NoMemory: s.PilotNoMemory,
 	}
 	return cfg.Normalize()
+}
+
+// pilotService is the service chosen, or the one the settings of before
+// there were services name.
+func (s Settings) pilotService() string {
+	if s.PilotService != "" {
+		return s.PilotService
+	}
+	url := s.PilotAnthropicURL
+	if s.PilotProvider == pilot.OpenAI {
+		url = s.PilotOpenAIURL
+	}
+	return pilot.ServiceFor(s.PilotProvider, url)
+}
+
+// pilotModel is the model chosen for a service: the one saved for it, else
+// the one saved for its API before there were services.
+func (s Settings) pilotModel(svc string) string {
+	if m, ok := s.PilotModels[svc]; ok {
+		return m
+	}
+	switch svc {
+	case pilot.Anthropic, pilot.CustomAnthropic:
+		return s.PilotAnthropicModel
+	case pilot.OpenAI, pilot.CustomOpenAI:
+		return s.PilotOpenAIModel
+	}
+	return ""
+}
+
+// pilotURL is the address chosen for a service, as pilotModel.
+func (s Settings) pilotURL(svc string) string {
+	if u, ok := s.PilotURLs[svc]; ok {
+		return u
+	}
+	switch svc {
+	case pilot.CustomAnthropic:
+		return s.PilotAnthropicURL
+	case pilot.CustomOpenAI:
+		return s.PilotOpenAIURL
+	}
+	return ""
+}
+
+// setPilotModel saves the model chosen for a service.
+func (s *Settings) setPilotModel(svc, model string) {
+	s.PilotModels = setIn(s.PilotModels, svc, model)
+}
+
+// setPilotURL saves the address chosen for a service.
+func (s *Settings) setPilotURL(svc, url string) {
+	s.PilotURLs = setIn(s.PilotURLs, svc, url)
+}
+
+// setIn sets m[k] in a copy of m, so that the settings reported before
+// keep theirs (clone).
+func setIn(m map[string]string, k, v string) map[string]string {
+	out := make(map[string]string, len(m)+1)
+	for mk, mv := range m {
+		out[mk] = mv
+	}
+	out[k] = v
+	return out
 }
 
 // DefaultRemoteAddr is where Pinky serves MCP over HTTP: this computer
@@ -320,6 +452,7 @@ type app struct {
 	shownOnce bool          // the main window has shown (Options.Hidden)
 
 	mediaCache map[string]*mediaEntry // step screenshots by media id
+	mediaSweep bool                   // a sweepMedia is due (mediaKeep)
 	previews   map[string]bool        // steps whose screenshot shows in a task card
 	agents     agentsState
 	always     alwaysState       // Settings › Safety › Always allowed
@@ -338,14 +471,18 @@ type app struct {
 	bg        bgState        // background displays, per phone
 	conn      connState      // iPhones: how Pinky connects, per phone
 	helper    helperState    // iPhones: installing the helper from the window (helper.go)
+	tasksTip  tasksTipState  // the card about tasks on the phone itself (phonetasks.go)
 	rec       recState       // task recordings in Activity
 	remote    remoteState    // Settings › Agents › Remote agents
 	vcorp     vcorpState     // Settings › Agents › VCorp
+	webMirror webMirrorState // Settings › Phones › Web mirror
 	setup     setupState     // Settings › Agents › Connect an agent, and the sidebar's card
 	upd       updateState    // new versions of Pinky and the companion app
 	tn        tailnetState   // phones away from this computer's network, through Tailscale
 	phoneWiFi phoneWiFiState // phones without Wireless debugging moved to Wi-Fi (wifiswitch.go)
 	ask       askState       // Ask Pinky: the box at the top of Tasks, and its settings (ask.go)
+	sched     schedState     // Ask Pinky's scheduled tasks (schedules.go)
+	mem       memState       // Ask Pinky's notes, after a task and in its settings (memory.go)
 	rotate    rotateState    // Rotate in ⋯ under the mirror (rotate.go)
 
 	vit phoneVitalsState // phones' battery and storage (vitals.go)
@@ -448,6 +585,7 @@ func (a *app) ready() {
 	a.loaded = true
 	a.applySettings()
 	a.afterRefresh(true)
+	a.startSchedules()
 
 	a.main = mygo.NewWindow(mygo.WindowOptions{
 		Title: "Pinky", Width: 1280, Height: 820, MinWidth: 960, MinHeight: 620,
@@ -514,6 +652,7 @@ func (a *app) ready() {
 
 func (a *app) shutdown() {
 	a.end()
+	a.stopSchedules()
 	a.setAwake(false)
 	a.setAwayAwake(false)
 	for id, m := range a.mirrors {

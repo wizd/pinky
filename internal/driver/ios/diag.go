@@ -108,9 +108,7 @@ type OrientationElement struct {
 // Orientation reads what OrientationReport describes. It only reads.
 func (d *Device) Orientation(ctx context.Context) (OrientationReport, error) {
 	var r OrientationReport
-	d.svcMu.Lock()
-	svc := d.info2
-	d.svcMu.Unlock()
+	svc := d.infoSvc()
 	disp, err := readDisplay(ctx, svc)
 	if err != nil {
 		return r, err

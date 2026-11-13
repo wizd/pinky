@@ -79,6 +79,27 @@ func TestProbe(t *testing.T) {
 			facts: []string{"Android has bound it", "its socket is listening"},
 		},
 		{
+			// Since the app was renamed Pinky, its service's label is
+			// Pinky; the development build's, Pinky (dev), is not it.
+			name: "bound, renamed", app: Release,
+			sections: with(probeUIAutomation, map[string]string{"a11y": `User state[attributes:{id=0, installedServiceCount=2, Ui Automation[eventTypes=TYPES_ALL_MASK, notificationTimeout=0]
+     Bound services:{Service[label=Pinky (dev), feedbackType[FEEDBACK_GENERIC]], Service[label=Pinky, feedbackType[FEEDBACK_GENERIC], capabilities=1, eventTypes=TYPES_ALL_MASK, notificationTimeout=0]}
+     Enabled services:{{app.pinky.companion/app.pinky.companion.PinkyAccessibilityService}}
+     Binding services:{}]
+`, "socket": "1\n"}),
+			facts: []string{"Android has bound it", "its socket is listening"},
+		},
+		{
+			name: "renamed development build bound, release not", app: Release,
+			sections: with(probeUIAutomation, map[string]string{"a11y": `User state[attributes:{id=0, installedServiceCount=1}
+     Bound services:{Service[label=Pinky (dev), feedbackType[FEEDBACK_GENERIC]]}
+     Enabled services:{{app.pinky.companion/app.pinky.companion.PinkyAccessibilityService}}
+     Binding services:{}]
+`}),
+			facts: []string{"Android lists it as enabled but has not bound it"},
+			not:   []string{"Android has bound it"},
+		},
+		{
 			// Android 11 and later list crashed services; the development
 			// build's label is not the release build's.
 			name: "crashed", app: Release,
@@ -217,7 +238,7 @@ func TestEnableSaysWhyServiceDidNotStart(t *testing.T) {
 	startWait = 300 * time.Millisecond
 	p := newFakePhone(t)
 	p.mu.Lock()
-	p.rewrite = func(v string) string { return strings.ReplaceAll(v, Release.Component(), "") }
+	p.deaf = true // listed, and never answers
 	p.probe = probeOut(probeUIAutomation)
 	p.mu.Unlock()
 	c := New(p)

@@ -62,6 +62,18 @@ type Action struct {
 	// it (prep.settleFull), waits the whole limit anyway, and the next
 	// action waits out the rest of a wait this cut short (settleOwed).
 	Settle *time.Duration
+	// list shapes a swipe by direction that phone_read_list sends
+	// (read_list.go); nil for every other swipe.
+	list *listSwipe
+}
+
+// listSwipe shapes a phone_read_list swipe: area, when set, takes the
+// place of a ref (a scroll_area on a web page); travel is how much of the
+// area the finger crosses, in percent; lane is where across the area it
+// runs, in percent of its width from the left.
+type listSwipe struct {
+	area         *screen.Rect
+	travel, lane int
 }
 
 // Keys agents may press.
@@ -507,6 +519,12 @@ func (g *Gateway) act(ctx context.Context, l *lease, c Call, a Action) *Result {
 		g.recordRefusal(l, c, a, p, res)
 		return res
 	case policy.Ask:
+		if !g.granted(l, v, p) && c.noAsk {
+			d.act.Unlock()
+			res := &Result{Status: StatusBlocked, Rule: v.Rule, Message: noAskMessage(v)}
+			g.recordRefusal(l, c, a, p, res)
+			return res
+		}
 		if !g.granted(l, v, p) {
 			info, res := g.ask(ctx, l, c, a, p, v, cur)
 			d.act.Unlock()
@@ -766,9 +784,11 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 	seen := l.baseline
 	readOnly := l.readOnly
 	fgAllowed := allowsLocked(l, fg)
+	prov := d.provider // discovery sets it again under g.mu
+	virtual := d.info.Virtual
 	g.mu.Unlock()
 	p.input = policy.Input{Device: d.id, App: fg, Screen: cur, TaskApps: apps, LongPress: a.LongPress,
-		ReadOnly: scope.Mode == ScopeReadOnly || readOnly, AllowBlocked: fgAllowed}
+		ReadOnly: scope.Mode == ScopeReadOnly || readOnly, AllowBlocked: fgAllowed, Virtual: virtual}
 	if scope.Mode == ScopeApps {
 		p.input.ScopeApps = scope.Apps
 	}
@@ -810,7 +830,7 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 			if res != nil {
 				return p, res
 			}
-			p.target, p.point = e, tapPoint(cur, t, d.provider.Platform())
+			p.target, p.point = e, tapPoint(cur, t, prov.Platform())
 		} else {
 			if !inBounds(*a.Point) {
 				return p, errResult(ErrInvalidArgument, "%d,%d is outside the %dx%d screen.", a.Point.X, a.Point.Y, cur.Width, cur.Height)
@@ -819,7 +839,7 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 			p.target = hitTest(cur, p.point)
 		}
 		p.hasPt = true
-		if pad, ok := policy.HiddenKeypad(cur); ok && pad.Contains(p.point) {
+		if pad, ok := policy.HiddenKeypad(cur); ok && pad.Contains(p.point) && !g.policy.CredentialTypingAllowed(virtual) {
 			// The app's own passcode keypad, which the person watching
 			// cannot see: a tap on it enters their passcode.
 			p.input.Target = p.target
@@ -844,7 +864,7 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 			p.target, p.point, p.hasPt = e, e.Bounds.Center(), true
 		} else if f, ok := cur.Focused(); ok {
 			p.target = &f
-		} else if credentialOnScreen(cur) {
+		} else if credentialOnScreen(cur) && !g.policy.CredentialTypingAllowed(virtual) {
 			// The focused field is unknown and might be the password field.
 			return p, &Result{Status: StatusBlocked, Rule: policy.RuleCredentials,
 				Message: "This screen has a password or code field and Pinky cannot tell which field has focus. Nothing was done. Pass ref to type into a specific field, or call phone_handoff for credentials."}
@@ -869,13 +889,20 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 					return p, res
 				}
 				p.target = e
+			} else if a.list != nil && a.list.area != nil {
+				e = &screen.Element{Bounds: *a.list.area}
 			}
 			area, res := swipeArea(cur, e, a.Direction)
 			if res != nil {
 				return p, res
 			}
-			p.from, p.to = swipeLine(area, a.Direction)
+			if a.list != nil {
+				p.from, p.to = listSwipeLine(area, a.Direction, a.list.travel, a.list.lane)
+			} else {
+				p.from, p.to = swipeLine(area, a.Direction)
+			}
 		}
+		p.input.Move = screen.Point{X: p.to.X - p.from.X, Y: p.to.Y - p.from.Y}
 	case "pinch":
 		p.input.Op = policy.OpSwipe
 		if dev, _ := g.screenOf(d); dev != nil {
@@ -893,7 +920,7 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 				return p, errResult(ErrUnsupported, "This phone cannot drag. Nothing was done.")
 			}
 		}
-		if res := p.prepareDrag(a, cur, d.provider.Platform(), byRef, inBounds); res != nil {
+		if res := p.prepareDrag(a, cur, prov.Platform(), byRef, inBounds); res != nil {
 			return p, res
 		}
 	case "key":
@@ -967,6 +994,25 @@ func credentialOnScreen(s *screen.Screen) bool {
 		}
 	}
 	return false
+}
+
+// listSwipeLine is swipeLine for a phone_read_list swipe: the finger
+// crosses travel percent of area's height, centred, at lane percent of its
+// width (0 for the middle).
+func listSwipeLine(area screen.Rect, dir string, travel, lane int) (from, to screen.Point) {
+	if travel <= 0 {
+		return swipeLine(area, dir)
+	}
+	c := area.Center()
+	if lane > 0 {
+		c.X = area.X + area.W*lane/100
+	}
+	c.X = max(area.X+1, min(c.X, area.X+area.W-2))
+	dy := area.H * travel / 200
+	if dir == "down" {
+		return screen.Point{X: c.X, Y: c.Y - dy}, screen.Point{X: c.X, Y: c.Y + dy}
+	}
+	return screen.Point{X: c.X, Y: c.Y + dy}, screen.Point{X: c.X, Y: c.Y - dy}
 }
 
 // swipeLine returns a swipe across the middle of area, where direction is
@@ -1340,7 +1386,10 @@ func approvalTitle(a Action, p *prep, v policy.Verdict) string {
 	case label != "" && a.Tool != "pinch":
 		return fmt.Sprintf("%s “%s”?", capitalize(verbFor(a)), label)
 	}
-	return capitalize(p.desc) + "?"
+	// History's p.desc says it in the past tense ("Tapped at 540,1200").
+	// Earlier gateways asked that ("Tapped at 540,1200?"), and the client
+	// still reads it from them and from the approvals they stored.
+	return capitalize(question(a, p)) + "?"
 }
 
 func verbFor(a Action) string {
@@ -1725,6 +1774,11 @@ func (g *Gateway) executeOn(ctx context.Context, l *lease, c Call, a Action, p *
 		g.recordStep(l, step, a, c, p, res, start, before, "", "")
 		return res
 	}
+	if n, ok := dev.(driver.InputNoter); ok && a.Tool == "key" {
+		// A note an earlier input left, such as the person's typing, is
+		// not this key's; a Type replaces the note itself.
+		n.TakeInputNote()
+	}
 	err := g.perform(actx, dev, a, p)
 	if err != nil && onBG && a.Tool == "launch" && errors.Is(err, driver.ErrUnsupported) {
 		// The app will not run on a background display: the task moves
@@ -1765,9 +1819,9 @@ func (g *Gateway) executeOn(ctx context.Context, l *lease, c Call, a Action, p *
 		g.mu.Unlock()
 	}
 	// What the driver could not make sure of, such as typed text it could
-	// not read back.
+	// not read back or a key the phone may have dropped.
 	var inputNote string
-	if n, ok := dev.(driver.InputNoter); ok && a.Tool == "type" {
+	if n, ok := dev.(driver.InputNoter); ok && (a.Tool == "type" || a.Tool == "key") {
 		inputNote = n.TakeInputNote()
 	}
 	limit := g.opt.SettleMax
@@ -2044,6 +2098,9 @@ func (g *Gateway) perform(ctx context.Context, dev driver.Device, a Action, p *p
 // actionError maps a driver error from an input to a result. Only errors
 // that prove nothing happened become errors; the rest are uncertain.
 func (g *Gateway) actionError(l *lease, err error) *Result {
+	if res := g.onPhoneResult(l, err); res != nil {
+		return res
+	}
 	switch {
 	case errors.Is(err, driver.ErrUnsupported):
 		return errResult(ErrUnsupported, "This phone cannot do that: %v. Nothing was done.", err)
@@ -2063,6 +2120,9 @@ func (g *Gateway) actionError(l *lease, err error) *Result {
 
 // readError maps an error from reading the screen.
 func (g *Gateway) readError(l *lease, err error) *Result {
+	if res := g.onPhoneResult(l, err); res != nil {
+		return res
+	}
 	switch {
 	case errors.Is(err, driver.ErrOffline):
 		g.setOffline(l.dev, "")
@@ -2195,6 +2255,7 @@ func (g *Gateway) observeOCR(ctx context.Context, d *device, mode readOCR) (*scr
 		}
 		return nil, errors.New("the driver returned no screen")
 	}
+	g.setBusy(d, nil)
 	// One-time codes are masked before anything else sees the read: the
 	// agent, history, approvals and refs (policy.MaskScreen).
 	g.policy.MaskScreen(s)
@@ -2691,17 +2752,33 @@ func ocrInStatusBar(s *screen.Screen, e screen.Element) bool {
 	return e.Bounds.Center().Y < s.Height*6/100
 }
 
-// describe says what an action does, in plain words for history.
-func describe(a Action, p *prep) string {
+// describe says what an action did, in plain words for history: "Tapped
+// at 540,1200".
+func describe(a Action, p *prep) string { return sayAction(a, p, false) }
+
+// question says what an action would do, in the imperative, for an
+// approval's title that has nothing more particular to ask: "Tap at
+// 540,1200", as the other titles ask "Pay: …?" and "Open …?".
+func question(a Action, p *prep) string { return sayAction(a, p, true) }
+
+// sayAction says an action in describe's past tense or, when ask is set,
+// in question's imperative.
+func sayAction(a Action, p *prep, ask bool) string {
 	label := ""
 	if p != nil && p.target != nil && p.target.Label != "" {
 		label = "“" + clip(p.target.Label, 60) + "”"
 	}
+	tense := func(past, imperative string) string {
+		if ask {
+			return imperative
+		}
+		return past
+	}
 	switch a.Tool {
 	case "tap":
-		verb := "Tapped"
+		verb := tense("Tapped", "Tap")
 		if a.LongPress {
-			verb = "Long-pressed"
+			verb = tense("Long-pressed", "Long-press")
 		}
 		if label != "" {
 			return verb + " " + label
@@ -2711,40 +2788,42 @@ func describe(a Action, p *prep) string {
 		}
 		return verb
 	case "type":
-		s := fmt.Sprintf("Typed “%s”", clip(a.Text, 60))
+		s := fmt.Sprintf("%s “%s”", tense("Typed", "Type"), clip(a.Text, 60))
 		if label != "" {
 			s += " into " + label
 		}
 		if a.Submit {
-			s += " and submitted"
+			s += tense(" and submitted", " and submit")
 		}
 		return s
 	case "swipe":
+		verb := tense("Swiped", "Swipe")
 		if a.Direction != "" {
 			if label != "" {
-				return fmt.Sprintf("Swiped %s in %s", a.Direction, label)
+				return fmt.Sprintf("%s %s in %s", verb, a.Direction, label)
 			}
-			return "Swiped " + a.Direction
+			return verb + " " + a.Direction
 		}
-		return fmt.Sprintf("Swiped from %d,%d to %d,%d", a.From.X, a.From.Y, a.To.X, a.To.Y)
+		return fmt.Sprintf("%s from %d,%d to %d,%d", verb, a.From.X, a.From.Y, a.To.X, a.To.Y)
 	case "pinch":
-		return describePinch(a, label)
+		return describePinch(a, label, ask)
 	case "drag":
-		return describeDrag(a, p, label)
+		return describeDrag(a, p, label, ask)
 	case "key":
-		return "Pressed " + strings.ReplaceAll(a.Key, "_", " ")
+		return tense("Pressed ", "Press ") + strings.ReplaceAll(a.Key, "_", " ")
 	case "launch":
+		verb := tense("Opened", "Open")
 		name := a.App
 		if p != nil && p.launch.Name != "" {
 			name = p.launch.Name
 		}
 		if p != nil && p.url {
 			if p.launch.Name == "" && p.launch.ID == "" {
-				return fmt.Sprintf("Opened “%s”", clip(p.link, maxLinkText))
+				return fmt.Sprintf("%s “%s”", verb, clip(p.link, maxLinkText))
 			}
-			return fmt.Sprintf("Opened “%s” in %s", clip(p.link, maxLinkText), appLabel(screen.App{ID: p.launch.ID, Name: p.launch.Name}))
+			return fmt.Sprintf("%s “%s” in %s", verb, clip(p.link, maxLinkText), appLabel(screen.App{ID: p.launch.ID, Name: p.launch.Name}))
 		}
-		return "Opened " + name + localeWords(a)
+		return verb + " " + name + localeWords(a)
 	}
 	return a.Tool
 }

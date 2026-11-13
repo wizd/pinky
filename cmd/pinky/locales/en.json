@@ -1,5 +1,347 @@
 {
   "@@locale": "en",
+  "schedButton": "Schedule…",
+  "@schedButton": {
+    "description": "Ask Pinky: the button beside Start that opens the dialog to run the typed task at set times instead of now."
+  },
+  "schedCondition": "Tell me only if",
+  "@schedCondition": {
+    "description": "Scheduled task dialog: the label of the optional condition, in the person's words, under which they want to hear of a run (\"it will rain\")."
+  },
+  "schedConditionDesc": "Leave it empty to hear of every run. Otherwise Pinky checks it each time and tells you only when it holds.",
+  "@schedConditionDesc": {
+    "description": "Scheduled task dialog: the note under the condition field."
+  },
+  "schedConditionHint": "it will rain (optional)",
+  "@schedConditionHint": {
+    "description": "Scheduled task dialog: the hint in the empty condition field, an example that completes \"Tell me only if\"."
+  },
+  "schedCooldown": "Tell me",
+  "@schedCooldown": {
+    "description": "Scheduled task dialog: the label of how often a condition that holds again tells the person."
+  },
+  "schedCooldownAlways": "Each time it holds",
+  "@schedCooldownAlways": {
+    "description": "Scheduled task dialog, Tell me: every run whose condition holds tells the person."
+  },
+  "schedCooldownDay": "At most once a day",
+  "@schedCooldownDay": {
+    "description": "Scheduled task dialog, Tell me: a condition that holds tells the person at most once a day."
+  },
+  "schedCooldownHour": "At most once an hour",
+  "@schedCooldownHour": {
+    "description": "Scheduled task dialog, Tell me: a condition that holds tells the person at most once an hour."
+  },
+  "schedDate": "Date",
+  "@schedDate": {
+    "description": "Scheduled task dialog: the label of the date of a task that runs once."
+  },
+  "schedDay": "{day, date, ::EEE}",
+  "@schedDay": {
+    "description": "Scheduled task dialog: a day of the week the person can pick, short.",
+    "placeholders": {
+      "day": {
+        "type": "DateTime",
+        "example": "Mon"
+      }
+    }
+  },
+  "schedDays": "Days",
+  "@schedDays": {
+    "description": "Scheduled task dialog: the label of the days of the week the task runs on."
+  },
+  "schedDelete": "Delete",
+  "@schedDelete": {
+    "description": "Scheduled task dialog: deletes the scheduled task."
+  },
+  "schedDesktopNote": "Scheduled tasks run while Pinky is open on this computer, also with its window closed. A time missed while Pinky is quit or the computer sleeps is skipped and reported; one the phone is busy for waits up to 15 minutes. Nobody watches a scheduled run: Pinky never pays in it, and a step that needs your approval waits for you as usual.",
+  "@schedDesktopNote": {
+    "description": "Scheduled task dialog: the note at the bottom on when scheduled tasks run on this computer and what Pinky does in a run nobody watches."
+  },
+  "schedErrDate": "Write the date as year-month-day, like 2026-11-20.",
+  "@schedErrDate": {
+    "description": "Scheduled task dialog: why it cannot be saved: the date of a task that runs once is not year-month-day."
+  },
+  "schedErrLong": "The task is too long.",
+  "@schedErrLong": {
+    "description": "Scheduled task dialog: why it cannot be saved: the task or the condition is too long."
+  },
+  "schedErrNoDays": "Choose at least one day.",
+  "@schedErrNoDays": {
+    "description": "Scheduled task dialog: why it cannot be saved: On certain days without a day."
+  },
+  "schedErrNoPhone": "Choose a phone.",
+  "@schedErrNoPhone": {
+    "description": "Scheduled task dialog: why it cannot be saved: no phone."
+  },
+  "schedErrNoTask": "Type a task.",
+  "@schedErrNoTask": {
+    "description": "Scheduled task dialog: why it cannot be saved: no task."
+  },
+  "schedErrNoTime": "Add a time.",
+  "@schedErrNoTime": {
+    "description": "Scheduled task dialog: why it cannot be saved: no time of day."
+  },
+  "schedErrOther": "Couldn't save the schedule: {detail}",
+  "@schedErrOther": {
+    "description": "Scheduled task dialog: saving failed; detail is the error, in English.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "permission denied"
+      }
+    }
+  },
+  "schedErrPast": "That time has passed.",
+  "@schedErrPast": {
+    "description": "Scheduled task dialog: why it cannot be saved: the time of a task that runs once has passed."
+  },
+  "schedErrRunning": "A scheduled task is already running. Try again when it ends.",
+  "@schedErrRunning": {
+    "description": "Scheduled task dialog, Run now: another scheduled task runs."
+  },
+  "schedErrTime": "Write times as hours and minutes, like 08:00 or 20:30.",
+  "@schedErrTime": {
+    "description": "Scheduled task dialog: why it cannot be saved: a time is not hours and minutes."
+  },
+  "schedErrTooMany": "{count, plural, one {# time a day at most.} other {# times a day at most.}}",
+  "@schedErrTooMany": {
+    "description": "Scheduled task dialog: why it cannot be saved: too many times a day.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "schedErrZone": "Pinky doesn't know this time zone. Use a name like Asia/Shanghai, or leave it empty.",
+  "@schedErrZone": {
+    "description": "Scheduled task dialog: why it cannot be saved: an unknown time zone. Asia/Shanghai is an example of an IANA name and stays as it is (a Japanese one may give Asia/Tokyo)."
+  },
+  "schedEvery": "Every",
+  "@schedEvery": {
+    "description": "Scheduled task dialog, Every few hours: the label of the choice of how many hours apart."
+  },
+  "schedHours": "{count, plural, one {Every hour} other {Every # hours}}",
+  "@schedHours": {
+    "description": "Scheduled task dialog, Every few hours: a choice of how many hours apart the task runs.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "schedInterrupted": "Pinky quit before the task ended.",
+  "@schedInterrupted": {
+    "description": "A scheduled task's run that never ended: Pinky quit while it ran."
+  },
+  "schedMet": "condition met",
+  "@schedMet": {
+    "description": "After how a scheduled task's run went: its condition held, so the person was told."
+  },
+  "schedNew": "New schedule…",
+  "@schedNew": {
+    "description": "The right panel, under the list of scheduled tasks: opens the dialog for a new one."
+  },
+  "schedNext": "Next runs",
+  "@schedNext": {
+    "description": "Scheduled task dialog: the heading of the next three times the task runs, or why it cannot be saved."
+  },
+  "schedNextAt": "Next {when, date, ::MMMEEEdjmm}",
+  "@schedNextAt": {
+    "description": "A scheduled task's row in the right panel: when it runs next.",
+    "placeholders": {
+      "when": {
+        "type": "DateTime",
+        "example": "Fri, Nov 14, 8:00 AM"
+      }
+    }
+  },
+  "schedNoNext": "It won't run again.",
+  "@schedNoNext": {
+    "description": "A scheduled task that runs no more: one that ran once."
+  },
+  "schedNoRuns": "It hasn't run yet.",
+  "@schedNoRuns": {
+    "description": "Scheduled task dialog, Last runs: none yet."
+  },
+  "schedNotMet": "condition not met",
+  "@schedNotMet": {
+    "description": "After how a scheduled task's run went: its condition did not hold."
+  },
+  "schedNotifyTitle": "Scheduled: {task}",
+  "@schedNotifyTitle": {
+    "description": "The title of the notification, or the toast, of how a scheduled task went. task is the task's words, shortened.",
+    "placeholders": {
+      "task": {
+        "type": "String",
+        "example": "Check the weather"
+      }
+    }
+  },
+  "schedOpen": "Open the schedule “{task}”",
+  "@schedOpen": {
+    "description": "Accessible name of a scheduled task's row in the right panel, which opens its dialog. task is the task's words, shortened.",
+    "placeholders": {
+      "task": {
+        "type": "String",
+        "example": "Check the weather"
+      }
+    }
+  },
+  "schedPause": "Pause",
+  "@schedPause": {
+    "description": "Scheduled task dialog: stops the task from running at its times until Resume."
+  },
+  "schedPaused": "Paused",
+  "@schedPaused": {
+    "description": "A scheduled task's row in the right panel: the person paused it, so it does not run."
+  },
+  "schedPaymentDenied": "A scheduled task never pays: Pinky denied this step by itself.",
+  "@schedPaymentDenied": {
+    "description": "The note of an approval Pinky denied by itself: a payment step in a scheduled task nobody watched."
+  },
+  "schedRepeat": "Repeat",
+  "@schedRepeat": {
+    "description": "Scheduled task dialog: the label of the choice of how the task repeats."
+  },
+  "schedRepeatDaily": "Every day",
+  "@schedRepeatDaily": {
+    "description": "Scheduled task dialog, Repeat: every day, at one or more times."
+  },
+  "schedRepeatInterval": "Every few hours",
+  "@schedRepeatInterval": {
+    "description": "Scheduled task dialog, Repeat: every few hours, from a time of day to midnight."
+  },
+  "schedRepeatOnce": "Once",
+  "@schedRepeatOnce": {
+    "description": "Scheduled task dialog, Repeat: run once, on a date at a time."
+  },
+  "schedRepeatWeekdays": "Weekdays",
+  "@schedRepeatWeekdays": {
+    "description": "Scheduled task dialog, Repeat: Monday to Friday, at one or more times."
+  },
+  "schedRepeatWeekly": "On certain days",
+  "@schedRepeatWeekly": {
+    "description": "Scheduled task dialog, Repeat: on the days of the week the person picks, at one or more times."
+  },
+  "schedResume": "Resume",
+  "@schedResume": {
+    "description": "Scheduled task dialog: runs a paused task at its times again, from now on."
+  },
+  "schedRunNow": "Run now",
+  "@schedRunNow": {
+    "description": "Scheduled task dialog: runs the task at once, with the person there; also marks such a run in Last runs."
+  },
+  "schedRuns": "Last runs",
+  "@schedRuns": {
+    "description": "Scheduled task dialog: the heading of the task's last ten runs."
+  },
+  "schedSection": "Scheduled",
+  "@schedSection": {
+    "description": "The right panel: the heading of the list of scheduled tasks (Ask Pinky tasks set to run at set times), under Tasks."
+  },
+  "schedSkipBusy": "{phone} was busy with another task.",
+  "@schedSkipBusy": {
+    "description": "A scheduled task's skipped run: another task had the phone for 15 minutes after its time.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "schedSkipInUse": "You were using {phone}.",
+  "@schedSkipInUse": {
+    "description": "A scheduled task's skipped run: the person had taken over the phone for 15 minutes after its time.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "schedSkipLocked": "{phone} was locked.",
+  "@schedSkipLocked": {
+    "description": "A scheduled task's skipped run: the phone was locked, and Pinky never unlocks it for a scheduled task.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "schedSkipNoPhone": "The phone is no longer in Pinky.",
+  "@schedSkipNoPhone": {
+    "description": "A scheduled task's skipped run: its phone was removed from Pinky."
+  },
+  "schedSkipNotRunning": "{count, plural, one {Pinky wasn't running at that time.} other {Pinky wasn't running: # times were missed.}}",
+  "@schedSkipNotRunning": {
+    "description": "A scheduled task's skipped run: Pinky was quit or the computer asleep at its times. count is how many times were missed.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "schedSkipOff": "Ask Pinky was turned off.",
+  "@schedSkipOff": {
+    "description": "A scheduled task's skipped run: the person turned Ask Pinky off in Settings › Agents."
+  },
+  "schedSkipOffline": "{phone} wasn't connected.",
+  "@schedSkipOffline": {
+    "description": "A scheduled task's skipped run: the phone was not connected to Pinky, or not ready.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "schedSkipped": "Skipped",
+  "@schedSkipped": {
+    "description": "How a scheduled task's run went: it did not run at its time, for the reason below."
+  },
+  "schedStartAt": "Starting at",
+  "@schedStartAt": {
+    "description": "Scheduled task dialog, Every few hours: the label of the first time of each day."
+  },
+  "schedTask": "Task",
+  "@schedTask": {
+    "description": "Scheduled task dialog: the label of the field with the task, in the person's words, as they would type it into Ask Pinky."
+  },
+  "schedTime": "Time",
+  "@schedTime": {
+    "description": "Scheduled task dialog: the label of the time of day of a task that runs once."
+  },
+  "schedTimes": "Times",
+  "@schedTimes": {
+    "description": "Scheduled task dialog: the label of the times of day the task runs at, one or more, separated by commas."
+  },
+  "schedTitleEdit": "Scheduled task",
+  "@schedTitleEdit": {
+    "description": "The title of the dialog that shows and edits a scheduled task."
+  },
+  "schedTitleNew": "Schedule a task",
+  "@schedTitleNew": {
+    "description": "The title of the dialog that makes a scheduled task."
+  },
+  "schedWhen": "{when, date, ::MMMEEEdjmm}",
+  "@schedWhen": {
+    "description": "A time a scheduled task runs or ran: the weekday, the day and the time.",
+    "placeholders": {
+      "when": {
+        "type": "DateTime",
+        "example": "Fri, Nov 14, 8:00 AM"
+      }
+    }
+  },
+  "schedZone": "Time zone",
+  "@schedZone": {
+    "description": "Scheduled task dialog: the label of the time zone the times are in; empty is this computer's, which the hint shows."
+  },
   "activityAnsweredIn": "Answered in {duration}",
   "@activityAnsweredIn": {
     "description": "The second line of a step where the person allowed or denied what the agent asked: how long they took to answer. duration is as \"14 s\" or \"1 min 02 s\".",
@@ -540,11 +882,11 @@
   },
   "addPhoneIPhoneStepPasscode": "Enter the passcode",
   "@addPhoneIPhoneStepPasscode": {
-    "description": "Add phone › iPhone, the phone's page and the checkup: the title of the step where the iPhone asks for its passcode before the WebDriverAgent helper may control it, as iOS does now and then."
+    "description": "Add phone › iPhone, the phone's page and the checkup: the title of the step where the iPhone asks for its passcode before Pinky on the iPhone may control it, as iOS does now and then."
   },
-  "addPhoneIPhoneStepPasscodeDetail": "Enter the passcode on the iPhone: iOS asks for it now and then before the WebDriverAgent helper can control the phone. If the iPhone no longer asks, Pinky tries again in a few minutes, or at once when you plug it in again.",
+  "addPhoneIPhoneStepPasscodeDetail": "Enter the passcode on the iPhone: iOS asks for it now and then before Pinky on the iPhone can control the phone. If the iPhone no longer asks, Pinky tries again in a few minutes, or at once when you plug it in again.",
   "@addPhoneIPhoneStepPasscodeDetail": {
-    "description": "Add phone › iPhone, the phone's page and the checkup: what to do while the iPhone asks for its passcode before the WebDriverAgent helper may control it. WebDriverAgent is a name. Pinky starts the helper again later when nobody entered the passcode."
+    "description": "Add phone › iPhone, the phone's page and the checkup: what to do while the iPhone asks for its passcode before Pinky on the iPhone may control it. WebDriverAgent is a name. Pinky starts Pinky on the iPhone again later when nobody entered the passcode."
   },
   "addPhoneIPhoneStepPlug": "Plug in the iPhone",
   "@addPhoneIPhoneStepPlug": {
@@ -694,23 +1036,23 @@
   "@addPhoneOlderDetail": {
     "description": "Add phone › older iPhone: the line under the heading \"Pair your iPhone\", above two ways to connect."
   },
-  "addPhoneOlderHelper": "Install the Pinky helper",
+  "addPhoneOlderHelper": "Use Pinky on the iPhone",
   "@addPhoneOlderHelper": {
-    "description": "Add phone › older iPhone: the first way to connect, by installing a helper app (WebDriverAgent) on the iPhone. Also its accessibility label."
+    "description": "Add phone › older iPhone: the first way to connect, by installing Pinky's iPhone app, which hosts WebDriverAgent, on the iPhone. Also its accessibility label. Pinky on the iPhone is what the computer calls Pinky's iPhone app, named just Pinky on the iPhone itself (Pinky on the phone names the Android app the same way); older installs are the app Pinky Helper, which works the same."
   },
-  "addPhoneOlderHelperDetail": "WebDriverAgent, signed with your Apple ID; on the iPhone it shows as Pinky Helper. With a free Apple ID it needs re-signing every 7 days; a paid developer account lasts a year.",
+  "addPhoneOlderHelperDetail": "Pinky's app for the iPhone, signed with your Apple ID, through which Pinky controls the phone (WebDriverAgent). With a free Apple ID it needs re-signing every 7 days; a paid developer account lasts a year. Pinky Helper, installed before, keeps working.",
   "@addPhoneOlderHelperDetail": {
-    "description": "Add phone › older iPhone: under \"Install the Pinky helper\", what the helper is, its name on the iPhone's home screen, and how long its signature lasts. WebDriverAgent is a name. The home screen name is the one Pinky gives the helper in the iPhone's language: Pinky Helper, 「Pinky 助手」 in Chinese, 「Pinky ヘルパー」 in Japanese."
+    "description": "Add phone › older iPhone: under \"Install Pinky on the iPhone\", what Pinky on the iPhone is, that Pinky Helper installed before keeps working, and how long its signature lasts. WebDriverAgent is a name. Pinky Helper is the name an older install has on the iPhone's home screen in the iPhone's language: Pinky Helper, 「Pinky 助手」 in Chinese, 「Pinky ヘルパー」 in Japanese."
   },
   "addPhoneOlderHelperHow": "Install it once on a Mac with Xcode: run pinkyctl helper install in Terminal, with the iPhone connected and unlocked. Pinky finds the iPhone after that.",
   "@addPhoneOlderHelperHow": {
-    "description": "Add phone › older iPhone, Install the Pinky helper chosen, where Pinky cannot install it from its window (no Mac, or no Xcode): how to install it. pinkyctl helper install is a command typed in Terminal (macOS's app, named as Apple names it in the language) and stays as it is."
+    "description": "Add phone › older iPhone, Install Pinky on the iPhone chosen, where Pinky cannot install it from its window (no Mac, or no Xcode): how to install it. pinkyctl helper install is a command typed in Terminal (macOS's app, named as Apple names it in the language) and stays as it is."
   },
   "addPhoneOlderIPhone": "Try an older iPhone",
   "@addPhoneOlderIPhone": {
     "description": "Add phone › iPhone: the quiet button to the right of Pair that switches to the ways of connecting an older iPhone."
   },
-  "addPhoneOlderMirrorNotYet": "Pinky can't connect through iPhone Mirroring yet. Install the Pinky helper instead, or update to iOS 27.",
+  "addPhoneOlderMirrorNotYet": "Pinky can't connect through iPhone Mirroring yet. Install Pinky on the iPhone instead, or update to iOS 27.",
   "@addPhoneOlderMirrorNotYet": {
     "description": "Add phone › older iPhone, Use iPhone Mirroring chosen: Pinky has no way in through iPhone Mirroring yet. iPhone Mirroring is Apple's name for the feature in the language."
   },
@@ -942,6 +1284,42 @@
       }
     }
   },
+  "askCancel": "Cancel",
+  "@askCancel": {
+    "description": "Ask Pinky: leaves the message as it was."
+  },
+  "askContinue": "Continue",
+  "@askContinue": {
+    "description": "Ask Pinky once its task ended: the button that continues the same task, with the message typed. The limits count anew."
+  },
+  "askContinueField": "Next message for Pinky",
+  "@askContinueField": {
+    "description": "Ask Pinky once its task ended: the accessible name of the field that continues the same task with a new message."
+  },
+  "askContinuePlaceholder": "Tell Pinky what to do next…",
+  "@askContinuePlaceholder": {
+    "description": "Ask Pinky once its task ended: the placeholder of askContinueField."
+  },
+  "askByAgent": "Asked by {agent}",
+  "@askByAgent": {
+    "description": "Ask Pinky, under the box's state: an agent on the computer handed Pinky this task (phone_task_run).",
+    "placeholders": {
+      "agent": {
+        "type": "String",
+        "example": "Claude Code"
+      }
+    }
+  },
+  "askCancelled": "{agent} cancelled the task.",
+  "@askCancelled": {
+    "description": "Why an Ask Pinky task ended: the agent that handed Pinky the task cancelled it (phone_task_cancel).",
+    "placeholders": {
+      "agent": {
+        "type": "String",
+        "example": "Claude Code"
+      }
+    }
+  },
   "askDismiss": "Dismiss",
   "@askDismiss": {
     "description": "Ask Pinky: the button that hides how its last task ended."
@@ -955,6 +1333,10 @@
         "example": "2.00"
       }
     }
+  },
+  "askEdit": "Edit",
+  "@askEdit": {
+    "description": "Ask Pinky: the button that edits a message Pinky has not read yet."
   },
   "askEndDone": "Done",
   "@askEndDone": {
@@ -985,6 +1367,16 @@
   "askEndStopped": "Stopped",
   "@askEndStopped": {
     "description": "Ask Pinky after a task: the person stopped it, or it reached a limit (then why follows)."
+  },
+  "askErrSend": "Couldn't send: {detail}",
+  "@askErrSend": {
+    "description": "Ask Pinky, in red: a message to Pinky or Continue failed.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "Pinky runs no task on this phone"
+      }
+    }
   },
   "askErrStart": "Couldn't start: {detail}",
   "@askErrStart": {
@@ -1040,6 +1432,26 @@
       }
     }
   },
+  "askMemoryDrop": "Don't",
+  "@askMemoryDrop": {
+    "description": "Ask Pinky: the button that does not keep a suggested note."
+  },
+  "askMemoryDropped": "Not remembered",
+  "@askMemoryDropped": {
+    "description": "Ask Pinky: a suggested note the person did not keep."
+  },
+  "askMemoryKeep": "Remember",
+  "@askMemoryKeep": {
+    "description": "Ask Pinky: the button that keeps a suggested note."
+  },
+  "askMemoryKept": "Remembered",
+  "@askMemoryKept": {
+    "description": "Ask Pinky: a suggested note the person kept."
+  },
+  "askMemoryTitle": "Remember for later tasks?",
+  "@askMemoryTitle": {
+    "description": "Ask Pinky: over the notes a finished task suggests keeping."
+  },
   "askTaskLimit": "Up to {limit} a task",
   "@askTaskLimit": {
     "description": "Ask Pinky, under the model's name next to Start: the cost limit of a task (askDollars or askTokens).",
@@ -1064,6 +1476,10 @@
   "@askNoKey": {
     "description": "Why Ask Pinky could not start a task."
   },
+  "askPendingNote": "Pinky reads this at its next step",
+  "@askPendingNote": {
+    "description": "Ask Pinky: under a message the person sent that Pinky has not read yet; it can still be edited or withdrawn."
+  },
   "askPhone": "Phone",
   "@askPhone": {
     "description": "Ask Pinky on All phones: the accessible name of the menu that chooses the phone for the task."
@@ -1078,9 +1494,21 @@
       }
     }
   },
+  "askRead": "Pinky has already read it.",
+  "@askRead": {
+    "description": "Ask Pinky, in red: the person tried to edit or withdraw a message that Pinky read in the meantime."
+  },
   "askRefused": "The model declined this task.",
   "@askRefused": {
     "description": "Why Ask Pinky could not finish a task."
+  },
+  "askSave": "Save",
+  "@askSave": {
+    "description": "Ask Pinky: saves the edited message."
+  },
+  "askSend": "Send",
+  "@askSend": {
+    "description": "Ask Pinky while its task runs: the button that sends the message in askSteerField."
   },
   "askSetup": "Pinky can do simple tasks on your phone by itself, with an AI model you choose.",
   "@askSetup": {
@@ -1097,6 +1525,26 @@
   "askStart": "Start",
   "@askStart": {
     "description": "Ask Pinky: the button that starts the task typed in the field."
+  },
+  "askSteerField": "Message for Pinky",
+  "@askSteerField": {
+    "description": "Ask Pinky while its task runs: the accessible name of the field where the person writes to Pinky as it works."
+  },
+  "askSteerPlaceholder": "Add or change instructions…",
+  "@askSteerPlaceholder": {
+    "description": "Ask Pinky while its task runs: the placeholder of askSteerField. Pinky reads the message at its next step."
+  },
+  "askScreen": "About the screen",
+  "@askScreen": {
+    "description": "Ask Pinky: the button that starts a question about what the phone shows now; the field may be empty."
+  },
+  "askScreenTooltip": "Ask Pinky about what the phone shows now, or have it explained when the field is empty. Blocked apps and hidden codes stay hidden.",
+  "@askScreenTooltip": {
+    "description": "Ask Pinky: the tooltip of the button that asks about the phone's screen."
+  },
+  "askScreenDefault": "Explain what the phone shows.",
+  "@askScreenDefault": {
+    "description": "Ask Pinky: the task sent when the person asks about the screen with an empty field."
   },
   "askSteps": "{count, plural, one {# step} other {# steps}}",
   "@askSteps": {
@@ -1116,6 +1564,16 @@
   "@askTitle": {
     "description": "The name of Pinky's own agent, which does a task the person types on a phone by itself: the box at the top of Tasks, and its part of Settings › Agents."
   },
+  "askToday": "Today: {amount}",
+  "@askToday": {
+    "description": "Ask Pinky, under the model's name next to Start: what Pinky's own agent used today (askTokens, then askDollars when known).",
+    "placeholders": {
+      "amount": {
+        "type": "String",
+        "example": "48,210 tokens · US$0.21"
+      }
+    }
+  },
   "askTokens": "{count, plural, one {# token} other {# tokens}}",
   "@askTokens": {
     "description": "Ask Pinky: how many tokens a task used, or its limit, for a model whose prices Pinky does not know.",
@@ -1125,6 +1583,14 @@
         "example": "1000000"
       }
     }
+  },
+  "askUnread": "Pinky didn't read these before the task ended. Continue to send them.",
+  "@askUnread": {
+    "description": "Ask Pinky once its task ended: above the messages the person sent that Pinky never read; Continue sends them."
+  },
+  "askWithdraw": "Withdraw",
+  "@askWithdraw": {
+    "description": "Ask Pinky: the button that takes back a message Pinky has not read yet."
   },
   "askWorking": "Pinky is working on it",
   "@askWorking": {
@@ -1534,53 +2000,81 @@
   "@checkBackgroundUnlocked": {
     "description": "The checkup, working in the background: works on Android 11 and 12, only while the phone is unlocked."
   },
+  "checkBadAnswer": "The address answered, but not as an API Pinky knows. Check the API address.",
+  "@checkBadAnswer": {
+    "description": "A check of the model: an answer that is not the API's."
+  },
+  "checkBadKey": "The service didn't accept the API key. Check that it is a key of this service.",
+  "@checkBadKey": {
+    "description": "A check of the model: the service refused the key (HTTP 401 or 403)."
+  },
+  "checkBusy": "The service is busy or limited the request. Try again in a moment.",
+  "@checkBusy": {
+    "description": "A check of the model: HTTP 429 or the service's own error (5xx)."
+  },
+  "checkCompanionManual": "Installed, but this phone doesn't let Pinky turn on its accessibility service over USB debugging. Turn on Pinky in the phone's accessibility settings by hand before an agent works on the phone. It then stays on until you turn it off there, and while it's on, the phone's apps, banking apps among them, can see it.",
+  "@checkCompanionManual": {
+    "description": "The checkup, Pinky on the phone, on a phone that took Pinky's change to its accessibility settings without an error and kept nothing of it (vivo's OriginOS 6 does): only the person can turn the app's service on, in the phone's settings. Pinky then leaves it on after tasks, until the person turns it off on the phone, and the phone's apps can see an accessibility service that is on (banking apps check for such services). A note follows that says where the switch is. Pinky is the app's name on the phone."
+  },
+  "checkCompanionManualOn": "Installed and on. This phone doesn't let Pinky turn its accessibility service on or off over USB debugging, so the service you turned on stays on until you turn off Pinky in the phone's accessibility settings. While it's on, the phone's apps, banking apps among them, can see it.",
+  "@checkCompanionManualOn": {
+    "description": "The checkup, Pinky on the phone: passed, on a phone that does not let Pinky turn the app's accessibility service on or off (vivo's OriginOS 6), where the person turned it on by hand. Pinky leaves it on after tasks, until the person turns it off on the phone, and the phone's apps can see an accessibility service that is on (banking apps check for such services). Pinky is the app's name on the phone."
+  },
+  "checkCompanionManualOther": "In the phone's Settings, open Accessibility (search Settings for it if you can't find it), choose Pinky among the downloaded or installed apps, and turn it on.",
+  "@checkCompanionManualOther": {
+    "description": "The checkup and the Pinky on the phone card, on a phone that does not let Pinky turn the app's service on: where to turn it on by hand. Accessibility is Android's own name for the settings page: use Android's own name for it in each language. Pinky is the app's name on the phone."
+  },
+  "checkCompanionManualVivo": "On vivo phones, Accessibility is usually in Settings, in the section for shortcuts and accessibility; search Settings for it if you can't find it. Choose Pinky there and turn it on.",
+  "@checkCompanionManualVivo": {
+    "description": "The checkup and the Pinky on the phone card, on a vivo phone that does not let Pinky turn the app's service on (OriginOS 6 ignores the change): where to turn it on by hand. The menu names of OriginOS 6 could not be confirmed, so the section is described rather than quoted; Accessibility is Android's own name for the settings page. Pinky is the app's name on the phone."
+  },
   "checkCompanionMissing": "Not installed. With it, Pinky reads the screen in about 70 ms instead of 2 s, and types any language without the clipboard.",
   "@checkCompanionMissing": {
-    "description": "The checkup, Pinky Companion: not installed; an Install button follows."
+    "description": "The checkup, Pinky on the phone: not installed; an Install button follows."
   },
-  "checkCompanionNone": "Pinky couldn't tell whether its companion app is installed.",
+  "checkCompanionNone": "Pinky couldn't tell whether it is installed.",
   "@checkCompanionNone": {
-    "description": "The checkup, Pinky Companion: the check failed."
+    "description": "The checkup, Pinky on the phone: the check failed."
   },
   "checkCompanionOff": "Installed, but Pinky couldn't turn on its accessibility service.",
   "@checkCompanionOff": {
-    "description": "The checkup, Pinky Companion: its service did not come on the last time Pinky tried; a Turn on button follows."
+    "description": "The checkup, Pinky on the phone: its service did not come on the last time Pinky tried; a Turn on button follows."
   },
-  "checkCompanionOffHuawei": "If it keeps turning off: search Settings for App launch, turn off Manage automatically for Pinky Companion, and allow it to run in the background.",
+  "checkCompanionOffHuawei": "If it keeps turning off: search Settings for App launch, turn off Manage automatically for Pinky, and allow it to run in the background.",
   "@checkCompanionOffHuawei": {
-    "description": "The checkup, Pinky Companion, on a HUAWEI or HONOR phone whose app's service is off. App launch and Manage automatically are Huawei's names: use those of its Simplified Chinese settings."
+    "description": "The checkup, Pinky on the phone, on a HUAWEI or HONOR phone whose app's service is off. App launch and Manage automatically are Huawei's names: use those of its Simplified Chinese settings. Pinky is the app's name on the phone."
   },
   "checkCompanionOffOppo": "If it keeps turning off: in Developer options, turn on Disable permission monitoring; in the app's battery settings, allow background activity.",
   "@checkCompanionOffOppo": {
-    "description": "The checkup, Pinky Companion, on an OPPO, OnePlus or realme phone whose app's service is off. Use ColorOS's Simplified Chinese names."
+    "description": "The checkup, Pinky on the phone, on an OPPO, OnePlus or realme phone whose app's service is off. Use ColorOS's Simplified Chinese names."
   },
-  "checkCompanionOffOther": "If it keeps turning off: on Android 13 and later, open Settings › Apps › Pinky Companion, tap ⋮ › Allow restricted settings, then turn it on again.",
+  "checkCompanionOffOther": "If it keeps turning off: on Android 13 and later, open Settings › Apps › Pinky, tap ⋮ › Allow restricted settings, then turn it on again.",
   "@checkCompanionOffOther": {
-    "description": "The checkup, Pinky Companion, on other phones whose app's service is off. Allow restricted settings is Android's own name: use that of Android's Simplified Chinese settings."
+    "description": "The checkup, Pinky on the phone, on other phones whose app's service is off. Allow restricted settings is Android's own name: use that of Android's Simplified Chinese settings. Pinky is the app's name on the phone."
   },
-  "checkCompanionOffVivo": "If it keeps turning off: in Settings › Battery › Background power consumption management, choose Pinky Companion and don't restrict it, and allow it to start by itself.",
+  "checkCompanionOffVivo": "If it keeps turning off: in Settings › Battery › Background power consumption management, choose Pinky and don't restrict it, and allow it to start by itself.",
   "@checkCompanionOffVivo": {
-    "description": "The checkup, Pinky Companion, on a vivo phone whose app's service is off: vivo turns off the service of apps that are not from its store. The Chinese menu names could not be confirmed, so they are described rather than quoted."
+    "description": "The checkup, Pinky on the phone, on a vivo phone whose app's service is off: vivo turns off the service of apps that are not from its store. The Chinese menu names could not be confirmed, so they are described rather than quoted. Pinky is the app's name on the phone."
   },
   "checkCompanionOffXiaomi": "If it keeps turning off: in the app's settings, turn on Autostart and set Battery saver to No restrictions.",
   "@checkCompanionOffXiaomi": {
-    "description": "The checkup, Pinky Companion, on a Xiaomi phone whose app's service is off: Xiaomi's cleaners stop apps, which turns their service off. Autostart and Battery saver are Xiaomi's names: use those of its Simplified Chinese settings."
+    "description": "The checkup, Pinky on the phone, on a Xiaomi phone whose app's service is off: Xiaomi's cleaners stop apps, which turns their service off. Autostart and Battery saver are Xiaomi's names: use those of its Simplified Chinese settings."
   },
   "checkCompanionOutdated": "An older version is installed; Pinky carries a newer one.",
   "@checkCompanionOutdated": {
-    "description": "The checkup, Pinky Companion: outdated; an Update button follows."
+    "description": "The checkup, Pinky on the phone: outdated; an Update button follows."
   },
   "checkCompanionPass": "Installed. Pinky turns it on only while an agent works on the phone, then reads the screen quickly and types any language.",
   "@checkCompanionPass": {
-    "description": "The checkup, Pinky Companion: passed. Pinky turns the app's accessibility service on only while an agent works on the phone, and off again afterwards."
+    "description": "The checkup, Pinky on the phone: passed. Pinky turns the app's accessibility service on only while an agent works on the phone, and off again afterwards."
   },
   "checkCompanionPublicKey": "Installed, but signed with an old key that is public; Pinky carries the version signed with its private key.",
   "@checkCompanionPublicKey": {
-    "description": "The checkup, Pinky Companion: the installed app is signed with the key of the builds until 8 November 2026, which was public, so anyone could make a fake update of it; an Update button follows."
+    "description": "The checkup, Pinky on the phone: the installed app is signed with the key of the builds until 8 November 2026, which was public, so anyone could make a fake update of it; an Update button follows."
   },
-  "checkCompanionTitle": "Pinky Companion",
+  "checkCompanionTitle": "Pinky on the phone",
   "@checkCompanionTitle": {
-    "description": "The checkup: the item for Pinky's companion app on the phone. Pinky Companion is the app's name: keep it as it is."
+    "description": "The checkup: the item for Pinky's app on Android phones. Pinky on the phone is what the computer calls the app (on the phone it is just Pinky): translate it the same way everywhere, as the phone's word and Pinky."
   },
   "checkConnectionAndroidFail": "{name} isn't connected.",
   "@checkConnectionAndroidFail": {
@@ -1603,6 +2097,16 @@
   "checkConnectionAndroidStepDebugging": "Check that USB debugging is still on, in Developer options:",
   "@checkConnectionAndroidStepDebugging": {
     "description": "The checkup, connection: the second step, above the menu path to Developer options."
+  },
+  "checkConnectionAndroidStepOtherServer": "Another program's adb server, on port {port}, may hold it: quit that program, or, once you're sure nothing else uses it, run adb -P {port} kill-server in Terminal.",
+  "@checkConnectionAndroidStepOtherServer": {
+    "description": "The checkup, connection: the first step for an Android phone that is not connected while another program's adb server, on another port, holds a phone on a cable. adb -P {port} kill-server is a command: keep it as it is.",
+    "placeholders": {
+      "port": {
+        "type": "String",
+        "example": "5049"
+      }
+    }
   },
   "checkConnectionFail": "{name} isn't connected.",
   "@checkConnectionFail": {
@@ -1666,9 +2170,9 @@
   "@checkDiskImageTitle": {
     "description": "Checkup, an iPhone's item: the title of the item about Apple's developer disk image, the add-on that gives the iPhone its developer services."
   },
-  "checkHelperExpired": "The helper on {phone} stopped working on {when, date, ::MMMMEEEEdjmm}: its signature ran out. Install it again with pinkyctl helper install on a Mac with Xcode; signed with a free Apple ID, it lasts 7 days.",
+  "checkHelperExpired": "Pinky on {phone} stopped working on {when, date, ::MMMMEEEEdjmm}: its signature ran out. Install it again with pinkyctl helper install on a Mac with Xcode; signed with a free Apple ID, it lasts 7 days.",
   "@checkHelperExpired": {
-    "description": "Checkup and the Phone screen, an iPhone's helper (WebDriverAgent): the signature (provisioning profile) made with the person's Apple ID ran out, so the iPhone no longer starts the helper; pinkyctl helper install is a command that stays as it is; the button below opens how to install it. phone is the iPhone's name; when is when it ran out, with the time.",
+    "description": "Checkup and the Phone screen, Pinky on the iPhone (WebDriverAgent): the signature (provisioning profile) made with the person's Apple ID ran out, so the iPhone no longer starts Pinky on the iPhone; pinkyctl helper install is a command that stays as it is; the button below opens how to install it. phone is the iPhone's name; when is when it ran out, with the time.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -1680,9 +2184,9 @@
       }
     }
   },
-  "checkHelperExpiredHere": "The helper on {phone} stopped working on {when, date, ::MMMMEEEEdjmm}: its signature ran out. Install it again; signed with a free Apple ID, it lasts 7 days.",
+  "checkHelperExpiredHere": "Pinky on {phone} stopped working on {when, date, ::MMMMEEEEdjmm}: its signature ran out. Install it again; signed with a free Apple ID, it lasts 7 days.",
   "@checkHelperExpiredHere": {
-    "description": "Checkup and the Phone screen, on a Mac with Xcode, an iPhone's helper (WebDriverAgent): the signature (provisioning profile) made with the person's Apple ID ran out, so the iPhone no longer starts the helper; the button below, Install again, installs it. phone is the iPhone's name; when is when it ran out, with the time.",
+    "description": "Checkup and the Phone screen, on a Mac with Xcode, Pinky on the iPhone (WebDriverAgent): the signature (provisioning profile) made with the person's Apple ID ran out, so the iPhone no longer starts Pinky on the iPhone; the button below, Install again, installs it. phone is the iPhone's name; when is when it ran out, with the time.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -1696,19 +2200,19 @@
   },
   "checkHelperHow": "How to install it",
   "@checkHelperHow": {
-    "description": "Checkup, an iPhone's item: the button that opens the instructions for installing the helper."
+    "description": "Checkup, an iPhone's item: the button that opens the instructions for installing Pinky on the iPhone."
   },
   "checkHelperMissing": "WebDriverAgent isn't installed or doesn't answer. Below iOS 27 an iPhone takes taps and typing only through it; without it Pinky can only read the screen and open apps.",
   "@checkHelperMissing": {
-    "description": "Checkup, an iPhone's item: the helper is missing or does not answer."
+    "description": "Checkup, an iPhone's item: Pinky on the iPhone is missing or does not answer."
   },
   "checkHelperPass": "WebDriverAgent is installed and answers.",
   "@checkHelperPass": {
-    "description": "Checkup, an iPhone's item: the helper answers."
+    "description": "Checkup, an iPhone's item: Pinky on the iPhone answers."
   },
-  "checkHelperSoon": "The helper on {phone} stops working on {when, date, ::MMMMEEEEdjmm}: install it again with pinkyctl helper install on a Mac with Xcode.",
+  "checkHelperSoon": "Pinky on {phone} stops working on {when, date, ::MMMMEEEEdjmm}: install it again with pinkyctl helper install on a Mac with Xcode.",
   "@checkHelperSoon": {
-    "description": "Checkup and a reminder on the Phone screen, an iPhone's helper (WebDriverAgent): its signature (provisioning profile) runs out within two days, after which the iPhone no longer starts the helper; pinkyctl helper install is a command that stays as it is; the button beside it opens how to install it. phone is the iPhone's name; when is when it runs out, with the time.",
+    "description": "Checkup and a reminder on the Phone screen, Pinky on the iPhone (WebDriverAgent): its signature (provisioning profile) runs out within two days, after which the iPhone no longer starts Pinky on the iPhone; pinkyctl helper install is a command that stays as it is; the button beside it opens how to install it. phone is the iPhone's name; when is when it runs out, with the time.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -1720,9 +2224,9 @@
       }
     }
   },
-  "checkHelperSoonHere": "The helper on {phone} stops working on {when, date, ::MMMMEEEEdjmm}: install it again before then.",
+  "checkHelperSoonHere": "Pinky on {phone} stops working on {when, date, ::MMMMEEEEdjmm}: install it again before then.",
   "@checkHelperSoonHere": {
-    "description": "Checkup and a reminder on the Phone screen, on a Mac with Xcode, an iPhone's helper (WebDriverAgent): its signature (provisioning profile) runs out within two days, after which the iPhone no longer starts the helper; the button beside it, Install again, installs it. phone is the iPhone's name; when is when it runs out, with the time.",
+    "description": "Checkup and a reminder on the Phone screen, on a Mac with Xcode, Pinky on the iPhone (WebDriverAgent): its signature (provisioning profile) runs out within two days, after which the iPhone no longer starts Pinky on the iPhone; the button beside it, Install again, installs it. phone is the iPhone's name; when is when it runs out, with the time.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -1734,13 +2238,13 @@
       }
     }
   },
-  "checkHelperTitle": "Pinky helper",
+  "checkHelperTitle": "Pinky on the iPhone",
   "@checkHelperTitle": {
-    "description": "Checkup, an iPhone's item: the title of the item about the WebDriverAgent helper, the app Pinky drives iPhones below iOS 27 through."
+    "description": "Checkup, an iPhone's item: the title of the item about Pinky on the iPhone, the app Pinky drives iPhones below iOS 27 through. Pinky on the iPhone is what the computer calls Pinky's iPhone app, named just Pinky on the iPhone itself (Pinky on the phone names the Android app the same way), which hosts WebDriverAgent; older installs are the app Pinky Helper, which works the same."
   },
   "checkHelperUntil": "Its signature lasts until {when, date, ::yMMMMd}. Pinky reminds you two days before.",
   "@checkHelperUntil": {
-    "description": "Checkup, an iPhone's helper (WebDriverAgent) that works: a note on when its signature (provisioning profile) runs out. when is that day, with the year.",
+    "description": "Checkup, Pinky on the iPhone (WebDriverAgent) that works: a note on when its signature (provisioning profile) runs out. when is that day, with the year.",
     "placeholders": {
       "when": {
         "type": "DateTime",
@@ -1755,6 +2259,16 @@
   "checkHostADBOld": "The adb server running on this computer is too old to pair phones over Wi-Fi. Quit the program that started it, such as an old Android SDK's tools, or update them: Pinky then starts its own.",
   "@checkHostADBOld": {
     "description": "The checkup and Add phone › Android: the adb server that runs is older than Wi-Fi pairing needs."
+  },
+  "checkHostADBOtherServer": "Another program's adb server, on port {port}, holds a phone that's on a USB cable, so Pinky's adb server can't reach it. Quit the program that started it, or, once you're sure nothing else uses it, run adb -P {port} kill-server in Terminal: Pinky then gets the phone.",
+  "@checkHostADBOtherServer": {
+    "description": "The checkup and Add phone › Android: a second adb server, which another program started on another port, holds a phone on a cable (one adb server at a time gets a phone's USB connection), so the server Pinky uses never sees it. Pinky does not stop it. adb -P {port} kill-server is a command: keep it as it is.",
+    "placeholders": {
+      "port": {
+        "type": "String",
+        "example": "5049"
+      }
+    }
   },
   "checkHostADBRestarts": "Another program keeps replacing the adb server, so phones drop off now and then. It's usually a program with another version of adb: quit it, or have it use the same adb as Pinky.",
   "@checkHostADBRestarts": {
@@ -1776,9 +2290,9 @@
   "@checkInputFail": {
     "description": "The checkup, tapping and typing: failed for another reason; the system's words follow."
   },
-  "checkInputIPhoneNoHelper": "No taps or typing without the Pinky helper.",
+  "checkInputIPhoneNoHelper": "No taps or typing without Pinky on the iPhone.",
   "@checkInputIPhoneNoHelper": {
-    "description": "Checkup, an iPhone's item: the input item of an iPhone below iOS 27 without the helper."
+    "description": "Checkup, an iPhone's item: the input item of an iPhone below iOS 27 without Pinky on the iPhone."
   },
   "checkInputIPhonePass": "The iPhone's touch and key service answers.",
   "@checkInputIPhonePass": {
@@ -1840,6 +2354,30 @@
   "@checkLocalNetworkUnknown": {
     "description": "The checkup, local network: the check could not run."
   },
+  "checkNoCredit": "The service says the account has no credit left. Top it up on the service's site.",
+  "@checkNoCredit": {
+    "description": "A check of the model: HTTP 402."
+  },
+  "checkNoKey": "Add an API key first.",
+  "@checkNoKey": {
+    "description": "A check of the model: no API key is saved for the service."
+  },
+  "checkNoModel": "Choose a model first.",
+  "@checkNoModel": {
+    "description": "A check of the model in Settings › Agents › Ask Pinky: no model is chosen."
+  },
+  "checkNoTools": "The model answered but didn't use a tool. Pinky works through tools, so choose a model that uses them.",
+  "@checkNoTools": {
+    "description": "A check of the model: it answered without calling the tool, or the service said it does not support tools."
+  },
+  "checkNotFound": "The service doesn't know this model or address. Check the model's name and the API address.",
+  "@checkNotFound": {
+    "description": "A check of the model: HTTP 404."
+  },
+  "checkRejected": "The service refused the request.",
+  "@checkRejected": {
+    "description": "A check of the model: another error of the service; settingsAskCheckDetail follows with its words."
+  },
   "checkScreenFail": "The phone sends no screenshots, so agents can't see the screen. Restart the phone, then check again.",
   "@checkScreenFail": {
     "description": "The checkup, seeing the screen: failed."
@@ -1895,6 +2433,10 @@
   "checkUSBPermissionNote": "On Linux: add yourself to the plugdev group (sudo usermod -aG plugdev $LOGNAME), log out and in again, and install your distribution's udev rules for Android phones (android-sdk-platform-tools-common on Ubuntu and Debian). Then unplug the phone and plug it in again.",
   "@checkUSBPermissionNote": {
     "description": "The checkup and Add phone: how to fix checkUSBPermission. android-udev-rules and plugdev are names of Linux packages and groups: keep them as they are."
+  },
+  "checkUnreachable": "Pinky couldn't reach the API address. Check it, and that the service or server is running.",
+  "@checkUnreachable": {
+    "description": "A check of the model: no answer from the address."
   },
   "checkWiFiFail": "Pinky can't use this phone over Wi-Fi.",
   "@checkWiFiFail": {
@@ -2032,23 +2574,23 @@
   },
   "companionAllowHint": "If the phone asks, allow the install.",
   "@companionAllowHint": {
-    "description": "The Pinky Companion card: under the progress bar while the app installs, and in small type under the buttons before."
+    "description": "The Pinky on the phone card: under the progress bar while the app installs, and in small type under the buttons before."
   },
   "companionAllowHintOppo": "If the phone shows a permission notice, tap Continue installing; some phones ask for your OPPO account.",
   "@companionAllowHintOppo": {
-    "description": "The Pinky Companion card and the checkup, on an OPPO, OnePlus or realme phone, while Pinky installs the app: what to do on the phone. Continue installing is the button of ColorOS's page: use its Simplified Chinese name."
+    "description": "The Pinky on the phone card and the checkup, on an OPPO, OnePlus or realme phone, while Pinky installs the app: what to do on the phone. Continue installing is the button of ColorOS's page: use its Simplified Chinese name."
   },
   "companionAllowHintXiaomi": "On the phone, tap Install within 10 seconds; keep it unlocked.",
   "@companionAllowHintXiaomi": {
-    "description": "The Pinky Companion card and the checkup, on a Xiaomi phone, while Pinky installs the app: what to do on the phone. Install is the button of Xiaomi's prompt: use its Simplified Chinese name."
+    "description": "The Pinky on the phone card and the checkup, on a Xiaomi phone, while Pinky installs the app: what to do on the phone. Install is the button of Xiaomi's prompt: use its Simplified Chinese name."
   },
   "companionByHandHow": "How to install it by hand",
   "@companionByHandHow": {
-    "description": "The Pinky Companion card and the checkup, after the phone refused an install over USB: a link to the README's steps for installing Pinky Companion by hand."
+    "description": "The Pinky on the phone card and the checkup, after the phone refused an install over USB: a link to the README's steps for installing Pinky on the phone by hand."
   },
-  "companionCardLabel": "Pinky Companion on {name}",
+  "companionCardLabel": "Pinky on {name}",
   "@companionCardLabel": {
-    "description": "The accessibility label of the Pinky Companion card. name is the phone's name.",
+    "description": "The accessibility label of the Pinky on the phone card. name is the phone's name.",
     "placeholders": {
       "name": {
         "type": "String",
@@ -2058,11 +2600,11 @@
   },
   "companionErrDeclined": "The install was declined on the phone. Try again, and tap Install when the phone asks.",
   "@companionErrDeclined": {
-    "description": "The Pinky Companion card and the checkup: the error when the person or the phone declined the install (the phone's own confirmation)."
+    "description": "The Pinky on the phone card and the checkup: the error when the person or the phone declined the install (the phone's own confirmation)."
   },
-  "companionErrNoAnswer": "Pinky turned on Pinky Companion's accessibility service, but it didn't start ({detail}). Restart the phone, then try again. If it still doesn't start, send feedback: its diagnostics include what the phone showed.",
+  "companionErrNoAnswer": "Pinky turned on the app's accessibility service, but it didn't start ({detail}). Restart the phone, then try again. If it still doesn't start, send feedback: its diagnostics include what the phone showed.",
   "@companionErrNoAnswer": {
-    "description": "The Pinky Companion card and the checkup: Pinky turned on the app's accessibility service, but the service did not answer, and the phone showed no known reason. detail is what Pinky saw on the phone, in English. Send feedback is the name of Pinky's feedback window.",
+    "description": "The Pinky on the phone card and the checkup: Pinky turned on the app's accessibility service, but the service did not answer, and the phone showed no known reason. detail is what Pinky saw on the phone, in English. Send feedback is the name of Pinky's feedback window.",
     "placeholders": {
       "detail": {
         "type": "String",
@@ -2070,17 +2612,17 @@
       }
     }
   },
-  "companionErrNotUnlocked": "The phone hasn't been unlocked since it restarted, and Android starts Pinky Companion only after that. Unlock the phone, then try again.",
+  "companionErrNotUnlocked": "The phone hasn't been unlocked since it restarted, and Android starts the app only after that. Unlock the phone, then try again.",
   "@companionErrNotUnlocked": {
-    "description": "The Pinky Companion card and the checkup: the app's accessibility service did not start because the phone has not been unlocked since it started."
+    "description": "The Pinky on the phone card and the checkup: the app's accessibility service did not start because the phone has not been unlocked since it started."
   },
   "companionErrOffline": "The phone went offline. Connect it again, then try again.",
   "@companionErrOffline": {
-    "description": "The Pinky Companion card: the error when the phone went offline during the install."
+    "description": "The Pinky on the phone card: the error when the phone went offline during the install."
   },
-  "companionErrOther": "Couldn't install Pinky Companion: {detail}",
+  "companionErrOther": "Couldn't install Pinky on the phone: {detail}",
   "@companionErrOther": {
-    "description": "The Pinky Companion card: the error when the install failed for another reason. detail is the error, in English.",
+    "description": "The Pinky on the phone card: the error when the install failed for another reason. detail is the error, in English.",
     "placeholders": {
       "detail": {
         "type": "String",
@@ -2090,19 +2632,23 @@
   },
   "companionErrPlayProtect": "Google Play Protect stopped the install. On the phone, choose Install anyway, then try again.",
   "@companionErrPlayProtect": {
-    "description": "The Pinky Companion card: the error when Google Play Protect stopped the install. Install anyway is the button of Play Protect's prompt."
+    "description": "The Pinky on the phone card: the error when Google Play Protect stopped the install. Install anyway is the button of Play Protect's prompt."
   },
   "companionErrRestricted": "The phone blocked installing apps over USB. If it asked you to confirm, tap Install; if Developer options has a switch such as Install via USB, turn it on. Then try again, or install the APK on the phone by hand.",
   "@companionErrRestricted": {
-    "description": "The Pinky Companion card and the checkup: the error when the phone blocked installs over USB, on a phone whose maker Pinky does not know. The links companionShowAPK and companionByHandHow follow it, for installing the APK by hand."
+    "description": "The Pinky on the phone card and the checkup: the error when the phone blocked installs over USB, on a phone whose maker Pinky does not know. The links companionShowAPK and companionByHandHow follow it, for installing the APK by hand."
   },
   "companionErrRestrictedXiaomi": "The phone blocked the install. In Developer options, turn on Install via USB (it needs your Xiaomi account and may need a SIM card), then try again with the phone unlocked, and tap Install on it within 10 seconds. Or install the APK on the phone by hand.",
   "@companionErrRestrictedXiaomi": {
-    "description": "The Pinky Companion card and the checkup, on a Xiaomi phone: the error when the phone blocked installs over USB (the switch is off, or nobody tapped Install in time). Install via USB and Install are Xiaomi's names: use those of its Simplified Chinese settings. Some Xiaomi phones cannot turn the switch on without a SIM card; the links companionShowAPK and companionByHandHow follow, for installing the APK by hand."
+    "description": "The Pinky on the phone card and the checkup, on a Xiaomi phone: the error when the phone blocked installs over USB (the switch is off, or nobody tapped Install in time). Install via USB and Install are Xiaomi's names: use those of its Simplified Chinese settings. Some Xiaomi phones cannot turn the switch on without a SIM card; the links companionShowAPK and companionByHandHow follow, for installing the APK by hand."
+  },
+  "companionErrSettingIgnored": "The phone accepted the change but didn't keep it: it doesn't let Pinky turn on the app's accessibility service over USB debugging. Turn on Pinky in the phone's accessibility settings by hand.",
+  "@companionErrSettingIgnored": {
+    "description": "The Pinky on the phone card and the checkup: Pinky added the app's service to the phone's accessibility settings, the phone took the change without an error, and reading the setting back showed it had not kept it (vivo's OriginOS 6 does this). Pinky is the app's name on the phone."
   },
   "companionErrSettings": "The phone refuses to let the computer turn on the app's accessibility service: {detail}",
   "@companionErrSettings": {
-    "description": "The Pinky Companion card and the checkup: turning on the app's service failed because the phone refuses settings changes from the computer, on a phone whose maker Pinky does not know.",
+    "description": "The Pinky on the phone card and the checkup: turning on the app's service failed because the phone refuses settings changes from the computer, on a phone whose maker Pinky does not know.",
     "placeholders": {
       "detail": {
         "type": "String",
@@ -2112,31 +2658,31 @@
   },
   "companionErrSettingsOppo": "The phone refuses to let the computer turn on the app. In Developer options, turn on Disable permission monitoring, restart the phone, then try again.",
   "@companionErrSettingsOppo": {
-    "description": "The Pinky Companion card and the checkup, on an OPPO, OnePlus or realme phone: turning on the app's service failed because permission monitoring is on. Use ColorOS's Simplified Chinese name for the switch."
+    "description": "The Pinky on the phone card and the checkup, on an OPPO, OnePlus or realme phone: turning on the app's service failed because permission monitoring is on. Use ColorOS's Simplified Chinese name for the switch."
   },
   "companionErrSettingsXiaomi": "The phone refuses to let the computer turn on the app. In Developer options, turn on USB debugging (Security settings), restart the phone, then try again.",
   "@companionErrSettingsXiaomi": {
-    "description": "The Pinky Companion card and the checkup, on a Xiaomi phone: turning on the app's service failed because USB debugging (Security settings) is off. Use the name of Xiaomi's Simplified Chinese settings."
+    "description": "The Pinky on the phone card and the checkup, on a Xiaomi phone: turning on the app's service failed because USB debugging (Security settings) is off. Use the name of Xiaomi's Simplified Chinese settings."
   },
   "companionErrStorage": "The phone is out of space. Free some up, then try again.",
   "@companionErrStorage": {
-    "description": "The Pinky Companion card: the error when the phone has no room for the app."
+    "description": "The Pinky on the phone card: the error when the phone has no room for the app."
   },
   "companionErrTimeout": "The install didn't finish. If the phone asked to allow it, tap Allow there, then try again.",
   "@companionErrTimeout": {
-    "description": "The Pinky Companion card: the error when the install did not finish in time. Allow is the button of the phone's install prompt."
+    "description": "The Pinky on the phone card: the error when the install did not finish in time. Allow is the button of the phone's install prompt."
   },
   "companionErrUIAutomation": "Another tool is controlling the phone through Android's UI automation (such as uiautomator2, Appium or Maestro), and Android keeps accessibility services off while it does. Quit that tool or restart the phone, then try again.",
   "@companionErrUIAutomation": {
-    "description": "The Pinky Companion card and the checkup: the app's accessibility service did not start because another testing tool holds Android's UI automation, which turns off every accessibility service. Keep the tools' names as they are."
+    "description": "The Pinky on the phone card and the checkup: the app's accessibility service did not start because another testing tool holds Android's UI automation, which turns off every accessibility service. Keep the tools' names as they are."
   },
   "companionInstall": "Install",
   "@companionInstall": {
-    "description": "The Pinky Companion card: the button that installs the app on the phone."
+    "description": "The Pinky on the phone card: the button that installs the app on the phone."
   },
   "companionInstallBody": "A small Pinky app for {name}. Agents control the phone faster and more steadily with it, and type without using its clipboard. Pinky turns it on only while an agent works.",
   "@companionInstallBody": {
-    "description": "The Pinky Companion card, when the app is not installed: why to install it. Pinky turns its accessibility service on only while an agent works on the phone. name is the phone's name. The card is in a narrow side panel.",
+    "description": "The Pinky on the phone card, when the app is not installed: why to install it. Pinky turns its accessibility service on only while an agent works on the phone. name is the phone's name. The card is in a narrow side panel.",
     "placeholders": {
       "name": {
         "type": "String",
@@ -2144,9 +2690,9 @@
       }
     }
   },
-  "companionInstallLabel": "Install Pinky Companion on {name}",
+  "companionInstallLabel": "Install Pinky on {name}",
   "@companionInstallLabel": {
-    "description": "The accessibility label of the Install button of the Pinky Companion card. name is the phone's name.",
+    "description": "The accessibility label of the Install button of the Pinky on the phone card. name is the phone's name.",
     "placeholders": {
       "name": {
         "type": "String",
@@ -2154,57 +2700,149 @@
       }
     }
   },
-  "companionInstallTitle": "Install Pinky Companion",
+  "companionInstallTitle": "Install Pinky on the phone",
   "@companionInstallTitle": {
-    "description": "The title of the card on an Android phone's side panel that offers to install Pinky Companion, Pinky's app for the phone."
+    "description": "The title of the card on an Android phone's side panel that offers to install Pinky on the phone, Pinky's app for the phone."
   },
   "companionInstalling": "Installing",
   "@companionInstalling": {
-    "description": "The Pinky Companion card: the accessibility label of the progress bar while the app installs."
+    "description": "The Pinky on the phone card: the accessibility label of the progress bar while the app installs."
   },
-  "companionShowAPK": "Show pinky-companion.apk",
+  "companionShowAPK": "Show pinky-android.apk",
   "@companionShowAPK": {
-    "description": "The Pinky Companion card and the checkup, after the phone refused an install over USB: a link that shows the companion's APK, which comes with Pinky, in Finder or the file manager, to copy to the phone and install there. Keep the file name as it is."
+    "description": "The Pinky on the phone card and the checkup, after the phone refused an install over USB: a link that shows the APK of Pinky on the phone, which comes with Pinky, in Finder or the file manager, to copy to the phone and install there. Keep the file name as it is."
   },
-  "companionInstallingTitle": "Installing Pinky Companion",
+  "companionInstallingTitle": "Installing Pinky on the phone",
   "@companionInstallingTitle": {
-    "description": "The Pinky Companion card's title while Pinky installs or updates the app."
+    "description": "The Pinky on the phone card's title while Pinky installs or updates the app."
   },
-  "companionLineMissing": "Pinky Companion is not installed",
+  "companionLineManual": "Turn on Pinky on the phone by hand",
+  "@companionLineManual": {
+    "description": "Settings › Phones: a phone's line about Pinky on the phone when the phone does not let Pinky turn the app's service on, so only the person can, on the phone."
+  },
+  "companionLineManualOn": "Pinky on the phone stays on until you turn it off there; apps on the phone, banking apps among them, can see it",
+  "@companionLineManualOn": {
+    "description": "Settings › Phones: a phone's line about Pinky on the phone while its accessibility service is on, on a phone that does not let Pinky turn the service on or off (vivo's OriginOS 6): the person turned it on, and it stays on after tasks until they turn it off on the phone. The phone's apps can see an accessibility service that is on (banking apps check for such services)."
+  },
+  "companionLineMissing": "Pinky on the phone is not installed",
   "@companionLineMissing": {
-    "description": "Settings › Phones: a phone's line about Pinky Companion when the app is not on the phone."
+    "description": "Settings › Phones: a phone's line about Pinky on the phone when the app is not on the phone."
   },
-  "companionLineNoAPK": "This Pinky has no companion app to install",
+  "companionLineNoAPK": "This Pinky doesn't come with the phone app",
   "@companionLineNoAPK": {
-    "description": "Settings › Phones: a phone's line about Pinky Companion when this build of Pinky does not include the app."
+    "description": "Settings › Phones: a phone's line about Pinky on the phone when this build of Pinky does not include the app."
   },
-  "companionLineOff": "Pinky couldn't turn on Pinky Companion",
+  "companionLineOff": "Couldn't turn on Pinky on the phone",
   "@companionLineOff": {
-    "description": "Settings › Phones: a phone's line about Pinky Companion when its service did not come on the last time Pinky tried."
+    "description": "Settings › Phones: a phone's line about Pinky on the phone when its service did not come on the last time Pinky tried."
   },
-  "companionLineOn": "Pinky Companion is on",
+  "companionLineOn": "Pinky on the phone is on",
   "@companionLineOn": {
-    "description": "Settings › Phones: a phone's line about Pinky Companion, Pinky's app for the phone, while its accessibility service is on: an agent works on the phone."
+    "description": "Settings › Phones: a phone's line about Pinky on the phone, Pinky's app for the phone, while its accessibility service is on: an agent works on the phone."
   },
-  "companionLineOutdated": "Pinky Companion has an update",
+  "companionLineOutdated": "Pinky on the phone has an update",
   "@companionLineOutdated": {
-    "description": "Settings › Phones: a phone's line about Pinky Companion when this Pinky comes with a newer version."
+    "description": "Settings › Phones: a phone's line about Pinky on the phone when this Pinky comes with a newer version."
   },
-  "companionLinePublicKey": "Pinky Companion has a security update",
+  "companionLinePublicKey": "Pinky on the phone has a security update",
   "@companionLinePublicKey": {
-    "description": "Settings › Phones: a phone's line about Pinky Companion when the installed app is signed with the old public key and this Pinky carries the version signed with its private key."
+    "description": "Settings › Phones: a phone's line about Pinky on the phone when the installed app is signed with the old public key and this Pinky carries the version signed with its private key."
   },
-  "companionLineReady": "Pinky Companion turns on only while an agent works",
+  "companionLineReady": "Pinky on the phone turns on only while an agent works",
   "@companionLineReady": {
-    "description": "Settings › Phones: a phone's line about Pinky Companion, Pinky's app for the phone, when it is installed and ready: Pinky turns its accessibility service on only while an agent works on the phone, so that the phone's apps (banking apps check for such services) see it only then."
+    "description": "Settings › Phones: a phone's line about Pinky on the phone, Pinky's app for the phone, when it is installed and ready: Pinky turns its accessibility service on only while an agent works on the phone, so that the phone's apps (banking apps check for such services) see it only then."
+  },
+  "companionManualBody": "This phone doesn't let Pinky turn on the app's accessibility service over USB debugging, so agents control it the slower way. To use the app, turn on Pinky in the phone's accessibility settings by hand. It then stays on until you turn it off there, and while it's on, the phone's apps, banking apps among them, can see it.",
+  "@companionManualBody": {
+    "description": "The Pinky on the phone card, on a phone that took Pinky's change to its accessibility settings without an error and kept nothing of it (vivo's OriginOS 6 does): what that means and what to do. Pinky then leaves the service on after tasks, until the person turns it off on the phone, and the phone's apps can see an accessibility service that is on (banking apps check for such services). A note follows that says where the switch is. Pinky is the app's name on the phone."
+  },
+  "companionManualTitle": "Turn on Pinky on the phone",
+  "@companionManualTitle": {
+    "description": "The title of the Pinky on the phone card on a phone that does not let Pinky turn the app's service on: only the person can, in the phone's settings."
   },
   "companionNotNow": "Not now",
   "@companionNotNow": {
-    "description": "The Pinky Companion card: the quiet button that hides the card for this phone."
+    "description": "The Pinky on the phone card: the quiet button that hides the card for this phone."
   },
-  "companionOnToast": "Pinky Companion is ready on {name}",
+  "memoryErrFull": "{count, plural, one {Memory keeps at most # note. Delete one first.} other {Memory keeps at most # notes. Delete one first.}}",
+  "@memoryErrFull": {
+    "description": "Why a note of Ask Pinky's memory was not saved: there are as many as it keeps.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "50"
+      }
+    }
+  },
+  "memoryErrLong": "{count, plural, one {A note has at most # character.} other {A note has at most # characters.}}",
+  "@memoryErrLong": {
+    "description": "Why a note of Ask Pinky's memory was not saved: it is too long.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "200"
+      }
+    }
+  },
+  "memoryErrSave": "Couldn't save: {error}",
+  "@memoryErrSave": {
+    "description": "Why a note of Ask Pinky's memory was not saved: the file could not be written.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "permission denied"
+      }
+    }
+  },
+  "memoryErrSensitive": "Memory never keeps passwords, codes, card, account, ID or phone numbers, email or street addresses.",
+  "@memoryErrSensitive": {
+    "description": "Why a note of Ask Pinky's memory was not saved: it holds something memory never keeps."
+  },
+  "memoryFromYou": "From you",
+  "@memoryFromYou": {
+    "description": "Under a note of Ask Pinky's memory: the person said it in a task, or wrote it."
+  },
+  "memoryLearned": "Learned on a task",
+  "@memoryLearned": {
+    "description": "Under a note of Ask Pinky's memory: a way of doing something Pinky found on a task."
+  },
+  "memoryLearnedIn": "Learned in {app}",
+  "@memoryLearnedIn": {
+    "description": "Under a note of Ask Pinky's memory: a way of doing something in an app that Pinky found on a task.",
+    "placeholders": {
+      "app": {
+        "type": "String",
+        "example": "Meituan"
+      }
+    }
+  },
+  "phoneTasksTitle": "Pinky on the phone can work by itself",
+  "@phoneTasksTitle": {
+    "description": "Title of the card in a phone's sidebar, and its accessible name, that says Pinky's app on the phone (Pinky on the phone) can do tasks on the phone without the computer. Shown once, until put away."
+  },
+  "phoneTasksAndroid": "Open Pinky on {name}, choose an AI model and add its API key, then give it simple tasks there, without this computer. The key stays on the phone.",
+  "@phoneTasksAndroid": {
+    "description": "The card's text, and the line in Settings › Phones, for an Android phone with Pinky's app installed. name is the phone's name."
+  },
+  "phoneTasksIPhone": "Pinky on the iPhone can do simple tasks on {name} by itself, without this computer. Install it from a Mac with Xcode, then open Pinky on the iPhone, choose an AI model and add its API key. The key stays on the phone.",
+  "@phoneTasksIPhone": {
+    "description": "The same for an iPhone. Pinky on the iPhone is Pinky's iPhone app; on a Mac with Xcode the Install Pinky on the iPhone button follows. name is the phone's name."
+  },
+  "phoneTasksRow": "Tasks on the phone",
+  "@phoneTasksRow": {
+    "description": "Settings › Phones: the title of a phone's row about Pinky's app doing tasks on the phone by itself."
+  },
+  "phoneTasksHow": "How to set it up",
+  "@phoneTasksHow": {
+    "description": "Link on the card and the row that opens the README's section on setting up Pinky on the phone."
+  },
+  "phoneTasksGotIt": "Got it",
+  "@phoneTasksGotIt": {
+    "description": "The card's quiet button that puts it away for good, for every phone."
+  },
+  "companionOnToast": "Pinky on {name} is ready",
   "@companionOnToast": {
-    "description": "A notice after Pinky installed, updated or turned on Pinky Companion, its app for Android phones, and checked that its service comes on. It is on only while an agent works on the phone. name is the phone's name.",
+    "description": "A notice after Pinky installed, updated or turned on Pinky on the phone, its app for Android phones, and checked that its service comes on. It is on only while an agent works on the phone. name is the phone's name.",
     "placeholders": {
       "name": {
         "type": "String",
@@ -2212,25 +2850,25 @@
       }
     }
   },
-  "companionPublicKeyBody": "Pinky Companion on this phone is signed with an old key that is public, so anyone could make a fake update of it. The new version is signed with Pinky's private key: once you update, it is safe.",
+  "companionPublicKeyBody": "Pinky on this phone is signed with an old key that is public, so anyone could make a fake update of it. The new version is signed with Pinky's private key: once you update, it is safe.",
   "@companionPublicKeyBody": {
-    "description": "The Pinky Companion card, when the installed app is signed with the key of the builds until 8 November 2026, which was public, and this Pinky carries the version signed with its private key: why to update soon. Shown in place of the usual update text, often on phones where the person has to click Update because the phone asks before installs over USB. Keep it plain, not alarming. The card is in a narrow side panel."
+    "description": "The Pinky on the phone card, when the installed app is signed with the key of the builds until 8 November 2026, which was public, and this Pinky carries the version signed with its private key: why to update soon. Shown in place of the usual update text, often on phones where the person has to click Update because the phone asks before installs over USB. Keep it plain, not alarming. The card is in a narrow side panel."
   },
   "companionStillWaiting": "Still waiting for the phone. Look for a prompt on its screen.",
   "@companionStillWaiting": {
-    "description": "The Pinky Companion card: when the install has taken more than 20 seconds, as the phone may be asking to allow it."
+    "description": "The Pinky on the phone card: when the install has taken more than 20 seconds, as the phone may be asking to allow it."
   },
   "companionTurnOn": "Turn on",
   "@companionTurnOn": {
-    "description": "The Pinky Companion card: the button that turns the app's service on."
+    "description": "The Pinky on the phone card: the button that turns the app's service on."
   },
   "companionTurnOnBody": "Pinky couldn't turn on the app's service the last time it tried, so agents control the phone the slower way. Try again to see why.",
   "@companionTurnOnBody": {
-    "description": "The Pinky Companion card, when the app's service did not come on the last time Pinky tried (some phones refuse settings changes from the computer): why to try again. Turn on, the button, shows the reason if it fails again."
+    "description": "The Pinky on the phone card, when the app's service did not come on the last time Pinky tried (some phones refuse settings changes from the computer): why to try again. Turn on, the button, shows the reason if it fails again."
   },
-  "companionTurnOnLabel": "Turn on Pinky Companion on {name}",
+  "companionTurnOnLabel": "Turn on Pinky on {name}",
   "@companionTurnOnLabel": {
-    "description": "The accessibility label of the Turn on button of the Pinky Companion card. name is the phone's name.",
+    "description": "The accessibility label of the Turn on button of the Pinky on the phone card. name is the phone's name.",
     "placeholders": {
       "name": {
         "type": "String",
@@ -2238,21 +2876,21 @@
       }
     }
   },
-  "companionTurnOnTitle": "Turn on Pinky Companion",
+  "companionTurnOnTitle": "Turn on Pinky on the phone",
   "@companionTurnOnTitle": {
-    "description": "The title of the card that offers to turn on Pinky Companion's service when the app is installed but off."
+    "description": "The title of the card that offers to turn on Pinky on the phone's service when the app is installed but off."
   },
   "companionUpdate": "Update",
   "@companionUpdate": {
-    "description": "The Pinky Companion card: the button that updates the app on the phone."
+    "description": "The Pinky on the phone card: the button that updates the app on the phone."
   },
   "companionUpdateBody": "This Pinky comes with a newer version of its app for the phone. Updating keeps control fast and steady.",
   "@companionUpdateBody": {
-    "description": "The Pinky Companion card, when the phone has an older version: why to update it."
+    "description": "The Pinky on the phone card, when the phone has an older version: why to update it."
   },
-  "companionUpdateLabel": "Update Pinky Companion on {name}",
+  "companionUpdateLabel": "Update Pinky on {name}",
   "@companionUpdateLabel": {
-    "description": "The accessibility label of the Update button of the Pinky Companion card. name is the phone's name.",
+    "description": "The accessibility label of the Update button of the Pinky on the phone card. name is the phone's name.",
     "placeholders": {
       "name": {
         "type": "String",
@@ -2260,21 +2898,21 @@
       }
     }
   },
-  "companionUpdateTitle": "Update Pinky Companion",
+  "companionUpdateTitle": "Update Pinky on the phone",
   "@companionUpdateTitle": {
-    "description": "The title of the card that offers to update Pinky Companion on the phone to the version this Pinky comes with."
+    "description": "The title of the card that offers to update Pinky on the phone to the version this Pinky comes with."
   },
   "companionUpdatingHint": "Agents can use the phone again in a few seconds.",
   "@companionUpdatingHint": {
-    "description": "Under the companion card's progress bar while it updates."
+    "description": "Under the Pinky on the phone card's progress bar while it updates."
   },
   "companionUpdatingLabel": "Updating",
   "@companionUpdatingLabel": {
-    "description": "The accessibility label of the companion card's progress bar while it updates."
+    "description": "The accessibility label of the Pinky on the phone card's progress bar while it updates."
   },
-  "companionUpdatingTitle": "Updating Pinky Companion",
+  "companionUpdatingTitle": "Updating Pinky on the phone",
   "@companionUpdatingTitle": {
-    "description": "The companion card's title while Pinky updates the app by itself."
+    "description": "The Pinky on the phone card's title while Pinky updates the app by itself."
   },
   "connectAlsoWorks": "Pinky also works with {names}.",
   "@connectAlsoWorks": {
@@ -2692,7 +3330,7 @@
   "@connectionAuto": {
     "description": "Settings › Phones, an iPhone's connection choice: the first choice, which goes by the iOS version."
   },
-  "connectionAutoDesc": "Without the helper on iOS 27 and later. If the WebDriverAgent helper is installed, a task moves to it for apps that refuse screen sharing (DBS digibank, China Merchants Bank) and comes back afterwards. Older iPhones use the helper when they have it.",
+  "connectionAutoDesc": "On iOS 27 and later, without Pinky on the iPhone. If Pinky on the iPhone is installed, a task moves to it for apps that refuse screen sharing (DBS digibank, China Merchants Bank) and comes back afterwards. Older iPhones use it when they have it.",
   "@connectionAutoDesc": {
     "description": "Settings › Phones, an iPhone's connection choice: what Automatic does."
   },
@@ -2724,9 +3362,9 @@
   "@connectionChoose": {
     "description": "A link or button for an iPhone whose chosen connection does not work with it: opens Settings › Phones, where the connection is chosen."
   },
-  "connectionChosenNeedsIOS27": "This iPhone is set to connect through CoreDevice, which needs iOS 27 or later; it runs iOS {version}. Choose Automatic or the WebDriverAgent helper in Settings › Phones.",
+  "connectionChosenNeedsIOS27": "This iPhone is set to connect through CoreDevice, which needs iOS 27 or later; it runs iOS {version}. Choose Automatic or Pinky on the iPhone in Settings › Phones.",
   "@connectionChosenNeedsIOS27": {
-    "description": "The phone's page, its checkup and Add phone › iPhone, for an iPhone below iOS 27 whose connection in Settings › Phones was set to CoreDevice (connectionCoreDevice), which it cannot use. Automatic and the WebDriverAgent helper are the other choices there (connectionAuto, connectionWDA). CoreDevice and WebDriverAgent are names.",
+    "description": "The phone's page, its checkup and Add phone › iPhone, for an iPhone below iOS 27 whose connection in Settings › Phones was set to CoreDevice (connectionCoreDevice), which it cannot use. Automatic and Pinky on the iPhone are the other choices there (connectionAuto, connectionWDA). CoreDevice and WebDriverAgent are names.",
     "placeholders": {
       "version": {
         "type": "String",
@@ -2766,9 +3404,9 @@
   "@connectionNoAnswer": {
     "description": "Settings › Phones, an iPhone's connection choice: why a way cannot be checked."
   },
-  "connectionNotInstalled": "The helper isn't installed on this iPhone. Install it once on a Mac with Xcode: run pinkyctl helper install in Terminal. Pinky starts it after that.",
+  "connectionNotInstalled": "Pinky isn't installed on this iPhone. Install it once on a Mac with Xcode: run pinkyctl helper install in Terminal. Pinky starts it after that.",
   "@connectionNotInstalled": {
-    "description": "Settings › Phones, an iPhone's connection choice: why the WebDriverAgent helper cannot be used yet, and how to install it. pinkyctl helper install is a command typed in Terminal (macOS's app, named as Apple names it in the language) and stays as it is."
+    "description": "Settings › Phones, an iPhone's connection choice: why Pinky on the iPhone cannot be used yet, and how to install it. pinkyctl helper install is a command typed in Terminal (macOS's app, named as Apple names it in the language) and stays as it is."
   },
   "connectionOffline": "{platform} · offline",
   "@connectionOffline": {
@@ -2780,9 +3418,9 @@
       }
     }
   },
-  "connectionReadOnly": "read-only, no helper",
+  "connectionReadOnly": "read-only, without Pinky on the iPhone",
   "@connectionReadOnly": {
-    "description": "Settings › Phones, an iPhone's connection choice: what Automatic picked on an iPhone below iOS 27 without the WebDriverAgent helper, where Pinky can read the screen but not act. Shown inside connectionAutoNow, so lower case."
+    "description": "Settings › Phones, an iPhone's connection choice: what Automatic picked on an iPhone below iOS 27 without Pinky on the iPhone, where Pinky can read the screen but not act. Shown inside connectionAutoNow, so lower case."
   },
   "connectionReconnecting": "Reconnecting {phone} the way you chose…",
   "@connectionReconnecting": {
@@ -2798,13 +3436,13 @@
   "@connectionTitle": {
     "description": "Settings › Phones: the heading of an iPhone's choice of how Pinky connects to it."
   },
-  "connectionWDA": "WebDriverAgent helper",
+  "connectionWDA": "Pinky on the iPhone (WebDriverAgent)",
   "@connectionWDA": {
-    "description": "Settings › Phones, an iPhone's connection choice: the way through the WebDriverAgent helper app. WebDriverAgent is a name."
+    "description": "Settings › Phones, an iPhone's connection choice: the way through Pinky on the iPhone. WebDriverAgent is a name. Pinky on the iPhone is what the computer calls Pinky's iPhone app, named just Pinky on the iPhone itself (Pinky on the phone names the Android app the same way), which hosts WebDriverAgent; older installs are the app Pinky Helper, which works the same."
   },
-  "connectionWDADesc": "Works from iOS 17.4, and shares no screen, so banking apps that refuse screen sharing keep working. Needs the helper installed once from a Mac with Xcode, and now and then iOS asks on the iPhone for its passcode before the helper starts. The live picture and reading the screen are slower.",
+  "connectionWDADesc": "Works from iOS 17.4, and shares no screen, so banking apps that refuse screen sharing keep working. Needs Pinky on the iPhone installed once from a Mac with Xcode, and now and then iOS asks on the iPhone for its passcode before it starts. The live picture and reading the screen are slower.",
   "@connectionWDADesc": {
-    "description": "Settings › Phones, an iPhone's connection choice: what the WebDriverAgent helper gives and costs."
+    "description": "Settings › Phones, an iPhone's connection choice: what Pinky on the iPhone gives and costs."
   },
   "dayOtherYear": "{day, date, ::yMMMMd}",
   "@dayOtherYear": {
@@ -3036,7 +3674,7 @@
   },
   "flyoutPasscode": "Enter the passcode on the phone",
   "@flyoutPasscode": {
-    "description": "Menu bar flyout: what the Needs you row of an iPhone says after the phone's name when iOS asks on the phone for its passcode before the WebDriverAgent helper may control it."
+    "description": "Menu bar flyout: what the Needs you row of an iPhone says after the phone's name when iOS asks on the phone for its passcode before Pinky on the iPhone may control it."
   },
   "flyoutReview": "Review",
   "@flyoutReview": {
@@ -3200,7 +3838,7 @@
   "@guideHuaweiDev": {
     "description": "Add phone › Android, step 2 on HUAWEI phones: where Developer options is once it is on. Write it as menu names joined by ›, as the phone shows them in Simplified Chinese."
   },
-  "guideHuaweiNote": "If the phone asks what to use USB for, pick Transfer files. If installing Pinky Companion is blocked, turn off Enhanced protection in Settings › System & updates › Pure mode.",
+  "guideHuaweiNote": "If the phone asks what to use USB for, pick Transfer files. If installing Pinky on the phone is blocked, turn off Enhanced protection in Settings › System & updates › Pure mode.",
   "@guideHuaweiNote": {
     "description": "Add phone › Android, step 2 on HUAWEI phones: a note under the switches."
   },
@@ -3248,7 +3886,7 @@
   "@guideOppoSwitchMonitor": {
     "description": "Add phone › Android, step 2 on OPPO, OnePlus and realme phones: ColorOS's switch at the bottom of Developer options. Use the name of ColorOS's Simplified Chinese settings."
   },
-  "guideOppoSwitchMonitorWhy": "Lets Pinky turn on its companion app. It's at the bottom of Developer options; restart the phone after turning it on. On ColorOS and OxygenOS 16 it shows only in English, as Disable system optimization: switch the phone's language to English, turn it on, tap Turn on anyway, and switch back.",
+  "guideOppoSwitchMonitorWhy": "Lets Pinky turn on Pinky on the phone. It's at the bottom of Developer options; restart the phone after turning it on. On ColorOS and OxygenOS 16 it shows only in English, as Disable system optimization: switch the phone's language to English, turn it on, tap Turn on anyway, and switch back.",
   "@guideOppoSwitchMonitorWhy": {
     "description": "Add phone › Android, step 2 on OPPO, OnePlus and realme phones: why to turn on Disable permission monitoring, and how to find it on version 16. Disable system optimization and Turn on anyway are the English names the phone shows: keep them in English."
   },
@@ -3376,7 +4014,7 @@
   "@guideXiaomiSwitchInstall": {
     "description": "Add phone › Android, step 2 on Xiaomi phones: Xiaomi's switch that lets the computer install apps. Use the name of Xiaomi's Simplified Chinese settings, without spaces."
   },
-  "guideXiaomiSwitchInstallWhy": "Lets Pinky install its companion app. It needs your Xiaomi account signed in. Each install then asks on the phone: tap Install within 10 seconds.",
+  "guideXiaomiSwitchInstallWhy": "Lets Pinky install Pinky on the phone. It needs your Xiaomi account signed in. Each install then asks on the phone: tap Install within 10 seconds.",
   "@guideXiaomiSwitchInstallWhy": {
     "description": "Add phone › Android, step 2 on Xiaomi phones: why to turn on Install via USB, and what it needs."
   },
@@ -3384,7 +4022,7 @@
   "@guideXiaomiSwitchSecurity": {
     "description": "Add phone › Android, step 2 on Xiaomi phones: Xiaomi's switch that lets the computer tap, type and change settings. Use the name of Xiaomi's Simplified Chinese settings, without spaces."
   },
-  "guideXiaomiSwitchSecurityWhy": "Lets Pinky tap, type and turn on its companion app. The phone shows three warnings, each with a 5-second wait. Restart the phone afterwards: it takes effect only then.",
+  "guideXiaomiSwitchSecurityWhy": "Lets Pinky tap, type and turn on Pinky on the phone. The phone shows three warnings, each with a 5-second wait. Restart the phone afterwards: it takes effect only then.",
   "@guideXiaomiSwitchSecurityWhy": {
     "description": "Add phone › Android, step 2 on Xiaomi phones: why to turn on USB debugging (Security settings), and what turning it on is like."
   },
@@ -4586,6 +5224,14 @@
       }
     }
   },
+  "gwStatusBusyComputer": "Busy · Pinky on another computer is using it",
+  "@gwStatusBusyComputer": {
+    "description": "A phone's status line in the sidebar and tiles: an agent's task waits because Pinky on another computer holds the phone. Shown only in other languages; in English the gateway's own words show."
+  },
+  "gwStatusBusyPhone": "Busy · Pinky on the phone is running a task",
+  "@gwStatusBusyPhone": {
+    "description": "A phone's status line in the sidebar and tiles: an agent's task waits because Pinky on the phone runs a task of its own on the phone (on-phone mode), and only one of them uses the phone at a time. Shown only in other languages; in English the gateway's own words show."
+  },
   "gwStatusConnecting": "Connecting",
   "@gwStatusConnecting": {
     "description": "A phone's status line while Pinky opens it (listed and ready, online in a moment). Shown only in other languages; in English the gateway's own words show."
@@ -4698,11 +5344,11 @@
   },
   "gwStatusSwitchCoreDevice": "Switching to CoreDevice",
   "@gwStatusSwitchCoreDevice": {
-    "description": "An iPhone's status line while Pinky moves it back from the WebDriverAgent helper to CoreDevice after a task that needed the helper. Shown only in other languages."
+    "description": "An iPhone's status line while Pinky moves it back from Pinky on the iPhone to CoreDevice after a task that needed it. Shown only in other languages."
   },
-  "gwStatusSwitchHelper": "Switching to the helper",
+  "gwStatusSwitchHelper": "Switching to Pinky on the iPhone",
   "@gwStatusSwitchHelper": {
-    "description": "An iPhone's status line while Pinky moves an agent's task to the WebDriverAgent helper, for an app that refuses screen sharing. Shown only in other languages."
+    "description": "An iPhone's status line while Pinky moves an agent's task to Pinky on the iPhone, for an app that refuses screen sharing. Shown only in other languages."
   },
   "gwStatusWaiting": "Waiting for you · {title}",
   "@gwStatusWaiting": {
@@ -5130,6 +5776,30 @@
       }
     }
   },
+  "gwStepAgentSaid": "{agent} said: “{message}”",
+  "@gwStepAgentSaid": {
+    "description": "A step: a message to Pinky's own agent from the agent on the computer that handed it the task (phone_task_steer), which Pinky's agent read. Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "agent": {
+        "type": "String",
+        "example": "Claude Code"
+      },
+      "message": {
+        "type": "String",
+        "example": "Use the blue one"
+      }
+    }
+  },
+  "gwStepYouSaid": "You said: “{message}”",
+  "@gwStepYouSaid": {
+    "description": "A step: the person's message to Pinky's own agent while it worked, which the agent read. Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "message": {
+        "type": "String",
+        "example": "Use the blue one"
+      }
+    }
+  },
   "gwStepYouStopped": "You stopped the task",
   "@gwStepYouStopped": {
     "description": "A step of the demo's fake gateway: the person stopped the task. Shown only in other languages; in English the gateway's own words show."
@@ -5160,9 +5830,9 @@
   "@gwSwitchRotation": {
     "description": "Names a phone setting inside a step, such as “Set the screen's rotation to landscape”. Shown only in other languages; in English the gateway's own words show."
   },
-  "gwSetupPasscodeDetail": "iOS asks for it on the phone before the WebDriverAgent helper can control it, and stops asking after a while. {agent} is waiting · {task}",
+  "gwSetupPasscodeDetail": "iOS asks for it on the phone before Pinky on the iPhone can control it, and stops asking after a while. {agent} is waiting · {task}",
   "@gwSetupPasscodeDetail": {
-    "description": "The second line of the card that asks the person to enter the iPhone's passcode on the phone itself, so that the WebDriverAgent helper can start for an agent's task. Shown only in other languages; in English the gateway's own words show.",
+    "description": "The second line of the card that asks the person to enter the iPhone's passcode on the phone itself, so that Pinky on the iPhone can start for an agent's task. Shown only in other languages; in English the gateway's own words show.",
     "placeholders": {
       "agent": {
         "type": "String",
@@ -5176,7 +5846,7 @@
   },
   "gwSetupPasscodeTitle": "Enter the passcode on {phone}",
   "@gwSetupPasscodeTitle": {
-    "description": "The title of the card that asks the person to enter the iPhone's passcode on the phone itself, where iOS asks for it before the WebDriverAgent helper may control the phone. Shown only in other languages; in English the gateway's own words show.",
+    "description": "The title of the card that asks the person to enter the iPhone's passcode on the phone itself, where iOS asks for it before Pinky on the iPhone may control the phone. Shown only in other languages; in English the gateway's own words show.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5260,19 +5930,19 @@
   },
   "helperCancel": "Cancel",
   "@helperCancel": {
-    "description": "Button that stops installing the iPhone helper while Xcode builds or installs it."
+    "description": "Button that stops installing Pinky on the iPhone while Xcode builds or installs it."
   },
-  "helperChooseTeam": "This Mac can sign the helper for more than one team. Which one should sign it?",
+  "helperChooseTeam": "This Mac can sign Pinky's iPhone app for more than one team. Which one should sign it?",
   "@helperChooseTeam": {
-    "description": "Installing the iPhone helper: the Mac has signing certificates of several Apple developer teams, and the person picks one with the buttons below."
+    "description": "Installing Pinky on the iPhone: the Mac has signing certificates of several Apple developer teams, and the person picks one with the buttons below."
   },
-  "helperErrAppleID": "Xcode has no Apple ID to sign the helper with. Add yours in Xcode › Settings › Accounts (a free one works), then try again.",
+  "helperErrAppleID": "Xcode has no Apple ID to sign Pinky's iPhone app with. Add yours in Xcode › Settings › Accounts (a free one works), then try again.",
   "@helperErrAppleID": {
-    "description": "Installing the iPhone helper failed: Xcode has no Apple account or team to sign with. Xcode › Settings › Accounts stays in English: Xcode has no other language."
+    "description": "Installing Pinky on the iPhone failed: Xcode has no Apple account or team to sign with. Xcode › Settings › Accounts stays in English: Xcode has no other language."
   },
   "helperErrDeveloperMode": "Developer Mode is off on {phone}. Turn it on in Settings › Privacy & Security › Developer Mode (the phone restarts), then try again.",
   "@helperErrDeveloperMode": {
-    "description": "Installing the iPhone helper failed: Developer Mode is off; the path is the iPhone's Settings, named as Apple names them in the language. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone failed: Developer Mode is off; the path is the iPhone's Settings, named as Apple names them in the language. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5280,13 +5950,13 @@
       }
     }
   },
-  "helperErrDownload": "Pinky couldn't download the helper. Check this Mac's internet connection, then try again.",
+  "helperErrDownload": "Pinky couldn't download its iPhone app. Check this Mac's internet connection, then try again.",
   "@helperErrDownload": {
-    "description": "Installing the iPhone helper failed: downloading its source failed."
+    "description": "Installing Pinky on the iPhone failed: downloading what Pinky builds it from failed."
   },
   "helperErrInUse": "An agent is working on {phone}. Try again once its task ends.",
   "@helperErrInUse": {
-    "description": "Installing the iPhone helper refused: an agent's task holds the phone. phone is the iPhone's name.",
+    "description": "Installing Pinky on the iPhone refused: an agent's task holds the phone. phone is the iPhone's name.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5294,9 +5964,9 @@
       }
     }
   },
-  "helperErrOther": "Installing the helper on {phone} failed.",
+  "helperErrOther": "Installing Pinky on {phone} failed.",
   "@helperErrOther": {
-    "description": "Installing the iPhone helper failed for a reason Pinky has no words for; Xcode's own words follow in small print. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone failed for a reason Pinky has no words for; Xcode's own words follow in small print. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5304,9 +5974,9 @@
       }
     }
   },
-  "helperErrOtherTeam": "Another team signed the helper already on {phone}, and iOS replaces it only with one of that team. Delete Pinky Helper (or WebDriverAgentRunner) from the phone, then try again.",
+  "helperErrOtherTeam": "Another team signed Pinky Helper, already on {phone}, and iOS replaces it only with one of that team. Delete Pinky Helper (or WebDriverAgentRunner) from the phone, then try again.",
   "@helperErrOtherTeam": {
-    "description": "Installing the iPhone helper failed: the helper on the phone was signed by a team this Mac cannot sign for. Pinky Helper is the helper's name on the iPhone's home screen in the language (Pinky 助手, Pinky ヘルパー); WebDriverAgentRunner, an older one's, stays as it is. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone failed: Pinky Helper, the older app Pinky installed on the phone, was signed by a team this Mac cannot sign for. Pinky Helper is its name on the iPhone's home screen in the language (Pinky 助手, Pinky ヘルパー); WebDriverAgentRunner, an older one's, stays as it is. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5316,7 +5986,7 @@
   },
   "helperErrPasscode": "Nobody entered the passcode in time when {phone} asked for it to allow automation. Try again, and enter it on the phone when it asks.",
   "@helperErrPasscode": {
-    "description": "Installing the iPhone helper failed: iOS asked for the phone's passcode before it lets the helper control the phone, and it was not entered in time. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone failed: iOS asked for the phone's passcode before it lets Pinky on the iPhone control the phone, and it was not entered in time. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5326,7 +5996,7 @@
   },
   "helperErrPhone": "Xcode can't reach {phone}. Connect it with a cable, or keep it unlocked on the same Wi-Fi as this Mac, then try again.",
   "@helperErrPhone": {
-    "description": "Installing the iPhone helper failed: Xcode does not see the phone. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone failed: Xcode does not see the phone. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5334,9 +6004,9 @@
       }
     }
   },
-  "helperErrSigning": "Xcode found no way to sign the helper for {phone}. Check your team in Xcode › Settings › Accounts, then try again.",
+  "helperErrSigning": "Xcode found no way to sign Pinky for {phone}. Check your team in Xcode › Settings › Accounts, then try again.",
   "@helperErrSigning": {
-    "description": "Installing the iPhone helper failed: Xcode found no signing certificate or provisioning profile that covers the phone. Xcode › Settings › Accounts stays in English. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone failed: Xcode found no signing certificate or provisioning profile that covers the phone. Xcode › Settings › Accounts stays in English. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5346,7 +6016,7 @@
   },
   "helperErrTrust": "Your developer certificate isn't trusted on {phone} yet. On the phone, trust it in Settings › General › VPN & Device Management, then try again.",
   "@helperErrTrust": {
-    "description": "Installing the iPhone helper failed: the phone does not trust the developer who signed the helper yet; the path is the iPhone's Settings, named as Apple names them in the language. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone failed: the phone does not trust the developer who signed Pinky on the iPhone yet; the path is the iPhone's Settings, named as Apple names them in the language. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5354,9 +6024,9 @@
       }
     }
   },
-  "helperErrUnlock": "Xcode couldn't install the helper while {phone} was locked. Unlock it, keep it unlocked, then try again.",
+  "helperErrUnlock": "Xcode couldn't install Pinky while {phone} was locked. Unlock it, keep it unlocked, then try again.",
   "@helperErrUnlock": {
-    "description": "Installing the iPhone helper failed: the phone stayed locked while Xcode waited for it. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone failed: the phone stayed locked while Xcode waited for it. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5364,25 +6034,25 @@
       }
     }
   },
-  "helperErrXcode": "Installing the helper needs Xcode. Install it from the App Store, open it once, then try again.",
+  "helperErrXcode": "Installing Pinky on the iPhone needs Xcode. Install it from the App Store, open it once, then try again.",
   "@helperErrXcode": {
-    "description": "Installing the iPhone helper failed: this Mac has no Xcode."
+    "description": "Installing Pinky on the iPhone failed: this Mac has no Xcode."
   },
-  "helperInstall": "Install the helper",
+  "helperInstall": "Install Pinky on the iPhone",
   "@helperInstall": {
-    "description": "Button on a Mac with Xcode, in the checkup, on the Phone screen and in Add phone: Pinky builds the Pinky helper (WebDriverAgent) with Xcode and installs it on the iPhone."
+    "description": "Button on a Mac with Xcode, in the checkup, on the Phone screen and in Add phone: Pinky builds Pinky on the iPhone (WebDriverAgent) with Xcode and installs it on the iPhone. Pinky on the iPhone is what the computer calls Pinky's iPhone app, named just Pinky on the iPhone itself (Pinky on the phone names the Android app the same way), which hosts WebDriverAgent; older installs are the app Pinky Helper, which works the same."
   },
   "helperInstallAgain": "Install again",
   "@helperInstallAgain": {
-    "description": "Button on a Mac with Xcode: installs an iPhone's helper (WebDriverAgent) again, as its signature runs out soon or ran out."
+    "description": "Button on a Mac with Xcode: installs Pinky on the iPhone (WebDriverAgent) again, as its signature runs out soon or ran out."
   },
-  "helperInstallNote": "Pinky builds the helper with Xcode and signs it with your Apple ID. Keep the iPhone unlocked until it is done.",
+  "helperInstallNote": "Pinky builds its iPhone app with Xcode and signs it with your Apple ID. Keep the iPhone unlocked until it is done.",
   "@helperInstallNote": {
-    "description": "Under the button that installs the iPhone helper from Pinky's window: what it does, and what the person keeps in mind meanwhile."
+    "description": "Under the button that installs Pinky on the iPhone from Pinky's window: what it does, and what the person keeps in mind meanwhile."
   },
-  "helperInstalledToast": "The Pinky helper is installed on {phone}.",
+  "helperInstalledToast": "Pinky is installed on {phone}.",
   "@helperInstalledToast": {
-    "description": "Toast once the iPhone helper is installed from Pinky's window. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Toast once Pinky on the iPhone is installed from Pinky's window. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5392,15 +6062,15 @@
   },
   "helperShowLog": "Show the log",
   "@helperShowLog": {
-    "description": "Link after installing the iPhone helper failed: shows Xcode's log of the install in Finder."
+    "description": "Link after installing Pinky on the iPhone failed: shows Xcode's log of the install in Finder."
   },
-  "helperStepBuilding": "Building the helper with Xcode. This takes a minute or two.",
+  "helperStepBuilding": "Building Pinky's iPhone app with Xcode. This takes a few minutes.",
   "@helperStepBuilding": {
-    "description": "Installing the iPhone helper from Pinky's window: Xcode builds it on this Mac."
+    "description": "Installing Pinky on the iPhone from Pinky's window: Xcode builds it on this Mac."
   },
-  "helperStepInstalling": "Installing the helper on {phone}. If the phone asks for its passcode, enter it there.",
+  "helperStepInstalling": "Installing Pinky on {phone}. If the phone asks for its passcode, enter it there.",
   "@helperStepInstalling": {
-    "description": "Installing the iPhone helper from Pinky's window: Xcode installs it on the phone and starts it; iOS may ask for the phone's passcode to allow automation, which the person enters on the phone. phone is the iPhone's name, or \"the iPhone\" when Pinky does not know it yet.",
+    "description": "Installing Pinky on the iPhone from Pinky's window: Xcode installs it on the phone and starts it; iOS may ask for the phone's passcode to allow automation, which the person enters on the phone. phone is the iPhone's name, or \"the iPhone\" when Pinky does not know it yet.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5410,11 +6080,11 @@
   },
   "helperStepPreparing": "Getting ready…",
   "@helperStepPreparing": {
-    "description": "Installing the iPhone helper from Pinky's window, first step: Pinky finds the iPhone and the team that signs, and downloads the helper the first time."
+    "description": "Installing Pinky on the iPhone from Pinky's window, first step: Pinky finds the iPhone and the team that signs, and downloads Pinky on the iPhone the first time."
   },
   "helperStepUnlock": "Unlock {phone} and keep it unlocked: Xcode is waiting for it.",
   "@helperStepUnlock": {
-    "description": "Installing the iPhone helper from Pinky's window, shown in bold: the phone is locked and Xcode waits for the person to unlock it. phone is the iPhone's name, or \"the iPhone\".",
+    "description": "Installing Pinky on the iPhone from Pinky's window, shown in bold: the phone is locked and Xcode waits for the person to unlock it. phone is the iPhone's name, or \"the iPhone\".",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -5424,7 +6094,7 @@
   },
   "helperTeam": "{name} ({id})",
   "@helperTeam": {
-    "description": "Button choosing the Apple developer team that signs the iPhone helper: the team's name and ID, as Xcode lists them.",
+    "description": "Button choosing the Apple developer team that signs Pinky on the iPhone: the team's name and ID, as Xcode lists them.",
     "placeholders": {
       "name": {
         "type": "String",
@@ -5438,7 +6108,7 @@
   },
   "helperThisIPhone": "the iPhone",
   "@helperThisIPhone": {
-    "description": "Stands for the phone's name in the messages about installing the iPhone helper, when Pinky does not know the phone yet (Add phone); written to read well in their middle."
+    "description": "Stands for the phone's name in the messages about installing Pinky on the iPhone, when Pinky does not know the phone yet (Add phone); written to read well in their middle."
   },
   "listMany": "{rest} and {last}",
   "@listMany": {
@@ -6670,9 +7340,9 @@
   "@phoneHandBack": {
     "description": "Button that gives the phone back to the agents after the person took over: on the banner above the mirror and on All phones tiles."
   },
-  "phoneHelperPasscode": "Enter the passcode on {phone}: iOS asks for it before the WebDriverAgent helper can work. Then try again.",
+  "phoneHelperPasscode": "Enter the passcode on {phone}: iOS asks for it before Pinky on the iPhone can work. Then try again.",
   "@phoneHelperPasscode": {
-    "description": "A toast after the person turned the screen (Rotate in ⋯ under the mirror) of an iPhone or iPad over CoreDevice: Pinky moved it to the WebDriverAgent helper to turn it, and iOS asks on the phone for its passcode before the helper starts. phone is the phone's name. WebDriverAgent is a name."
+    "description": "A toast after the person turned the screen (Rotate in ⋯ under the mirror) of an iPhone or iPad over CoreDevice: Pinky moved it to Pinky on the iPhone to turn it, and iOS asks on the phone for its passcode before Pinky on the iPhone starts. phone is the phone's name. WebDriverAgent is a name."
   },
   "phoneKeyBack": "Back",
   "@phoneKeyBack": {
@@ -6872,7 +7542,7 @@
   },
   "phoneRotate": "Rotate",
   "@phoneRotate": {
-    "description": "A row of ⋯ under the mirror: the buttons beside it turn the phone's screen to portrait, landscape and the like. Also shown disabled, with phoneRotateTooltip, on an iPhone or iPad without the WebDriverAgent helper."
+    "description": "A row of ⋯ under the mirror: the buttons beside it turn the phone's screen to portrait, landscape and the like. Also shown disabled, with phoneRotateTooltip, on an iPhone or iPad without Pinky on the iPhone."
   },
   "phoneRotateAuto": "Auto-rotate",
   "@phoneRotateAuto": {
@@ -6898,9 +7568,9 @@
   "@phoneRotateReverseLandscape": {
     "description": "A button of the Rotate row, as its tooltip: the phone turned a quarter clockwise, its top on the right."
   },
-  "phoneRotateTooltip": "Turning the screen needs the WebDriverAgent helper. Settings › Phones says how to install it, or lets you choose it for this phone.",
+  "phoneRotateTooltip": "Turning the screen needs Pinky on the iPhone. Settings › Phones says how to install it, or lets you choose it for this phone.",
   "@phoneRotateTooltip": {
-    "description": "The tooltip of the disabled Rotate item on an iPhone or iPad that cannot use the WebDriverAgent helper: it is not installed, or the person chose CoreDevice for it in Settings › Phones. The app calls both phones. Settings › Phones says how to install the helper and offers it as connectionWDA. WebDriverAgent is a name."
+    "description": "The tooltip of the disabled Rotate item on an iPhone or iPad that cannot use Pinky on the iPhone: it is not installed, or the person chose CoreDevice for it in Settings › Phones. The app calls both phones. Settings › Phones says how to install Pinky on the iPhone and offers it as connectionWDA. WebDriverAgent is a name."
   },
   "phoneRotateUpsideDown": "Upside down",
   "@phoneRotateUpsideDown": {
@@ -6978,7 +7648,7 @@
   },
   "phoneSwitchCoreDeviceTitle": "Moving {phone} back to CoreDevice…",
   "@phoneSwitchCoreDeviceTitle": {
-    "description": "The page of an iPhone while Pinky moves it back from the WebDriverAgent helper to CoreDevice after a task. phone is its name.",
+    "description": "The page of an iPhone while Pinky moves it back from Pinky on the iPhone to CoreDevice after a task. phone is its name.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -6986,9 +7656,9 @@
       }
     }
   },
-  "phoneSwitchHelperTitle": "Moving {phone} to the helper…",
+  "phoneSwitchHelperTitle": "Moving {phone} to Pinky on the iPhone…",
   "@phoneSwitchHelperTitle": {
-    "description": "The page of an iPhone while Pinky moves an agent's task to the WebDriverAgent helper, which shares no screen, for an app that refuses screen sharing. phone is its name.",
+    "description": "The page of an iPhone while Pinky moves an agent's task to Pinky on the iPhone, which shares no screen, for an app that refuses screen sharing. phone is its name.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -8026,11 +8696,55 @@
   "@settingsAgentsWorking": {
     "description": "Settings › Agents: the state at the end of an agent's row, next to a green dot: one of its tasks is running."
   },
+  "settingsAskCheck": "Check",
+  "@settingsAskCheck": {
+    "description": "Settings › Agents › Ask Pinky: the title of the row that checks the model."
+  },
+  "settingsAskCheckAgain": "Check Again",
+  "@settingsAskCheckAgain": {
+    "description": "Settings › Agents › Ask Pinky: the button that checks the model again after a check."
+  },
+  "settingsAskCheckDesc": "Sends the model one tiny request to see that it answers and uses tools. Pinky does it when you save a key, model or address.",
+  "@settingsAskCheckDesc": {
+    "description": "Settings › Agents › Ask Pinky: under Check."
+  },
+  "settingsAskCheckDetail": "The service said: {detail}",
+  "@settingsAskCheckDetail": {
+    "description": "Settings › Agents › Ask Pinky: under a failed check, the service's own words, in its language.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "HTTP 401 · invalid x-api-key"
+      }
+    }
+  },
+  "settingsAskCheckLabel": "Check the model now",
+  "@settingsAskCheckLabel": {
+    "description": "Settings › Agents › Ask Pinky: what screen readers say for the Check and Check Again button."
+  },
+  "settingsAskCheckNow": "Check",
+  "@settingsAskCheckNow": {
+    "description": "Settings › Agents › Ask Pinky: the button that checks the model now."
+  },
+  "settingsAskCheckOK": "The model answered and used a tool, in {seconds} s.",
+  "@settingsAskCheckOK": {
+    "description": "Settings › Agents › Ask Pinky: a check that went well; seconds has one decimal.",
+    "placeholders": {
+      "seconds": {
+        "type": "String",
+        "example": "1.4"
+      }
+    }
+  },
+  "settingsAskChecking": "Checking…",
+  "@settingsAskChecking": {
+    "description": "Settings › Agents › Ask Pinky: while the check runs."
+  },
   "settingsAskCost": "Cost per task",
   "@settingsAskCost": {
     "description": "Settings › Agents › Ask Pinky: the title of the cost limit."
   },
-  "settingsAskCostDesc": "Counted from what the service reports, at Anthropic's prices.",
+  "settingsAskCostDesc": "Counted from what the service reports, at the prices it publishes.",
   "@settingsAskCostDesc": {
     "description": "Settings › Agents › Ask Pinky with a Claude model whose prices Pinky knows: the line under settingsAskCost."
   },
@@ -8090,6 +8804,16 @@
   "@settingsAskKeyKeepWindows": {
     "description": "Settings › Agents › Ask Pinky, on Windows: the line under settingsAskKey."
   },
+  "settingsAskKeyOptional": "Only if you set one up on the server. {keep}",
+  "@settingsAskKeyOptional": {
+    "description": "Settings › Agents › Ask Pinky: under API key, for a server on the person's own computer, which needs no key by default; keep says where a key stays (settingsAskKeyKeepMac and the others).",
+    "placeholders": {
+      "keep": {
+        "type": "String",
+        "example": "It stays in the macOS Keychain."
+      }
+    }
+  },
   "settingsAskKeyPlaceholder": "Paste the API key",
   "@settingsAskKeyPlaceholder": {
     "description": "Settings › Agents › Ask Pinky: the hint in the empty API key field."
@@ -8134,13 +8858,25 @@
   "@settingsAskModelDesc": {
     "description": "Settings › Agents › Ask Pinky with another service: the line under settingsAskModel."
   },
+  "settingsAskModelLocal": "The name of a model the server runs. It must read images and use tools.",
+  "@settingsAskModelLocal": {
+    "description": "Settings › Agents › Ask Pinky: under Model, for a server on the person's own computer, such as Ollama."
+  },
   "settingsAskModelNone": "None",
   "@settingsAskModelNone": {
     "description": "Settings › Agents › Ask Pinky: no model is chosen."
   },
+  "settingsAskModelOther": "Other…",
+  "@settingsAskModelOther": {
+    "description": "Settings › Agents › Ask Pinky, the Model menu: the entry that lets the person type another model's name."
+  },
   "settingsAskModelPlaceholder": "Model name",
   "@settingsAskModelPlaceholder": {
     "description": "Settings › Agents › Ask Pinky: the hint in the empty model field."
+  },
+  "settingsAskModelSuggested": "Models that read images and use tools, as Pinky needs. Choose Other… for another model of the service.",
+  "@settingsAskModelSuggested": {
+    "description": "Settings › Agents › Ask Pinky: under Model, for a service whose models Pinky suggests."
   },
   "settingsAskOn": "Show Ask Pinky",
   "@settingsAskOn": {
@@ -8150,6 +8886,14 @@
   "@settingsAskOnDesc": {
     "description": "Settings › Agents › Ask Pinky: the line under settingsAskOn."
   },
+  "settingsAskRegionChina": "China",
+  "@settingsAskRegionChina": {
+    "description": "settingsAskServiceRegion: the entry of a service for its mainland China address."
+  },
+  "settingsAskRegionGlobal": "International",
+  "@settingsAskRegionGlobal": {
+    "description": "settingsAskServiceRegion: the entry of a service for its address outside mainland China."
+  },
   "settingsAskService": "Service",
   "@settingsAskService": {
     "description": "Settings › Agents › Ask Pinky: the title of the setting that chooses the API the model is reached through."
@@ -8158,13 +8902,27 @@
   "@settingsAskServiceAnthropic": {
     "description": "Settings › Agents › Ask Pinky: a choice of service: Anthropic's Messages API, or a service that speaks it."
   },
-  "settingsAskServiceDesc": "Claude through Anthropic's API, or another model through a service compatible with OpenAI's. Each has its own key.",
+  "settingsAskServiceDesc": "Who runs the model. Each service keeps its own API key, model and address.",
   "@settingsAskServiceDesc": {
-    "description": "Settings › Agents › Ask Pinky: the line under settingsAskService."
+    "description": "Settings › Agents › Ask Pinky: under Service, what the choice is."
   },
   "settingsAskServiceOpenAI": "OpenAI-compatible API",
   "@settingsAskServiceOpenAI": {
     "description": "Settings › Agents › Ask Pinky: a choice of service: OpenAI's Chat Completions API, or a service that speaks it."
+  },
+  "settingsAskServiceRegion": "{service} ({region})",
+  "@settingsAskServiceRegion": {
+    "description": "Settings › Agents › Ask Pinky, the Service menu: a service that has one entry for mainland China and one for elsewhere, such as Qwen (China).",
+    "placeholders": {
+      "service": {
+        "type": "String",
+        "example": "Qwen"
+      },
+      "region": {
+        "type": "String",
+        "example": "China"
+      }
+    }
   },
   "settingsAskSteps": "Steps per task",
   "@settingsAskSteps": {
@@ -8198,13 +8956,51 @@
   "@settingsAskURLDescAnthropic": {
     "description": "Settings › Agents › Ask Pinky with the Anthropic-compatible service: the line under settingsAskURL."
   },
+  "settingsAskURLDescLocal": "The server on this computer by default. Change it when the server runs on another computer or port.",
+  "@settingsAskURLDescLocal": {
+    "description": "Settings › Agents › Ask Pinky: under API address, for a server on the person's own computer, such as Ollama."
+  },
   "settingsAskURLDescOpenAI": "The address of the service's OpenAI-compatible API, such as https://…/v1. OpenAI's own by default.",
   "@settingsAskURLDescOpenAI": {
     "description": "Settings › Agents › Ask Pinky with the OpenAI-compatible service: the line under settingsAskURL."
   },
+  "settingsAskURLDescService": "The service's own address by default. Change it only to go through another address, such as a proxy.",
+  "@settingsAskURLDescService": {
+    "description": "Settings › Agents › Ask Pinky: under API address, for a service Pinky knows."
+  },
   "settingsAskURLErr": "Enter an address that starts with https:// or http://.",
   "@settingsAskURLErr": {
     "description": "Settings › Agents › Ask Pinky, in red, under the API address field."
+  },
+  "settingsAskUsage": "Usage",
+  "@settingsAskUsage": {
+    "description": "Settings › Agents › Ask Pinky: the heading of the tokens Pinky's own agent used."
+  },
+  "settingsAskUsageDesc": "The tokens Pinky's own agent used, as the services reported them, and what they cost where Pinky knows the prices. Kept on this computer only.",
+  "@settingsAskUsageDesc": {
+    "description": "Settings › Agents › Ask Pinky: under Usage."
+  },
+  "settingsAskUsageMonth": "Last 30 days",
+  "@settingsAskUsageMonth": {
+    "description": "Settings › Agents › Ask Pinky, Usage: the total of the last 30 days, today included."
+  },
+  "settingsAskUsageNone": "Nothing yet.",
+  "@settingsAskUsageNone": {
+    "description": "Settings › Agents › Ask Pinky, Usage: no tokens used in the period."
+  },
+  "settingsAskUsageRequests": "{count, plural, one {# request} other {# requests}}",
+  "@settingsAskUsageRequests": {
+    "description": "Settings › Agents › Ask Pinky, Usage: how many requests a model got on a day.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "12"
+      }
+    }
+  },
+  "settingsAskUsageWeek": "Last 7 days",
+  "@settingsAskUsageWeek": {
+    "description": "Settings › Agents › Ask Pinky, Usage: the total of the last 7 days, today included."
   },
   "settingsCancel": "Cancel",
   "@settingsCancel": {
@@ -8277,6 +9073,54 @@
   "settingsLanguageSystem": "System",
   "@settingsLanguageSystem": {
     "description": "Settings › Advanced › Language: the first choice, which follows the computer's preferred languages. The other choices name each language in itself (English, Simplified Chinese)."
+  },
+  "settingsMemory": "Memory",
+  "@settingsMemory": {
+    "description": "Settings › Agents: the heading of Ask Pinky's memory, and the label of the field that writes a note."
+  },
+  "settingsMemoryAdd": "Add…",
+  "@settingsMemoryAdd": {
+    "description": "Settings › Agents › Memory: the button that writes a new note."
+  },
+  "settingsMemoryDelete": "Delete",
+  "@settingsMemoryDelete": {
+    "description": "Settings › Agents › Memory: the button that deletes a note."
+  },
+  "settingsMemoryDeleteAll": "Delete All",
+  "@settingsMemoryDeleteAll": {
+    "description": "Settings › Agents › Memory: the button that deletes every note, and the confirming button of its dialog."
+  },
+  "settingsMemoryDeleteAllMessage": "Every note on this computer is deleted. The phones keep theirs.",
+  "@settingsMemoryDeleteAllMessage": {
+    "description": "Settings › Agents › Memory: the message of the dialog before Delete All."
+  },
+  "settingsMemoryDeleteAllTitle": "Delete all of Ask Pinky's memory?",
+  "@settingsMemoryDeleteAllTitle": {
+    "description": "Settings › Agents › Memory: the title of the dialog before Delete All."
+  },
+  "settingsMemoryEdit": "Edit",
+  "@settingsMemoryEdit": {
+    "description": "Settings › Agents › Memory: the button that changes a note's words."
+  },
+  "settingsMemoryEmpty": "Nothing yet. After a task, Pinky may suggest something to remember; you decide.",
+  "@settingsMemoryEmpty": {
+    "description": "Settings › Agents › Memory: in place of the list while there are no notes."
+  },
+  "settingsMemoryIntro": "What Ask Pinky remembers for its tasks on this computer: what you told it, and ways of doing things you said yes to after a task. Nothing is kept without your yes, and never passwords, codes, card or ID numbers, or addresses. The Pinky app on each phone keeps its own.",
+  "@settingsMemoryIntro": {
+    "description": "Settings › Agents: what Ask Pinky's memory is, under its heading."
+  },
+  "settingsMemoryOn": "Use memory",
+  "@settingsMemoryOn": {
+    "description": "Settings › Agents › Memory: the switch's title."
+  },
+  "settingsMemoryOnDesc": "Tasks read these notes and may suggest new ones. Turned off, the notes stay until you delete them.",
+  "@settingsMemoryOnDesc": {
+    "description": "Settings › Agents › Memory: the line under settingsMemoryOn."
+  },
+  "settingsMemoryPlaceholder": "For example: Prefers window seats",
+  "@settingsMemoryPlaceholder": {
+    "description": "Settings › Agents › Memory: the placeholder of the field that writes a note."
   },
   "settingsNeedsYou": "Needs you",
   "@settingsNeedsYou": {
@@ -8848,6 +9692,14 @@
   "@settingsSafetyHideCodesDesc": {
     "description": "Settings › Safety: the line under Hide codes from agents. Screenshots are the ones agents get and the ones Activity keeps; recordings are the screen recordings of tasks, which are not covered."
   },
+  "settingsSafetyVirtualCredentials": "Allow passwords on virtual phones",
+  "@settingsSafetyVirtualCredentials": {
+    "description": "Settings › Safety: the switch that lets agents type passwords and one-time codes on virtual phones (emulators and Simulators on this computer). Off by default."
+  },
+  "settingsSafetyVirtualCredentialsDesc": "Agents may type passwords and one-time codes on emulators and Simulators on this computer, to test sign-ins with test accounts. On phones they never can.",
+  "@settingsSafetyVirtualCredentialsDesc": {
+    "description": "Settings › Safety: the line under Allow passwords on virtual phones. Phones means real phones, as opposed to virtual ones."
+  },
   "settingsSafetyIntro": "Pinky checks every action before it reaches the phone. Agents can't change these settings.",
   "@settingsSafetyIntro": {
     "description": "Settings › Safety: the line under the page title."
@@ -9145,6 +9997,10 @@
   "stepNotDoneTookOver": "Not done: you took over",
   "@stepNotDoneTookOver": {
     "description": "The second line of a step that never ran because the person took over."
+  },
+  "stepPhoneBusy": "Pinky on the phone was running a task",
+  "@stepPhoneBusy": {
+    "description": "The second line of a step that was not done because Pinky on the phone ran a task of its own on the phone, or Pinky on another computer used it."
   },
   "stepPhoneLocked": "The phone was locked",
   "@stepPhoneLocked": {
@@ -9612,7 +10468,7 @@
   "@telWhatsSharedDesc": {
     "description": "Under telWhatsShared."
   },
-  "timeHours": "{hours}\u00a0h\u00a0{minutes}\u00a0min",
+  "timeHours": "{hours} h {minutes} min",
   "@timeHours": {
     "description": "A duration of an hour or more. minutes has two digits. Joined with no-break spaces.",
     "placeholders": {
@@ -9626,7 +10482,7 @@
       }
     }
   },
-  "timeMinutes": "{minutes}\u00a0min\u00a0{seconds}\u00a0s",
+  "timeMinutes": "{minutes} min {seconds} s",
   "@timeMinutes": {
     "description": "A duration under an hour. seconds has two digits. Joined with no-break spaces.",
     "placeholders": {
@@ -9640,7 +10496,7 @@
       }
     }
   },
-  "timeSeconds": "{seconds}\u00a0s",
+  "timeSeconds": "{seconds} s",
   "@timeSeconds": {
     "description": "A duration under a minute, as task cards and Activity show it. Joined with a no-break space so it never wraps.",
     "placeholders": {
@@ -9930,9 +10786,13 @@
   "@updateAgoNow": {
     "description": "Inside updateLineUpToDate: checked less than a minute ago."
   },
-  "updateAvailable": "Pinky {version} is available",
-  "@updateAvailable": {
-    "description": "The update card's title when a newer version is out.",
+  "updateAvailableTitle": "New version available",
+  "@updateAvailableTitle": {
+    "description": "The update card's title in the sidebar when a newer version is out; the version shows on the line under it (updateAvailableVersion). Keep it short: the card is about 190 points wide."
+  },
+  "updateAvailableVersion": "Pinky {version}",
+  "@updateAvailableVersion": {
+    "description": "The line under the update card's title (updateAvailableTitle): the app's name and the new version.",
     "placeholders": {
       "version": {
         "type": "String",
@@ -9950,9 +10810,9 @@
       }
     }
   },
-  "updateBusyInstalling": "installing Pinky Companion on {phone}",
+  "updateBusyInstalling": "installing Pinky on {phone}",
   "@updateBusyInstalling": {
-    "description": "What a restart for an update would stop: installing the companion app.",
+    "description": "What a restart for an update would stop: installing Pinky on the phone.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -9978,9 +10838,9 @@
       }
     }
   },
-  "updateBusyUpdating": "updating Pinky Companion on {phone}",
+  "updateBusyUpdating": "updating Pinky on {phone}",
   "@updateBusyUpdating": {
-    "description": "What a restart for an update would stop: updating the companion app.",
+    "description": "What a restart for an update would stop: updating Pinky on the phone.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -10016,15 +10876,15 @@
   },
   "updateCompanionAuto": "Pinky updates it by itself when the phone is free.",
   "@updateCompanionAuto": {
-    "description": "The companion card when an update is out and automatic updates are on."
+    "description": "The Pinky on the phone card when an update is out and automatic updates are on."
   },
   "updateCompanionByHand": "The phone refused to install this update over USB, so Pinky won't try again by itself. Update it here, or install the APK on the phone by hand.",
   "@updateCompanionByHand": {
-    "description": "The companion card when an update is out: Pinky's automatic update failed because the phone refuses installs over USB (Xiaomi's Install via USB is off, or nobody allowed it on the phone in time), so it leaves the update to the person. Update is the card's button (companionUpdate); the links companionShowAPK and companionByHandHow follow."
+    "description": "The Pinky on the phone card when an update is out: Pinky's automatic update failed because the phone refuses installs over USB (Xiaomi's Install via USB is off, or nobody allowed it on the phone in time), so it leaves the update to the person. Update is the card's button (companionUpdate); the links companionShowAPK and companionByHandHow follow."
   },
-  "updateCompanionByHandCard": "{phone} refused to install the new Pinky Companion over USB, so Pinky won't try this version again. Install it on the phone by hand.",
+  "updateCompanionByHandCard": "{phone} refused to install the new version of Pinky over USB, so Pinky won't try this version again. Install it on the phone by hand.",
   "@updateCompanionByHandCard": {
-    "description": "A sidebar card, shown once: Pinky tried to update the companion app on a phone by itself (Update automatically), and the phone refused installs over USB (Xiaomi's Install via USB is off, or nobody allowed it on the phone in time). Pinky won't try this companion build again by itself; the links companionShowAPK and companionByHandHow follow, and a close button (updateNewsDismiss) hides the card.",
+    "description": "A sidebar card, shown once: Pinky tried to update Pinky on the phone on a phone by itself (Update automatically), and the phone refused installs over USB (Xiaomi's Install via USB is off, or nobody allowed it on the phone in time). Pinky won't try this build of Pinky on the phone again by itself; the links companionShowAPK and companionByHandHow follow, and a close button (updateNewsDismiss) hides the card.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -10032,21 +10892,21 @@
       }
     }
   },
-  "updateCompanionByHandDismissLabel": "Dismiss the Pinky Companion update",
+  "updateCompanionByHandDismissLabel": "Dismiss the update of Pinky on the phone",
   "@updateCompanionByHandDismissLabel": {
     "description": "The accessibility label of the close button of the sidebar card updateCompanionByHandTitle."
   },
-  "updateCompanionByHandTitle": "Update Pinky Companion by hand",
+  "updateCompanionByHandTitle": "Update Pinky on the phone by hand",
   "@updateCompanionByHandTitle": {
     "description": "The title of the sidebar card updateCompanionByHandCard."
   },
   "updateCompanionNeedsYou": "The phone asks before apps are installed over USB, so this update needs you.",
   "@updateCompanionNeedsYou": {
-    "description": "The companion card: the phone asks the person before installs, so Pinky cannot update it by itself."
+    "description": "The Pinky on the phone card: the phone asks the person before installs, so Pinky cannot update it by itself."
   },
-  "updateCompanionReplacedToast": "Reinstalled Pinky Companion on {phone} with Pinky's private signing key",
+  "updateCompanionReplacedToast": "Reinstalled Pinky on {phone} with Pinky's private signing key",
   "@updateCompanionReplacedToast": {
-    "description": "A toast after Pinky replaced the companion app on a phone by itself: the installed one was signed with another key (the public one of builds until 2026-11-08), so Pinky removed it and installed its own, signed with Pinky's private key.",
+    "description": "A toast after Pinky replaced Pinky on the phone on a phone by itself: the installed one was signed with another key (the public one of builds until 2026-11-08), so Pinky removed it and installed its own, signed with Pinky's private key.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -10054,9 +10914,9 @@
       }
     }
   },
-  "updateCompanionToast": "Updated Pinky Companion on {phone}",
+  "updateCompanionToast": "Updated Pinky on {phone}",
   "@updateCompanionToast": {
-    "description": "A toast after Pinky updated the companion app on a phone by itself.",
+    "description": "A toast after Pinky updated Pinky on the phone on a phone by itself.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -10256,9 +11116,13 @@
   "@updateNewsCardTitle": {
     "description": "The What's new card's title after Pinky was updated."
   },
+  "updateNewsCompanionHeading": "Pinky on the phone",
+  "@updateNewsCompanionHeading": {
+    "description": "What's new: the heading over the lines about Pinky's app on Android phones (updateNewsCompanionLine). Pinky on the phone is the app's name on the computer."
+  },
   "updateNewsCompanionLine": "Updated on {phone} to {version}",
   "@updateNewsCompanionLine": {
-    "description": "What's new, under the Pinky Companion heading: the companion app was updated on a phone.",
+    "description": "What's new, under the Pinky on the phone heading: Pinky on the phone was updated on a phone.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -10272,7 +11136,7 @@
   },
   "updateNewsCompanionReplaced": "Reinstalled on {phone} as {version}, signed with Pinky's private key. The earlier build was signed with a public key, with which anyone could sign an update of it.",
   "@updateNewsCompanionReplaced": {
-    "description": "What's new, under the Pinky Companion heading: Pinky replaced the companion app on a phone with a build signed with its private key, because the installed one was signed with a public key.",
+    "description": "What's new, under the Pinky on the phone heading: Pinky replaced Pinky on the phone on a phone with a build signed with its private key, because the installed one was signed with a public key.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -10284,9 +11148,9 @@
       }
     }
   },
-  "updateNewsCompanionUpdated": "Pinky Companion was updated",
+  "updateNewsCompanionUpdated": "Pinky on the phone was updated",
   "@updateNewsCompanionUpdated": {
-    "description": "The What's new card's title after only the companion app was updated."
+    "description": "The What's new card's title after only Pinky on the phone was updated."
   },
   "updateNewsDismiss": "Dismiss",
   "@updateNewsDismiss": {
@@ -10312,7 +11176,7 @@
   },
   "updateNewsOnPhone": "On {phone}",
   "@updateNewsOnPhone": {
-    "description": "The What's new card's second line after the companion app was updated on one phone.",
+    "description": "The What's new card's second line after Pinky on the phone was updated on one phone.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -10322,7 +11186,7 @@
   },
   "updateNewsOnPhones": "{count, plural, one {On # phone} other {On # phones}}",
   "@updateNewsOnPhones": {
-    "description": "The What's new card's second line after the companion app was updated on several phones.",
+    "description": "The What's new card's second line after Pinky on the phone was updated on several phones.",
     "placeholders": {
       "count": {
         "type": "int",
@@ -10424,9 +11288,9 @@
   },
   "updateSettingsAuto": "Update automatically",
   "@updateSettingsAuto": {
-    "description": "Settings › Advanced › Updates: the switch that lets Pinky update itself and the companion app."
+    "description": "Settings › Advanced › Updates: the switch that lets Pinky update itself and Pinky on the phone."
   },
-  "updateSettingsAutoDesc": "Pinky, and Pinky Companion on your Android phones, update when no one is using them.",
+  "updateSettingsAutoDesc": "Pinky, and Pinky on your phones, update when no one is using them.",
   "@updateSettingsAutoDesc": {
     "description": "Under updateSettingsAuto."
   },
@@ -10613,6 +11477,492 @@
   "vcorpUnpairedToast": "Unpaired",
   "@vcorpUnpairedToast": {
     "description": "Settings › Agents › VCorp: the toast once unpaired."
+  },
+  "webApprovalsTooMany": "At most {count} phones can answer approvals. Remove one first.",
+  "@webApprovalsTooMany": {
+    "description": "Settings › Phones › Web mirror: a toast when the person allows another phone while the most are added.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "8"
+      }
+    }
+  },
+  "webApprovalsToggle": "Answer approvals in the browser",
+  "@webApprovalsToggle": {
+    "description": "Settings › Phones › Web mirror: the switch that lets the person allow or deny a held step from a browser on their phone, through Tailscale."
+  },
+  "webApprovalsDesc": "Allow or deny a held step from your phone, through Tailscale. Each answer asks for Face ID, a fingerprint or the phone's passcode. Pinky forgets the phones you add when it quits.",
+  "@webApprovalsDesc": {
+    "description": "Settings › Phones › Web mirror: the line under the switch Answer approvals in the browser."
+  },
+  "webApprovalsNeedsTailnet": "Works only through the tailnet link: run the tailscale serve command above first.",
+  "@webApprovalsNeedsTailnet": {
+    "description": "Settings › Phones › Web mirror: shown under Answer approvals in the browser while Tailscale does not serve the web mirror yet."
+  },
+  "webApprovalsAdd": "Add a phone",
+  "@webApprovalsAdd": {
+    "description": "Settings › Phones › Web mirror: the row that makes a link to open on the phone that should answer approvals."
+  },
+  "webApprovalsAddDesc": "Makes a link to open on your phone. It works once, for 5 minutes.",
+  "@webApprovalsAddDesc": {
+    "description": "Settings › Phones › Web mirror: the line under Add a phone."
+  },
+  "webApprovalsAddButton": "Make a link",
+  "@webApprovalsAddButton": {
+    "description": "Settings › Phones › Web mirror: the button of the row Add a phone, which makes the link."
+  },
+  "webApprovalsLink": "Link for your phone",
+  "@webApprovalsLink": {
+    "description": "Settings › Phones › Web mirror: the row with the link that adds a phone, once made."
+  },
+  "webApprovalsLinkDesc": "Open it on your phone, then come back here to allow it.",
+  "@webApprovalsLinkDesc": {
+    "description": "Settings › Phones › Web mirror: the line under Link for your phone."
+  },
+  "webApprovalsRequest": "A browser asks to answer approvals",
+  "@webApprovalsRequest": {
+    "description": "Settings › Phones › Web mirror: the title of a request from a browser that opened the link and made a passkey, waiting for the person to allow it."
+  },
+  "webApprovalsRequestDesc": "{browser} · {login}. Allow it only if your phone shows this code:",
+  "@webApprovalsRequestDesc": {
+    "description": "Settings › Phones › Web mirror: the line under A browser asks to answer approvals, followed by the six-digit code in large type. browser is as \"iPhone · Safari\", login the Tailscale login.",
+    "placeholders": {
+      "browser": {
+        "type": "String",
+        "example": "iPhone · Safari"
+      },
+      "login": {
+        "type": "String",
+        "example": "alex@example.com"
+      }
+    }
+  },
+  "webApprovalsUnknownBrowser": "A browser",
+  "@webApprovalsUnknownBrowser": {
+    "description": "Settings › Phones › Web mirror: stands for the browser's name in a request to answer approvals when Pinky can't tell which browser it is."
+  },
+  "webApprovalsWhich": "Which phone is this browser on?",
+  "@webApprovalsWhich": {
+    "description": "Settings › Phones › Web mirror: in a request to answer approvals, the label of a menu of the phones connected to Pinky, and Another device. The person picks one before Allow."
+  },
+  "webApprovalsWhichDesc": "While an agent uses that phone, and for 30 seconds after, Pinky refuses answers from it: whoever drives the phone could tap Allow.",
+  "@webApprovalsWhichDesc": {
+    "description": "Settings › Phones › Web mirror: under webApprovalsWhich, why Pinky asks."
+  },
+  "webApprovalsChoose": "Choose…",
+  "@webApprovalsChoose": {
+    "description": "Settings › Phones › Web mirror: the menu of webApprovalsWhich before the person picks a phone."
+  },
+  "webApprovalsOther": "Another device",
+  "@webApprovalsOther": {
+    "description": "Settings › Phones › Web mirror: in the menu of webApprovalsWhich, a device that is not a phone connected to Pinky."
+  },
+  "webApprovalsOtherIPhone": "This browser says it runs on an iPhone, and an iPhone is connected to Pinky. If it is that phone, choose it: otherwise an agent using it could answer.",
+  "@webApprovalsOtherIPhone": {
+    "description": "Settings › Phones › Web mirror: a warning under webApprovalsWhich when the person picks webApprovalsOther for a browser that says it runs on an iPhone while an iPhone is connected."
+  },
+  "webApprovalsOtherAndroid": "This browser says it runs on an Android phone, and an Android phone is connected to Pinky. If it is that phone, choose it: otherwise an agent using it could answer.",
+  "@webApprovalsOtherAndroid": {
+    "description": "Settings › Phones › Web mirror: as webApprovalsOtherIPhone, for Android."
+  },
+  "webApprovalsNoDevice": "That phone is no longer connected to Pinky. Choose again.",
+  "@webApprovalsNoDevice": {
+    "description": "Settings › Phones › Web mirror: a toast when the phone chosen in webApprovalsWhich went away before Allow."
+  },
+  "webApprovalsAllow": "Allow",
+  "@webApprovalsAllow": {
+    "description": "Settings › Phones › Web mirror: the button that adds the browser of a request."
+  },
+  "webApprovalsCopyLink": "Copy the link for your phone",
+  "@webApprovalsCopyLink": {
+    "description": "Settings › Phones › Web mirror: the accessible name of the copy button on the row Link for your phone."
+  },
+  "webApprovalsDeny": "Deny",
+  "@webApprovalsDeny": {
+    "description": "Settings › Phones › Web mirror: the button that turns a request down."
+  },
+  "webApprovalsPhones": "Phones that answer approvals",
+  "@webApprovalsPhones": {
+    "description": "Settings › Phones › Web mirror: the title of the list of browsers added to answer approvals."
+  },
+  "webApprovalsNoPhones": "None yet.",
+  "@webApprovalsNoPhones": {
+    "description": "Settings › Phones › Web mirror: under Phones that answer approvals when there are none."
+  },
+  "webApprovalsPhone": "{browser} · {login}",
+  "@webApprovalsPhone": {
+    "description": "Settings › Phones › Web mirror: a browser added to answer approvals. browser is as \"iPhone · Safari\", login the Tailscale login.",
+    "placeholders": {
+      "browser": {
+        "type": "String",
+        "example": "iPhone · Safari"
+      },
+      "login": {
+        "type": "String",
+        "example": "alex@example.com"
+      }
+    }
+  },
+  "webApprovalsPhoneOn": "{browser} · {login} · on {phone}",
+  "@webApprovalsPhoneOn": {
+    "description": "Settings › Phones › Web mirror: a browser added to answer approvals that runs on a phone connected to Pinky. browser is as \"iPhone · Safari\", login the Tailscale login, phone the phone's name.",
+    "placeholders": {
+      "browser": {
+        "type": "String",
+        "example": "iPhone · Safari"
+      },
+      "login": {
+        "type": "String",
+        "example": "alex@example.com"
+      },
+      "phone": {
+        "type": "String",
+        "example": "Alex's iPhone"
+      }
+    }
+  },
+  "webApprovalsRemove": "Remove",
+  "@webApprovalsRemove": {
+    "description": "Settings › Phones › Web mirror: the button that takes a phone's right to answer approvals away."
+  },
+  "webApprovalsRemoved": "The phone can no longer answer approvals",
+  "@webApprovalsRemoved": {
+    "description": "Settings › Phones › Web mirror: a toast after Remove."
+  },
+  "webApprovalsPageTitle": "Pinky approvals",
+  "@webApprovalsPageTitle": {
+    "description": "The approvals page in the browser: its title."
+  },
+  "webApprovalsPageTailnet": "Open this page through Tailscale, on a device signed in as the owner of the computer running Pinky.",
+  "@webApprovalsPageTailnet": {
+    "description": "The approvals page: the request did not come through Tailscale from the owner of the computer."
+  },
+  "webApprovalsPageNotAdded": "This browser can't answer approvals yet. In Pinky on your computer, open Settings › Phones › Web mirror and click Make a link next to Add a phone.",
+  "@webApprovalsPageNotAdded": {
+    "description": "The approvals page in a browser that was not added."
+  },
+  "webApprovalsPageNoPasskeys": "This browser can't use passkeys. Use Safari on iPhone or iPad, or Chrome on Android.",
+  "@webApprovalsPageNoPasskeys": {
+    "description": "The approvals page in a browser without passkeys (WebAuthn)."
+  },
+  "webApprovalsPageAddTitle": "Answer Pinky's approvals on this phone",
+  "@webApprovalsPageAddTitle": {
+    "description": "The approvals page opened with the link that adds a phone: its title."
+  },
+  "webApprovalsPageAddBody": "The phone keeps a passkey for your computer, and asks for Face ID, a fingerprint or its passcode each time you answer.",
+  "@webApprovalsPageAddBody": {
+    "description": "The approvals page opened with the link that adds a phone: the text under its title."
+  },
+  "webApprovalsPageAddButton": "Add this phone",
+  "@webApprovalsPageAddButton": {
+    "description": "The approvals page: the button that makes the passkey."
+  },
+  "webApprovalsPageLinkUsed": "This link was already used, or is more than 5 minutes old. Make a new one in Pinky's Settings.",
+  "@webApprovalsPageLinkUsed": {
+    "description": "The approvals page: the link that adds a phone does not work."
+  },
+  "webApprovalsPagePasskeyFailed": "No passkey was made: {detail}",
+  "@webApprovalsPagePasskeyFailed": {
+    "description": "The approvals page: making the passkey failed or was cancelled. detail is the browser's own message, in English.",
+    "placeholders": {
+      "detail": {
+        "type": "String",
+        "example": "The operation either timed out or was not allowed."
+      }
+    }
+  },
+  "webApprovalsPageCompareTitle": "Check the code on your computer",
+  "@webApprovalsPageCompareTitle": {
+    "description": "The approvals page after the passkey was made: its title."
+  },
+  "webApprovalsPageCompare": "Click Allow in Pinky's Settings only if it shows this code.",
+  "@webApprovalsPageCompare": {
+    "description": "The approvals page after the passkey was made: under the code."
+  },
+  "webApprovalsPageTurnedDown": "Pinky on your computer turned this browser down.",
+  "@webApprovalsPageTurnedDown": {
+    "description": "The approvals page: the person clicked Deny on the request in Pinky's Settings."
+  },
+  "webApprovalsPageAdded": "This phone can answer approvals now. Keep this page open: approvals show here as they come.",
+  "@webApprovalsPageAdded": {
+    "description": "The approvals page right after the person allowed the phone."
+  },
+  "webApprovalsPageNone": "Nothing waits for you.",
+  "@webApprovalsPageNone": {
+    "description": "The approvals page when no approval is open."
+  },
+  "webApprovalsPageRemoved": "This browser can no longer answer approvals: it was removed in Pinky, or Pinky quit. Add it again from Settings › Phones › Web mirror.",
+  "@webApprovalsPageRemoved": {
+    "description": "The approvals page when its session no longer works."
+  },
+  "webApprovalsPageAllow": "Allow",
+  "@webApprovalsPageAllow": {
+    "description": "The approvals page: the button that allows the step once."
+  },
+  "webApprovalsPageDeny": "Deny",
+  "@webApprovalsPageDeny": {
+    "description": "The approvals page: the button that denies the step."
+  },
+  "webApprovalsPageConfirmAllow": "Tap again to allow",
+  "@webApprovalsPageConfirmAllow": {
+    "description": "The approvals page: the Allow button after the first tap; the second tap opens the passkey sheet."
+  },
+  "webApprovalsPageConfirmDeny": "Tap again to deny",
+  "@webApprovalsPageConfirmDeny": {
+    "description": "The approvals page: as webApprovalsPageConfirmAllow, for Deny."
+  },
+  "webApprovalsPageOnComputer": "Answer this one in Pinky on your computer.",
+  "@webApprovalsPageOnComputer": {
+    "description": "The approvals page: on a card it cannot answer (an agent's first connection, opening a blocked app)."
+  },
+  "webApprovalsPageLeft": "{seconds} s left",
+  "@webApprovalsPageLeft": {
+    "description": "The approvals page: the time left to answer a card.",
+    "placeholders": {
+      "seconds": {
+        "type": "String",
+        "example": "42"
+      }
+    }
+  },
+  "webApprovalsPageTimedOut": "No answer in time: it counted as Deny.",
+  "@webApprovalsPageTimedOut": {
+    "description": "The approvals page: a card's time ran out."
+  },
+  "webApprovalsPageAlready": "Already answered, on the computer or another device.",
+  "@webApprovalsPageAlready": {
+    "description": "The approvals page: someone answered the card elsewhere first."
+  },
+  "webApprovalsPageLate": "Too late: the time ran out, and it counted as Deny.",
+  "@webApprovalsPageLate": {
+    "description": "The approvals page: the answer came after the card's time ran out."
+  },
+  "webApprovalsPageVerifyFailed": "Pinky couldn't check the passkey. Try again.",
+  "@webApprovalsPageVerifyFailed": {
+    "description": "The approvals page: the answer's passkey check failed."
+  },
+  "webApprovalsPageNotAnswered": "Not answered.",
+  "@webApprovalsPageNotAnswered": {
+    "description": "The approvals page: the person cancelled the passkey sheet."
+  },
+  "webApprovalsPageAllowed": "Allowed.",
+  "@webApprovalsPageAllowed": {
+    "description": "The approvals page: the card was allowed from this phone."
+  },
+  "webApprovalsPageDenied": "Denied.",
+  "@webApprovalsPageDenied": {
+    "description": "The approvals page: the card was denied from this phone."
+  },
+  "webApprovalsPageRule": "Rule: {rule}",
+  "@webApprovalsPageRule": {
+    "description": "The approvals page: the rule that asked, on a card.",
+    "placeholders": {
+      "rule": {
+        "type": "String",
+        "example": "Payments"
+      }
+    }
+  },
+  "webApprovalsPageBusy": "An agent is using this phone, or just did, so it can't answer approvals now. Answer on the computer or on another phone.",
+  "@webApprovalsPageBusy": {
+    "description": "The approvals page, on a phone Pinky drives, while an agent uses it."
+  },
+  "webApprovalsPageSlowDown": "Too many tries. Wait a minute, then make a new link in Pinky.",
+  "@webApprovalsPageSlowDown": {
+    "description": "The approvals page: adding a phone was refused because of too many tries in a minute."
+  },
+  "webMirrorControlDesc": "Taps, swipes, Back and Home from the page, as on Pinky's own mirror: they pause an agent's task.",
+  "@webMirrorControlDesc": {
+    "description": "Settings › Phones › Web mirror: under webMirrorControlToggle, what control from the browser does."
+  },
+  "webMirrorControlLink": "Control link",
+  "@webMirrorControlLink": {
+    "description": "Settings › Phones › Web mirror: the row of the link that can also use the phone, on this computer."
+  },
+  "webMirrorControlLinkDesc": "On this computer. The page has Back and Home.",
+  "@webMirrorControlLinkDesc": {
+    "description": "Settings › Phones › Web mirror: under webMirrorControlLink."
+  },
+  "webMirrorControlTailnetLink": "Control link on your tailnet",
+  "@webMirrorControlTailnetLink": {
+    "description": "Settings › Phones › Web mirror: the row of the link that can also use the phone, through Tailscale."
+  },
+  "webMirrorControlTailnetLinkDesc": "Works only for you, signed in to Tailscale as this computer's owner.",
+  "@webMirrorControlTailnetLinkDesc": {
+    "description": "Settings › Phones › Web mirror: under webMirrorControlTailnetLink. Through Tailscale, only the tailnet login this computer is signed in as may use the phone."
+  },
+  "webMirrorControlToggle": "Let the browser use the phone",
+  "@webMirrorControlToggle": {
+    "description": "Settings › Phones › Web mirror: the switch that lets pages opened with the control link use the phone."
+  },
+  "webMirrorControlWarning": "Anyone with the control link can use the phone as you can, in any app, blocked apps included: Pinky's rules don't apply to you. Open it only on your own devices.",
+  "@webMirrorControlWarning": {
+    "description": "Settings › Phones › Web mirror: the amber warning while control from the browser is on."
+  },
+  "webMirrorControllers": "{count, plural, one {# can use the phone} other {# can use the phone}}",
+  "@webMirrorControllers": {
+    "description": "Settings › Phones › Web mirror: after webMirrorViewers, how many of those browsers can use the phone."
+  },
+  "webMirrorPageBack": "Back",
+  "@webMirrorPageBack": {
+    "description": "The web mirror's page: the button that presses Back on the phone."
+  },
+  "webMirrorPageControlOff": "Using the phone from the browser is off. Turn it on in Pinky: Settings › Phones › Web mirror.",
+  "@webMirrorPageControlOff": {
+    "description": "The web mirror's page opened with the control link while control is off in Settings."
+  },
+  "webMirrorPageFullScreen": "Full screen",
+  "@webMirrorPageFullScreen": {
+    "description": "The web mirror's page: the button that shows the page full screen, and its tooltip."
+  },
+  "webMirrorPageHome": "Home",
+  "@webMirrorPageHome": {
+    "description": "The web mirror's page: the button that goes to the phone's home screen."
+  },
+  "webMirrorPageInControl": "You're in control: the agent's task is paused. Hand it back in Pinky.",
+  "@webMirrorPageInControl": {
+    "description": "The web mirror's page, in the bar at the top, while the person's input paused an agent's task."
+  },
+  "webMirrorPageTailnetUser": "Through Tailscale, only the owner of the computer running Pinky can use the phone: sign in to Tailscale on this device as them. Tagged devices and public links can't.",
+  "@webMirrorPageTailnetUser": {
+    "description": "The web mirror's page: the control link was opened through Tailscale without a signed-in user (a tagged device, or Tailscale Funnel). tailnet is Tailscale's word: keep it."
+  },
+  "webMirrorCopiedLink": "Link copied",
+  "@webMirrorCopiedLink": {
+    "description": "Settings › Phones › Web mirror: the toast after a Copy button copies a link to the web mirror."
+  },
+  "webMirrorCopyLink": "Copy the link",
+  "@webMirrorCopyLink": {
+    "description": "Settings › Phones › Web mirror: the accessibility label of the Copy button of the link on this computer."
+  },
+  "webMirrorCopyTailnetLink": "Copy the tailnet link",
+  "@webMirrorCopyTailnetLink": {
+    "description": "Settings › Phones › Web mirror: the accessibility label of the Copy button of the tailnet link. tailnet is Tailscale's word for the person's private network: keep it."
+  },
+  "webMirrorFailed": "Couldn't turn on the web mirror: {error}",
+  "@webMirrorFailed": {
+    "description": "Settings › Phones › Web mirror: in red under the switch when the mirror could not start, as when another program uses its port. error is the system's own words, in English."
+  },
+  "webMirrorIntro": "Watch a phone's screen in a web browser, on this computer or on your other devices through Tailscale, and use the phone there if you allow it below.",
+  "@webMirrorIntro": {
+    "description": "Settings › Phones › Web mirror: under the heading webMirrorTitle, what the web mirror is. Tailscale is a product name: keep it."
+  },
+  "webMirrorLink": "On this computer",
+  "@webMirrorLink": {
+    "description": "Settings › Phones › Web mirror: the row of the mirror's link on this computer (http://127.0.0.1:7466/)."
+  },
+  "webMirrorLinkDesc": "Open it in Safari, Chrome or Edge.",
+  "@webMirrorLinkDesc": {
+    "description": "Settings › Phones › Web mirror: under webMirrorLink: the browsers that can show the phone's video. Product names: keep them."
+  },
+  "webMirrorNewLink": "Replace the link",
+  "@webMirrorNewLink": {
+    "description": "Settings › Phones › Web mirror: the row with the button that makes a new key for the links, so old links stop working."
+  },
+  "webMirrorNewLinkButton": "New link",
+  "@webMirrorNewLinkButton": {
+    "description": "Settings › Phones › Web mirror: the button on the webMirrorNewLink row."
+  },
+  "webMirrorNewLinkDesc": "The old links stop working, and browsers watching with them are cut off. Pinky also makes new links each time it starts.",
+  "@webMirrorNewLinkDesc": {
+    "description": "Settings › Phones › Web mirror: under webMirrorNewLink: what making a new link does."
+  },
+  "webMirrorNewLinkDone": "New link made. Copy it again.",
+  "@webMirrorNewLinkDone": {
+    "description": "Settings › Phones › Web mirror: the toast after New link."
+  },
+  "webMirrorNoViewers": "No one is watching",
+  "@webMirrorNoViewers": {
+    "description": "Settings › Phones › Web mirror: next to New link, while no browser shows the mirror."
+  },
+  "webMirrorOpen": "Open",
+  "@webMirrorOpen": {
+    "description": "Settings › Phones › Web mirror: the button that opens the mirror in the computer's web browser."
+  },
+  "webMirrorPageBadToken": "This link no longer works: its key was replaced. Copy it again in Pinky: Settings › Phones › Web mirror.",
+  "@webMirrorPageBadToken": {
+    "description": "The web mirror's page in a browser: the link's key is wrong, as after New link. Settings › Phones › Web mirror is the place in Pinky; translate it with the app's names."
+  },
+  "webMirrorPageConnecting": "Connecting to Pinky…",
+  "@webMirrorPageConnecting": {
+    "description": "The web mirror's page in a browser: while it connects."
+  },
+  "webMirrorPageEnded": "The phone's picture stopped. Reconnecting…",
+  "@webMirrorPageEnded": {
+    "description": "The web mirror's page in a browser: the phone's video ended, as when the phone was unplugged."
+  },
+  "webMirrorPageInsecure": "Browsers decode video only on secure pages. Open the tailnet link (https://…) that Pinky shows.",
+  "@webMirrorPageInsecure": {
+    "description": "The web mirror's page in a browser opened over plain HTTP from another device, where WebCodecs is not available. tailnet is Tailscale's word: keep it."
+  },
+  "webMirrorPageNoPhone": "No phone is connected to Pinky. Waiting for one…",
+  "@webMirrorPageNoPhone": {
+    "description": "The web mirror's page in a browser: no phone is online."
+  },
+  "webMirrorPageNoToken": "This link has no key. Copy it again in Pinky: Settings › Phones › Web mirror.",
+  "@webMirrorPageNoToken": {
+    "description": "The web mirror's page in a browser: opened without the key after the # of the link."
+  },
+  "webMirrorPageNoWebCodecs": "This browser can't decode video for the web mirror. Use a recent Safari, Chrome or Edge.",
+  "@webMirrorPageNoWebCodecs": {
+    "description": "The web mirror's page in a browser without WebCodecs."
+  },
+  "webMirrorPagePhone": "Phone",
+  "@webMirrorPagePhone": {
+    "description": "The web mirror's page in a browser: the accessibility label of the list that picks which phone to show."
+  },
+  "webMirrorPageReconnecting": "Lost the connection to Pinky. Reconnecting…",
+  "@webMirrorPageReconnecting": {
+    "description": "The web mirror's page in a browser: the connection dropped."
+  },
+  "webMirrorPageStreamFailed": "Couldn't get the phone's picture: {detail}. Trying again…",
+  "@webMirrorPageStreamFailed": {
+    "description": "The web mirror's page in a browser: the phone's video did not open. detail is Pinky's own words, in English."
+  },
+  "webMirrorPageTitle": "Phone screen · Pinky",
+  "@webMirrorPageTitle": {
+    "description": "The web mirror's page: the browser tab's title."
+  },
+  "webMirrorPageUnsupported": "This browser can't decode the phone's {codec} video. Try Safari, or Chrome or Edge on a Mac or a Windows PC.",
+  "@webMirrorPageUnsupported": {
+    "description": "The web mirror's page in a browser that cannot decode the phone's codec. codec is \"HEVC (H.265)\" or \"H.264\"."
+  },
+  "webMirrorTailnetCommandLabel": "Command to serve the web mirror on your tailnet",
+  "@webMirrorTailnetCommandLabel": {
+    "description": "Settings › Phones › Web mirror: the accessibility label of the tailscale serve command. tailnet is Tailscale's word: keep it."
+  },
+  "webMirrorTailnetHint": "Browsers decode video only on HTTPS pages, which Tailscale gives. Run this once on this computer; your devices on Tailscale then open the mirror at {url}.",
+  "@webMirrorTailnetHint": {
+    "description": "Settings › Phones › Web mirror: above the tailscale serve command, while Tailscale is connected here but does not serve the mirror yet. url is as https://macbook.tail1234.ts.net:8443/. Tailscale is a product name: keep it."
+  },
+  "webMirrorTailnetLink": "On your tailnet",
+  "@webMirrorTailnetLink": {
+    "description": "Settings › Phones › Web mirror: the row of the mirror's link through Tailscale. tailnet is Tailscale's word: keep it."
+  },
+  "webMirrorTailnetLinkDesc": "For your devices on Tailscale.",
+  "@webMirrorTailnetLinkDesc": {
+    "description": "Settings › Phones › Web mirror: under webMirrorTailnetLink."
+  },
+  "webMirrorTailnetTitle": "Your other devices",
+  "@webMirrorTailnetTitle": {
+    "description": "Settings › Phones › Web mirror: the heading of the tailscale serve command."
+  },
+  "webMirrorTitle": "Web mirror",
+  "@webMirrorTitle": {
+    "description": "Settings › Phones: the heading of the part that shows phones in a web browser, and its accessibility label."
+  },
+  "webMirrorToggle": "Show phones in a web browser",
+  "@webMirrorToggle": {
+    "description": "Settings › Phones › Web mirror: the switch that turns the web mirror on."
+  },
+  "webMirrorViewers": "{count, plural, one {# browser is watching} other {# browsers are watching}}",
+  "@webMirrorViewers": {
+    "description": "Settings › Phones › Web mirror: next to New link, how many browsers show the mirror now (1 or more)."
+  },
+  "webMirrorWarning": "Anyone with the link sees every phone connected to Pinky and everything on its screen, as Pinky's own mirror does, blocked apps and one-time codes included. Open it only on your own devices.",
+  "@webMirrorWarning": {
+    "description": "Settings › Phones › Web mirror: the amber warning while the web mirror is on."
   },
   "wiFiAlsoAway": "Stopping it also stops Use away from home.",
   "@wiFiAlsoAway": {

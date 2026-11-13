@@ -152,7 +152,7 @@ func parseProbe(out string, app App) probe {
 		l := strings.TrimSpace(line)
 		switch {
 		case strings.HasPrefix(l, "Bound services:"):
-			if strings.Contains(l, "label="+app.Label+",") || strings.Contains(l, "label="+app.Label+"]") {
+			if app.labeled(l) {
 				p.bound = true
 			}
 		case strings.HasPrefix(l, "Enabled services:"):

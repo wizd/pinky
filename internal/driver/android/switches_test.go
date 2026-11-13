@@ -40,6 +40,9 @@ func TestParseNightMode(t *testing.T) {
 		"Night mode: yes":    driver.AppearanceDark,
 		"Night mode: auto":   driver.AppearanceAuto,
 		"Night mode: custom": "custom",
+		// Android 13 and later (#104).
+		"Night mode: custom_schedule": "custom_schedule",
+		"Night mode: custom_bedtime":  "custom_bedtime",
 	} {
 		if got, err := parseNightMode(in); err != nil || got != want {
 			t.Errorf("parseNightMode(%q) = %q, %v; want %q", in, got, err, want)

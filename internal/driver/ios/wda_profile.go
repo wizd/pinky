@@ -426,13 +426,13 @@ func (p *Provider) withHelper(ctx context.Context, e goios.DeviceEntry, info dri
 	p.mu.Unlock()
 	switch {
 	case err != nil:
-		p.logger().Info("iphone: could not read the helper's provisioning profile", "device", info.ID, "helper", r.BundleID, "err", err)
+		p.logger().Info("iphone: could not read the provisioning profile of Pinky on the iPhone", "device", info.ID, "helper", r.BundleID, "err", err)
 		return info
 	case exp.IsZero():
-		p.logger().Info("iphone: no provisioning profile on the phone grants the helper", "device", info.ID, "helper", r.BundleID)
+		p.logger().Info("iphone: no provisioning profile on the phone grants Pinky on the iPhone", "device", info.ID, "helper", r.BundleID)
 		return info
 	}
-	p.logger().Info("iphone: the helper's provisioning profile", "device", info.ID, "helper", r.BundleID, "expires", exp.Local().Format(time.RFC3339))
+	p.logger().Info("iphone: the provisioning profile of Pinky on the iPhone", "device", info.ID, "helper", r.BundleID, "expires", exp.Local().Format(time.RFC3339))
 	info.HelperExpires = exp
 	if !now.Before(exp) {
 		info.State, info.Setup, info.Detail = driver.StateNeedsSetup, driver.SetupInstallHelper, helperExpired(exp)
@@ -478,7 +478,7 @@ func (p *Provider) helperStill(ctx context.Context, e goios.DeviceEntry, k known
 			}
 			p.mu.Unlock()
 			if !exp.IsZero() {
-				p.logger().Info("iphone: the helper's provisioning profile changed", "device", id, "helper", h.runner.BundleID, "expires", exp.Local().Format(time.RFC3339))
+				p.logger().Info("iphone: the provisioning profile of Pinky on the iPhone changed", "device", id, "helper", h.runner.BundleID, "expires", exp.Local().Format(time.RFC3339))
 			}
 			k.info.HelperExpires = exp
 		}
@@ -515,8 +515,8 @@ func (d *WDADevice) helperExpires(ctx context.Context) (time.Time, error) {
 
 // helperExpired says that the helper's profile ran out.
 func helperExpired(exp time.Time) string {
-	return "The WebDriverAgent helper's provisioning profile ran out on " + helperDate(exp) +
-		", so iOS no longer starts it. Install it again on a Mac with Xcode, with Install again in Pinky's window or pinkyctl helper install (docs/notes/ios.md, \"Installing the WebDriverAgent helper\"); with a free Apple ID it lasts 7 days."
+	return "The provisioning profile of Pinky on the iPhone ran out on " + helperDate(exp) +
+		", so iOS no longer starts it. Install it again on a Mac with Xcode, with Install again in Pinky's window or pinkyctl helper install (docs/notes/ios.md, \"Installing Pinky on the iPhone\"); with a free Apple ID it lasts 7 days."
 }
 
 // helperDate writes when a profile runs out, in the computer's time zone.

@@ -258,7 +258,7 @@ func (d *Device) launchLocale(ctx context.Context, app string, loc driver.Locale
 	}
 	phone := ""
 	if loc.Language == "" {
-		if phone, err = lockdownLocale(ctx, d.l.base); err != nil {
+		if phone, err = lockdownLocale(ctx, d.cur().base); err != nil {
 			return fmt.Errorf("read the phone's language: %w", err)
 		}
 	}
@@ -274,7 +274,7 @@ func (d *Device) launchLocale(ctx context.Context, app string, loc driver.Locale
 	opts := input["options"].(map[string]any)
 	opts["arguments"] = args
 	opts["terminateExisting"] = true
-	svc, err := dialCoreDevice(d.l.entry, appService)
+	svc, err := dialCoreDevice(d.link().entry, appService)
 	if err != nil {
 		return err
 	}

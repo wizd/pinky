@@ -31,8 +31,8 @@ func (a *AXDevice) setImageDir(dir string)  { a.d.imageDir = dir }
 // Checkup implements driver.Checker on CoreDevice (iOS 27 and later).
 func (d *Device) Checkup(ctx context.Context) (driver.Checkup, error) {
 	return runChecks(ctx, d.info,
-		func(context.Context) driver.Check { return checkDevMode(d.l.base) },
-		func(ctx context.Context) driver.Check { return checkImage(ctx, d.l, d.imageDir, true) },
+		func(context.Context) driver.Check { return checkDevMode(d.cur().base) },
+		func(ctx context.Context) driver.Check { return checkImage(ctx, d.link(), d.imageDir, true) },
 		d.checkScreen,
 		d.checkInput,
 	)
@@ -68,16 +68,16 @@ func (d *WDADevice) Checkup(ctx context.Context) (driver.Checkup, error) {
 func (a *AXDevice) Checkup(ctx context.Context) (driver.Checkup, error) {
 	d := a.d
 	return runChecks(ctx, d.info,
-		func(context.Context) driver.Check { return checkDevMode(d.l.base) },
-		func(ctx context.Context) driver.Check { return checkImage(ctx, d.l, d.imageDir, false) },
+		func(context.Context) driver.Check { return checkDevMode(d.cur().base) },
+		func(ctx context.Context) driver.Check { return checkImage(ctx, d.link(), d.imageDir, false) },
 		func(ctx context.Context) driver.Check { return checkScreenshot(ctx, a.Screenshot) },
 		func(context.Context) driver.Check {
 			return driver.Check{ID: driver.CheckHelper, Status: driver.CheckFail, Fix: driver.FixInstallHelper,
-				Detail: "below iOS 27 an iPhone takes taps and typing only through the WebDriverAgent helper, which is not installed"}
+				Detail: "below iOS 27 an iPhone takes taps and typing only through Pinky on the iPhone, which is not installed"}
 		},
 		func(context.Context) driver.Check {
 			return driver.Check{ID: driver.CheckInput, Status: driver.CheckFail, Fix: driver.FixInstallHelper,
-				Detail: "without the WebDriverAgent helper this iPhone takes no taps, swipes or typing"}
+				Detail: "without Pinky on the iPhone this iPhone takes no taps, swipes or typing"}
 		},
 	)
 }
@@ -217,14 +217,15 @@ func checkScreenshot(ctx context.Context, shot func(context.Context) (image.Imag
 // phone.
 func (d *Device) checkInput(ctx context.Context) driver.Check {
 	c := driver.Check{ID: driver.CheckInput}
-	if !d.l.has(universalHIDService) {
+	l := d.link()
+	if !l.has(universalHIDService) {
 		c.Status, c.Detail = driver.CheckFail, "the iPhone does not offer "+universalHIDService
 		return c
 	}
 	type result struct{ err error }
 	ch := make(chan result, 1)
 	go func() {
-		x, err := dialXPC(d.l.entry, universalHIDService)
+		x, err := dialXPC(l.entry, universalHIDService)
 		if err == nil {
 			x.Close()
 		}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Quick Settings tile that shows or hides Pinky's floating button:
+     a round button with Pinky's eyes. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,2a10,10 0,1 0,0.001 0ZM8.3,12a1.3,1.7 0,1 0,2.6 0a1.3,1.7 0,1 0,-2.6 0ZM13.1,12a1.3,1.7 0,1 0,2.6 0a1.3,1.7 0,1 0,-2.6 0Z" />
+</vector>

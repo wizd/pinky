@@ -146,7 +146,7 @@ func (d *Device) instrumentsShot(ctx context.Context) ([]byte, error) {
 		}
 		ch := make(chan result, 1)
 		go func() {
-			s, err := openInstShot(d.l.entry, limit)
+			s, err := openInstShot(d.link().entry, limit)
 			ch <- result{s, err}
 		}()
 		select {
@@ -203,7 +203,7 @@ func (d *Device) captureShotOf(ctx context.Context, uid string) ([]byte, error) 
 	}
 	for attempt := 0; ; attempt++ {
 		if d.shot == nil {
-			svc, err := dialCoreDevice(d.l.entry, screenCaptureService)
+			svc, err := dialCoreDevice(d.link().entry, screenCaptureService)
 			if err != nil {
 				return nil, err
 			}

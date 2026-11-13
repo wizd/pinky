@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -128,6 +129,7 @@ type Gateway struct {
 	known      map[string]bool           // phones that are the person's, which providers may open over Wi-Fi (wifi.go)
 	names      map[string]history.Device // what the history store calls the phones Pinky has seen (wifi.go)
 	chosen     map[string]string         // the connection the person chose per phone, none for Automatic (connection.go)
+	started    map[string]bool           // virtual phones started with StartVirtual in this run, by platform and VirtualID (virtual.go)
 	wifiOn     bool                      // the providers use phones over Wi-Fi (SetWiFi)
 	keepDays   int                       // history retention; 0 keeps everything
 	prune      chan struct{}             // asks the retention loop to run now
@@ -163,6 +165,7 @@ func New(o Options) (*Gateway, error) {
 		known:      map[string]bool{},
 		names:      map[string]history.Device{},
 		chosen:     map[string]string{},
+		started:    map[string]bool{},
 		prune:      make(chan struct{}, 1),
 	}
 	if g.policy == nil {
@@ -347,7 +350,7 @@ func (g *Gateway) discover(ctx context.Context) {
 		}
 		g.mu.Lock()
 		var gone []*device
-		var left []string
+		var left, forgot []string
 		now := time.Now()
 		for id, d := range g.devices {
 			if d.provider != p || seen[id] {
@@ -381,6 +384,16 @@ func (g *Gateway) discover(ctx context.Context) {
 				delete(g.devices, id)
 				left = append(left, id)
 				g.log.Info("device forgotten", "device", id, "why", "never opened, and no longer listed")
+			case emulator(d.info) && !d.opening && d.lease == nil && now.Sub(d.unlistedAt) >= emulatorGrace && !g.keepEmulatorLocked(d):
+				// An emulator that went away, with nothing to keep for
+				// it: its next run is likely another phone
+				// (emulatorGrace).
+				d.removed = true
+				g.dropSettingsLocked(id)
+				forgetTaskWay(d)
+				forgot = append(forgot, id)
+				left = append(left, id)
+				g.log.Info("device forgotten", "device", id, "why", "an emulator, no longer listed")
 			case unlisted(d):
 				left = append(left, id)
 			}
@@ -388,6 +401,9 @@ func (g *Gateway) discover(ctx context.Context) {
 		g.mu.Unlock()
 		for _, d := range gone {
 			g.setOffline(d, "the phone disconnected")
+		}
+		for _, id := range forgot {
+			g.forgetSettings(p, id)
 		}
 		for _, id := range left {
 			g.emit(Event{Kind: EventDevices, DeviceID: id})
@@ -402,6 +418,36 @@ func (g *Gateway) discover(ctx context.Context) {
 // long enough for a phone that restarts while it is set up (Developer
 // Mode) to come back as itself. A variable for tests.
 var unopenedGrace = 2 * time.Minute
+
+// emulatorGrace is how long an Android emulator that its provider no
+// longer lists stays on the list, offline, before it is forgotten with its
+// settings (its history stays). An emulator is listed by its adb serial,
+// which names the port it runs on, so its next run is often another phone:
+// the ones Pinky kept would pile up offline, a hundred a day for a test
+// farm. One that comes back later is listed again as new. A variable for
+// tests.
+var emulatorGrace = 10 * time.Minute
+
+// emulator reports whether the phone is an Android emulator. An iOS
+// Simulator keeps its UDID from run to run and stays.
+func emulator(info driver.Info) bool {
+	return info.Virtual && info.Platform == driver.Android
+}
+
+// keepEmulatorLocked reports whether a gone emulator stays on the list
+// all the same: Pinky started its AVD in this run, which runs again on the
+// same port and so as the same phone (Add phone's Start), or the person
+// gave it settings of its own (agents on a background display or not, a
+// connection, read-only). Its saved PIN is the client's, which forgetting
+// does not delete. The caller holds g.mu.
+func (g *Gateway) keepEmulatorLocked(d *device) bool {
+	if d.info.VirtualID != "" && g.started[virtualKey(d.info.Platform, d.info.VirtualID)] {
+		return true
+	}
+	_, background := g.background[d.id]
+	_, chosen := g.chosen[d.id]
+	return background || chosen || g.policy.ReadOnly(d.id)
+}
 
 // unlisted marks a phone its provider no longer lists, and that the
 // gateway has not opened, as offline: it went away while it waited for a
@@ -718,11 +764,30 @@ func (g *Gateway) expireIdle() {
 // from the computer, before an agent needs it. A variable for tests.
 var idleLockEvery = 6 * time.Second
 
+// idleLockEveryWiFi is idleLockEvery for an idle phone over Wi-Fi whose
+// screen nobody watches: each read is a new lockdown session over the
+// network, which costs the phone more than one over a cable (GitHub issue
+// #96), and nothing shows the state at once but the phone's tile. A
+// variable for tests.
+var idleLockEveryWiFi = 30 * time.Second
+
+// watchedDevices returns the IDs of the devices whose picture has a hub.
+func (g *Gateway) watchedDevices() map[string]bool {
+	g.hubMu.Lock()
+	defer g.hubMu.Unlock()
+	w := make(map[string]bool, len(g.hubs))
+	for key := range g.hubs { // an ended hub leaves the map
+		w[strings.TrimSuffix(key, "#agent")] = true
+	}
+	return w
+}
+
 // pollLocks asks lock-reporting drivers about devices that have an agent,
-// and about idle ones every idleLockEvery. A locked device whose driver
-// cannot report locks is read instead, so the unlock card goes away when
-// the person unlocks.
+// and about idle ones every idleLockEvery (idleLockEveryWiFi over Wi-Fi
+// with nobody watching). A locked device whose driver cannot report locks
+// is read instead, so the unlock card goes away when the person unlocks.
 func (g *Gateway) pollLocks(ctx context.Context) {
+	watched := g.watchedDevices()
 	g.mu.Lock()
 	var report, read []*device
 	now := time.Now()
@@ -731,7 +796,11 @@ func (g *Gateway) pollLocks(ctx context.Context) {
 			continue
 		}
 		if d.lease == nil {
-			if _, ok := d.dev.(driver.LockReporter); ok && now.Sub(d.lockReadAt) >= idleLockEvery {
+			every := idleLockEvery
+			if !watched[d.id] && d.dev.Info().Connection == "wifi" {
+				every = idleLockEveryWiFi
+			}
+			if _, ok := d.dev.(driver.LockReporter); ok && now.Sub(d.lockReadAt) >= every {
 				d.lockReadAt = now
 				report = append(report, d)
 			}
@@ -814,8 +883,8 @@ func (g *Gateway) screenOfLocked(d *device) (driver.Device, bool) {
 
 // noteWorkLocked tells the phone's driver whether an agent works on it, a
 // task running while the person is not in control, when that changed
-// (driver.WorkWatcher). Android turns Pinky Companion's accessibility
-// service on only while one does.
+// (driver.WorkWatcher). Pinky on the phone's accessibility service is on
+// only while one does.
 func (g *Gateway) noteWorkLocked(d *device) {
 	ww, ok := d.dev.(driver.WorkWatcher)
 	if !ok {

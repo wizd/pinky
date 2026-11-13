@@ -103,7 +103,7 @@ func (a *app) watchGatewaySettings(c *mg.Context) {
 // replaced.
 func (a *app) takeGatewaySettings(g Settings) {
 	for _, s := range []*Settings{&a.settings, &a.reported} {
-		s.Preset, s.HideCodes, s.ReadOnly = g.Preset, g.HideCodes, g.ReadOnly
+		s.Preset, s.HideCodes, s.VirtualCredentials, s.ReadOnly = g.Preset, g.HideCodes, g.VirtualCredentials, g.ReadOnly
 		s.BlockedApps = append([]BlockedApp(nil), g.BlockedApps...)
 	}
 }
@@ -138,7 +138,7 @@ func (a *app) fileProblemNotes(c *mg.Context) {
 		title := locales.SettingsFileProblemTitle(fp.File)
 		mg.Row(c.Key("file-problem-"+fp.File)).Gap(8).AlignItems(mg.Start).Padding(12, 14).Radius(10).
 			Background(p.amberTint).Border(1, p.amberLine).Role(mg.RoleStatus).Label(title).Children(func() {
-			mg.Icon(c, icAlert).FontSize(16).TextColor(p.amber).Margin(1, 0, 0, 0)
+			mg.Icon(c, icAlert).FontSize(iconBody).TextColor(p.amber).Margin(1, 0, 0, 0)
 			mg.Column(c).Gap(4).Grow(1).MinWidth(0).Children(func() {
 				mg.Text(c, title).FontWeight(fwSemibold)
 				mg.Text(c, locales.SettingsFileProblemDesc()).FontSize(fsSmall).TextColor(p.ink2)

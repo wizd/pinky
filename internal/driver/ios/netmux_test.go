@@ -32,14 +32,12 @@ func muxTestProvider(t *testing.T) *Provider {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	// This computer's own pair records (an iPad paired on Linux, say) would
-	// match the fake phone too, since pairFn gives every UDID its MAC.
-	lockdown := netmux.LockdownDir
-	netmux.LockdownDir = t.TempDir()
-	t.Cleanup(func() { netmux.LockdownDir = lockdown })
 	t.Setenv(ownMuxVar, "") // restored after the test: the provider sets it
 	p := NewProvider()
 	p.WiFiMux = true
+	// This computer's own pair records (an iPad paired on Linux, say) would
+	// match the fake phone too, since pairFn gives every UDID its MAC.
+	p.nmux.pairs = t.TempDir()
 	p.nmux.anyOS = true
 	p.nmux.dir = dir
 	p.nmux.browseFn = func() (netmux.Source, error) {

@@ -104,7 +104,7 @@ func (a *app) addVirtual(c *mg.Context) {
 		return
 	case len(st.list) == 0 && st.err != "":
 		statusBox(c, func() {
-			mg.Icon(c, icAlert).FontSize(16).TextColor(p.amberDot).Shrink(0)
+			mg.Icon(c, icAlert).FontSize(iconBody).TextColor(p.amberDot).Shrink(0)
 			mg.Text(c, locales.AddVirtualListFailed(st.err)).Grow(1).MinWidth(0)
 		})
 		return
@@ -137,7 +137,7 @@ func (a *app) virtualSection(c *mg.Context, vp driver.VirtualPhones) {
 		sectionLabel(c, title).Margin(0)
 		if msg := virtualMissing(vp); msg != "" {
 			mg.Row(c).Gap(10).Padding(sp3, 14).Radius(rControl).Background(p.bg2).AlignItems(mg.Start).Role(mg.RoleStatus).Children(func() {
-				mg.Icon(c, icAlert).FontSize(16).TextColor(p.amberDot).Shrink(0).Margin(1, 0, 0, 0)
+				mg.Icon(c, icAlert).FontSize(iconBody).TextColor(p.amberDot).Shrink(0).Margin(1, 0, 0, 0)
 				mg.Text(c, msg).FontSize(fsBody).Grow(1).MinWidth(0)
 			})
 			return
@@ -222,7 +222,7 @@ func (a *app) virtualRow(c *mg.Context, pf driver.Platform, v driver.VirtualPhon
 		if pf == driver.IOS {
 			ic = icIphone
 		}
-		mg.Icon(c, ic).FontSize(20).TextColor(p.ink2).Shrink(0)
+		mg.Icon(c, ic).FontSize(iconLarge).TextColor(p.ink2).Shrink(0)
 		mg.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			mg.Text(c, v.Name).FontWeight(fwSemibold)
 			mg.Row(c).Gap(6).AlignItems(mg.Center).Children(func() {

@@ -23,7 +23,7 @@ RELEASE_SIGN ?= Developer ID Application: NATURAL SELECTION LABS PTE. LTD. (492J
 NOTARY_PROFILE ?= pinky-notary
 DMG := build/pinky/darwin-$(GOARCH)/pinky-$(VERSION)-$(GOARCH).dmg
 
-.PHONY: build test vet check app e2e companion companion-release ffmpeg adb release notarize dist
+.PHONY: build test vet check app windows-dev e2e companion companion-release ffmpeg adb release notarize dist
 
 build:
 	CGO_ENABLED=0 go build ./...
@@ -62,20 +62,29 @@ ifeq ($(UNAME),Darwin)
 app: $(FFMPEG)/BUILD.txt $(if $(shell command -v cmake),$(ADB)/BUILD.txt)
 endif
 app:
-	@rm -f cmd/pinky/resources/pinky-companion.apk
+	@rm -f cmd/pinky/resources/pinky-android.apk
 	@if [ -f "$(COMPANION_APK)" ]; then \
 		mkdir -p cmd/pinky/resources && \
-		cp "$(COMPANION_APK)" cmd/pinky/resources/pinky-companion.apk && \
+		cp "$(COMPANION_APK)" cmd/pinky/resources/pinky-android.apk && \
 		echo "adding the companion APK ($(COMPANION_APK))"; \
 	else \
 		echo "no companion APK at $(COMPANION_APK) (make companion); the app will not offer to install it"; \
 	fi
 	MYGO_LDFLAGS="-X main.version=$(VERSION)" go tool mygo build -sign "$(MACOS_SIGN)" -skip-notarize cmd/pinky
-	@rm -f cmd/pinky/resources/pinky-companion.apk
+	@rm -f cmd/pinky/resources/pinky-android.apk
 	@rmdir cmd/pinky/resources 2>/dev/null || true
 ifeq ($(UNAME),Darwin)
 	ADB="$(if $(wildcard $(ADB)/BUILD.txt),$(ADB))" SIGN="$(MACOS_SIGN)" scripts/macapp.sh build/pinky/darwin-$(GOARCH)/Pinky.app $(FFMPEG) build/pinky/darwin-$(GOARCH)/pinky-$(VERSION)-$(GOARCH).dmg
 endif
+
+# Local Windows development: build Pinky.exe with MyGo. When
+# build/ffmpeg-windows/bin holds the LGPL FFmpeg 9 DLLs
+# (scripts/ffmpeg.sh build/ffmpeg-windows windows-amd64 makes them), the
+# script stages them through MyGo's resources so the build carries them
+# beside Pinky.exe, then removes the temporary resources. Released packages
+# use scripts/dist.sh and its separately built LGPL FFmpeg instead.
+windows-dev:
+	sh scripts/windows-dev.sh
 
 # Pinky.app and its .dmg for this Mac's processor, signed with the
 # Developer ID and notarized, to try on other Macs. Releases are made by
@@ -112,5 +121,8 @@ companion:
 # The companion's release build, signed with Pinky's release key
 # (PINKY_COMPANION_KEYSTORE and PINKY_COMPANION_KEYSTORE_PASSWORD, which only
 # the release workflow has); scripts/dist.sh companion runs it.
+# It carries Pinky's core, so it needs the Android NDK too
+# (scripts/androidcore.sh).
 companion-release:
+	scripts/androidcore.sh core
 	cd android/companion && ./gradlew --quiet assembleRelease

@@ -1,0 +1,271 @@
+{
+  "//": "Generated from internal/pilot/services.go by `go generate ./internal/pilot`. Do not edit.",
+  "services": [
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "api": "anthropic",
+      "base_url": "",
+      "models": [
+        {
+          "id": "claude-opus-5-5",
+          "name": "Claude Opus 5.5"
+        },
+        {
+          "id": "claude-sonnet-5-5",
+          "name": "Claude Sonnet 5.5"
+        },
+        {
+          "id": "claude-haiku-5-5",
+          "name": "Claude Haiku 5.5"
+        }
+      ],
+      "priced_models": [
+        "claude-fable-5-2",
+        "claude-haiku-5-5",
+        "claude-opus-5",
+        "claude-opus-5-5",
+        "claude-sonnet-5",
+        "claude-sonnet-5-5"
+      ]
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "api": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "models": [
+        {
+          "id": "gpt-5.6-terra",
+          "name": "GPT-5.6 Terra"
+        }
+      ],
+      "priced_models": [
+        "gpt-5.6-terra",
+        "gpt-6-astra",
+        "gpt-6-luna",
+        "gpt-6.1-sol",
+        "gpt-6.1-terra"
+      ]
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "api": "openai",
+      "base_url": "https://api.deepseek.com",
+      "models": [
+        {
+          "id": "deepseek-flash"
+        }
+      ],
+      "priced_models": [
+        "deepseek-flash",
+        "deepseek-v4-pro"
+      ]
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "api": "openai",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "models": [
+        {
+          "id": "gemini-4-hydrogen",
+          "name": "Gemini 4 Hydrogen"
+        },
+        {
+          "id": "gemini-4-carbon",
+          "name": "Gemini 4 Carbon"
+        }
+      ],
+      "priced_models": [
+        "gemini-3.5-flash-lite",
+        "gemini-4-argon",
+        "gemini-4-carbon",
+        "gemini-4-hydrogen"
+      ]
+    },
+    {
+      "id": "kimi-cn",
+      "name": "Kimi",
+      "region": "china",
+      "api": "openai",
+      "base_url": "https://api.moonshot.cn/v1",
+      "models": [
+        {
+          "id": "kimi-k3.1-pro"
+        },
+        {
+          "id": "kimi-k3.1-pro-highspeed"
+        },
+        {
+          "id": "kimi-k3"
+        }
+      ]
+    },
+    {
+      "id": "kimi-intl",
+      "name": "Kimi",
+      "region": "global",
+      "api": "openai",
+      "base_url": "https://api.moonshot.ai/v1",
+      "models": [
+        {
+          "id": "kimi-k3.1-pro"
+        },
+        {
+          "id": "kimi-k3.1-pro-highspeed"
+        },
+        {
+          "id": "kimi-k3"
+        }
+      ]
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "api": "openai",
+      "base_url": "https://openrouter.ai/api/v1",
+      "models": [
+        {
+          "id": "anthropic/claude-sonnet-5.5"
+        },
+        {
+          "id": "google/gemini-4-hydrogen"
+        }
+      ]
+    },
+    {
+      "id": "qwen-cn",
+      "name": "Qwen",
+      "region": "china",
+      "api": "openai",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "models": [
+        {
+          "id": "qwen3.7-plus"
+        }
+      ],
+      "priced_models": [
+        "qwen3.7-plus",
+        "qwen3.8-flash",
+        "qwen3.8-max"
+      ]
+    },
+    {
+      "id": "qwen-intl",
+      "name": "Qwen",
+      "region": "global",
+      "api": "openai",
+      "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+      "models": [
+        {
+          "id": "qwen3.7-plus"
+        }
+      ],
+      "priced_models": [
+        "qwen3.7-plus",
+        "qwen3.8-flash",
+        "qwen3.8-max"
+      ]
+    },
+    {
+      "id": "siliconflow-cn",
+      "name": "SiliconFlow",
+      "region": "china",
+      "api": "openai",
+      "base_url": "https://api.siliconflow.cn/v1"
+    },
+    {
+      "id": "siliconflow-intl",
+      "name": "SiliconFlow",
+      "region": "global",
+      "api": "openai",
+      "base_url": "https://api.siliconflow.com/v1"
+    },
+    {
+      "id": "volcengine-ark",
+      "name": "Volcengine Ark",
+      "api": "openai",
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "models": [
+        {
+          "id": "doubao-seed-2-1-pro-260915"
+        },
+        {
+          "id": "doubao-seed-2-1-lite-260915"
+        },
+        {
+          "id": "doubao-seed-2-1-turbo-260628"
+        }
+      ]
+    },
+    {
+      "id": "glm-cn",
+      "name": "Zhipu GLM",
+      "region": "china",
+      "api": "openai",
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "models": [
+        {
+          "id": "glm-5.3-flash"
+        }
+      ]
+    },
+    {
+      "id": "glm-intl",
+      "name": "Zhipu GLM",
+      "region": "global",
+      "api": "openai",
+      "base_url": "https://api.z.ai/api/paas/v4",
+      "models": [
+        {
+          "id": "glm-5.3-flash"
+        }
+      ],
+      "priced_models": [
+        "glm-5.3",
+        "glm-5.3-flash",
+        "glm-5.3-flashx"
+      ]
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama",
+      "api": "openai",
+      "base_url": "http://localhost:11434/v1",
+      "key_optional": true,
+      "local": true
+    },
+    {
+      "id": "lm-studio",
+      "name": "LM Studio",
+      "api": "openai",
+      "base_url": "http://localhost:1234/v1",
+      "key_optional": true,
+      "local": true
+    },
+    {
+      "id": "openai-compatible",
+      "name": "OpenAI-compatible",
+      "api": "openai",
+      "base_url": "",
+      "custom": true
+    },
+    {
+      "id": "anthropic-compatible",
+      "name": "Anthropic-compatible",
+      "api": "anthropic",
+      "base_url": "",
+      "custom": true,
+      "priced_models": [
+        "claude-fable-5-2",
+        "claude-haiku-5-5",
+        "claude-opus-5",
+        "claude-opus-5-5",
+        "claude-sonnet-5",
+        "claude-sonnet-5-5"
+      ]
+    }
+  ]
+}

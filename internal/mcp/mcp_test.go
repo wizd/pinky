@@ -123,7 +123,9 @@ func TestToolList(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"phone_connect", "phone_release", "phone_observe", "phone_tap", "phone_type", "phone_swipe", "phone_pinch", "phone_drag", "phone_key",
-		"phone_launch", "phone_apps", "phone_batch", "phone_wait_for", "phone_files", "phone_app", "phone_logs", "phone_device", "phone_request_approval", "phone_handoff"}
+		"phone_launch", "phone_apps", "phone_batch", "phone_read_list", "phone_wait_for", "phone_files", "phone_app",
+		"phone_logs", "phone_device", "phone_request_approval", "phone_handoff",
+		"phone_task_run", "phone_task_status", "phone_task_wait", "phone_task_steer", "phone_task_cancel", "phone_task_list"}
 	got := map[string]*sdk.Tool{}
 	for _, tool := range res.Tools {
 		got[tool.Name] = tool
@@ -161,6 +163,19 @@ func TestToolList(t *testing.T) {
 	schema, _ = json.Marshal(got["phone_batch"].InputSchema)
 	if !strings.Contains(string(schema), `"maxItems":50`) || !strings.Contains(string(schema), `"launch"`) {
 		t.Fatalf("phone_batch schema: %s", schema)
+	}
+	schema, _ = json.Marshal(got["phone_read_list"].InputSchema)
+	for _, want := range []string{`"max_screens"`, `"scroll_area"`, `"continuation"`, `"auto"`, `"all"`, `45000`} {
+		if !strings.Contains(string(schema), want) {
+			t.Fatalf("phone_read_list schema misses %s: %s", want, schema)
+		}
+	}
+	if strings.Contains(string(schema), `"null"`) {
+		t.Fatalf("phone_read_list schema advertises null types: %s", schema)
+	}
+	annotations := got["phone_read_list"].Annotations
+	if annotations == nil || annotations.DestructiveHint == nil || *annotations.DestructiveHint {
+		t.Fatalf("phone_read_list should be non-destructive acting: %+v", annotations)
 	}
 	schema, _ = json.Marshal(got["phone_device"].InputSchema)
 	for _, s := range []string{`"reverse_landscape"`, `"dark"`, `"latitude"`, `"maximum":180`, `"all"`} {
@@ -376,6 +391,36 @@ func TestBatchAndScreenshot(t *testing.T) {
 	}
 }
 
+func TestReadListOverMCP(t *testing.T) {
+	h := newHarness(t)
+	c := h.connect(t, "claude-code")
+	c.call(t, "phone_connect", map[string]any{"task": "Read a cart"})
+	c.call(t, "phone_launch", map[string]any{"app": "Dinely"})
+	text, _ := c.call(t, "phone_tap", map[string]any{"ref": refOf(t, c.mustCall(t, "phone_observe", nil), "Orders")})
+	text, _ = c.call(t, "phone_tap", map[string]any{"ref": refOf(t, text, "Reorder · Chicken rice bowl")})
+	text, _ = c.call(t, "phone_tap", map[string]any{"ref": refOf(t, text, "Cart · 1")})
+	if !strings.Contains(text, `"Cart"`) {
+		t.Fatalf("cart screen:\n%s", text)
+	}
+	text = c.mustCall(t, "phone_observe", nil)
+	text, isErr := c.call(t, "phone_read_list", map[string]any{
+		"ref": refOf(t, text, "Cart"), "max_screens": 3, "ocr": "off",
+	})
+	if isErr || !strings.HasPrefix(text, "settled") || !strings.Contains(text, "pages: 3") ||
+		!strings.Contains(text, "stop: no_new_content") {
+		t.Fatalf("read list:\n%s", text)
+	}
+}
+
+func (c *client) mustCall(t *testing.T, tool string, args map[string]any) string {
+	t.Helper()
+	text, isErr := c.call(t, tool, args)
+	if isErr {
+		t.Fatalf("%s failed:\n%s", tool, text)
+	}
+	return text
+}
+
 func TestHandoffOverMCP(t *testing.T) {
 	h := newHarness(t)
 	c := h.connect(t, "claude-code")
@@ -421,6 +466,33 @@ func TestStatusLine(t *testing.T) {
 	}
 	if got := StatusLine(&gateway.Result{Status: gateway.StatusNeedsSetup, DeviceName: "iPhone 16", Setup: "trust"}); got != "device_needs_setup · iPhone 16 · setup: trust" {
 		t.Fatal(got)
+	}
+	if got := StatusLine(&gateway.Result{Status: gateway.StatusSettled, DeviceName: "iPhone", Scan: &gateway.ScanView{
+		Pages: 3, Stop: "max_screens",
+	}}); got != "settled · iPhone · pages: 3 · stop: max_screens · complete: false" {
+		t.Fatal(got)
+	}
+}
+
+func TestRenderReadList(t *testing.T) {
+	result := render(&gateway.Result{
+		Status: gateway.StatusSettled,
+		Scan: &gateway.ScanView{
+			Pages: 2, Stop: "end", Complete: true,
+			Sections: []gateway.ScanPage{
+				{Number: 1, Lines: []string{"first", "second"}},
+				{Number: 2, Lines: []string{"third"}},
+			},
+		},
+	})
+	if len(result.Content) != 1 {
+		t.Fatalf("content = %d", len(result.Content))
+	}
+	text := result.Content[0].(*sdk.TextContent).Text
+	for _, want := range []string{"pages: 2", "stop: end", "complete: true", "screen 1", "- first", "screen 2", "- third"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("result misses %q:\n%s", want, text)
+		}
 	}
 }
 

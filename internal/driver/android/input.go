@@ -157,7 +157,9 @@ func (d *Device) longPressHold(ctx context.Context) time.Duration {
 
 // Tap implements driver.Device.
 func (d *Device) Tap(ctx context.Context, p screen.Point, opt driver.TapOptions) error {
-	d.used()
+	if err := d.acting(ctx); err != nil {
+		return err
+	}
 	hold := tapHold
 	if opt.LongPress {
 		hold = d.longPressHold(ctx)
@@ -174,7 +176,9 @@ func (d *Device) Tap(ctx context.Context, p screen.Point, opt driver.TapOptions)
 
 // Swipe implements driver.Device.
 func (d *Device) Swipe(ctx context.Context, from, to screen.Point, dur time.Duration) error {
-	d.used()
+	if err := d.acting(ctx); err != nil {
+		return err
+	}
 	err := d.withInput(ctx, true, func(l *live) error { return l.swipe(ctx, from, to, dur) })
 	if err == nil {
 		d.markAwake()
@@ -184,13 +188,18 @@ func (d *Device) Swipe(ctx context.Context, from, to screen.Point, dur time.Dura
 
 // Touch implements driver.Toucher, for the person's drags on the mirror.
 func (d *Device) Touch(ctx context.Context, a driver.TouchAction, p screen.Point) error {
-	d.used()
+	if err := d.acting(ctx); err != nil {
+		return err
+	}
 	return d.withInput(ctx, a == driver.TouchDown, func(l *live) error { return l.touch(ctx, a, p) })
 }
 
 // Key implements driver.Device.
 func (d *Device) Key(ctx context.Context, k driver.Key) error {
-	d.used()
+	if err := d.acting(ctx); err != nil {
+		return err
+	}
+	d.setInputNote("")
 	code, ok := keycodes[k]
 	if !ok {
 		return fmt.Errorf("android: key %q: %w", k, driver.ErrUnsupported)
@@ -212,7 +221,9 @@ func (d *Device) Key(ctx context.Context, k driver.Key) error {
 // read back afterwards: text that did not land, or reads otherwise, is an
 // error and is not submitted.
 func (d *Device) Type(ctx context.Context, text string, opt driver.TypeOptions) error {
-	d.used()
+	if err := d.acting(ctx); err != nil {
+		return err
+	}
 	d.setInputNote("")
 	if _, err := d.inputSession(ctx); err != nil {
 		return err

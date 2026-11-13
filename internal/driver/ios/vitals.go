@@ -29,7 +29,7 @@ var (
 // while the phone is locked and starts nothing the person sees: no display
 // stream, no screen, no HID.
 func (d *Device) Vitals(ctx context.Context, parts driver.VitalParts) (driver.Vitals, error) {
-	v, err := readVitals(ctx, d.l.base, parts)
+	v, err := readVitals(ctx, d.cur().base, parts)
 	return v, d.gone(err)
 }
 

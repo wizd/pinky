@@ -18,9 +18,11 @@ import (
 // be updated in place: it is turned off, uninstalled (Pinky's own package
 // only) and replaced. Either way the service is off afterwards, as after
 // any task: Pinky turns it on while an agent works on the phone, and the
-// person may be using the phone now. It refuses with driver.ErrNeedsPerson
-// when the phone would show a dialog (Google Play Protect checks adb
-// installs), and does nothing while the driver has the service on.
+// person may be using the phone now. On a phone where only the person can
+// turn it on (manual), an update in place leaves one they turned on on.
+// It refuses with driver.ErrNeedsPerson when the phone would show a dialog
+// (Google Play Protect checks adb installs), and does nothing while the
+// driver has the service on.
 func (d *Device) UpdateCompanion(ctx context.Context) (driver.CompanionUpdate, error) {
 	var res driver.CompanionUpdate
 	c := d.newCompanion()
@@ -80,9 +82,16 @@ func (d *Device) UpdateCompanion(ctx context.Context) (driver.CompanionUpdate, e
 	k.mu.Unlock()
 	// Android keeps a service listed across an update of the same package
 	// and binds the new build: one that an older Pinky kept on for good
-	// goes off, unless another client uses it.
+	// goes off, unless another client uses it, or the person turned it on
+	// on a phone where only they can (manual), where it stays on.
 	if listed, err := c.Enabled(ctx); err == nil && listed {
-		if answers(ctx, c, 10*time.Second) && companionPeers(ctx, c) {
+		if d.companionManualPhone() {
+			if answers(ctx, c, 10*time.Second) {
+				d.keepOn(ctx, c)
+			}
+			res.ServiceOn = true
+			d.cfg.logf("android: %s: leaving on the updated companion's service, which the person turned on on a phone where only they can", d.info.ID)
+		} else if answers(ctx, c, 10*time.Second) && companionPeers(ctx, c) {
 			res.ServiceOn = true
 		} else if err := c.ForceDisable(ctx); err != nil {
 			d.cfg.logf("android: %s: turning the updated companion's service off: %v", d.info.ID, err)

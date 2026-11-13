@@ -20,7 +20,7 @@ type Activity struct {
 	// Needs are approvals, unlocks and handoffs waiting for the person.
 	Needs int
 	// Busy is other work under way, in words: "unlocking Pixel 9",
-	// "installing Pinky Companion on Mi 10 Pro", "recording".
+	// "installing Pinky on Mi 10 Pro", "recording".
 	Busy []string
 	// LastInput is when the person last used Pinky's windows; LastTask is
 	// when an agent task last ran.

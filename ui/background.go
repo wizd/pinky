@@ -86,17 +86,22 @@ func (a *app) phoneChosen(id string, t *gateway.TaskView) bool {
 	return t != nil && a.bg.phone[id] == t.ID
 }
 
-// agentMirrorFor returns the mirror of the display an agent works on.
-func (a *app) agentMirrorFor(id string) *mirror {
+// agentMirrorFor returns the mirror of the display an agent works on
+// during the task. Until the display opens it asks again every few
+// seconds, but not while the task works on the phone's own screen: none
+// opens for it then.
+func (a *app) agentMirrorFor(id, task string) *mirror {
 	key := "agent:" + id
 	m := a.mirrors[key]
 	if m == nil {
-		m = &mirror{a: a, id: id, agent: true}
+		m = &mirror{a: a, id: id, agent: true, task: task}
 		a.mirrors[key] = m
 		m.open()
 	}
 	m.used = a.buildSeq
-	if m.state == "failed" && !m.opening && time.Now().After(m.retry) && a.videoErr == nil {
+	m.task = task
+	own := errors.Is(m.err, gateway.ErrOwnScreen) && m.ownTask == task
+	if m.state == "failed" && !m.opening && !own && time.Now().After(m.retry) && a.videoErr == nil {
 		m.open()
 	}
 	return m
@@ -114,7 +119,7 @@ func (a *app) screenFor(d gateway.DeviceView, t *gateway.TaskView, tile bool) (m
 	_, handoff := a.handoffFor(d.Info.ID)
 	holds := d.Status == gateway.DeviceInControl || handoff || t.State == gateway.TaskPaused
 	if !holds && (!a.phoneChosen(d.Info.ID, t) || tile) {
-		if am := a.agentMirrorFor(d.Info.ID); !am.missing() {
+		if am := a.agentMirrorFor(d.Info.ID, t.ID); !am.missing() {
 			return am, true
 		}
 	}

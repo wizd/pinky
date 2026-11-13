@@ -221,7 +221,7 @@ func (d *Device) InspectPackage(ctx context.Context, paths []string) (driver.Pac
 	if err != nil {
 		return p, err
 	}
-	p.Installed, err = installedVersion(ctx, d.l.base, p.ID)
+	p.Installed, err = installedVersion(ctx, d.cur().base, p.ID)
 	return p, d.gone(err)
 }
 
@@ -232,7 +232,7 @@ func (d *Device) InstallPackage(ctx context.Context, paths []string) error {
 		return err
 	}
 	start := time.Now()
-	err = installIPA(ctx, d.l.base, a.File, p.Name)
+	err = installIPA(ctx, d.cur().base, a.File, p.Name)
 	d.appsChanged()
 	if err != nil {
 		return d.gone(err)
@@ -243,7 +243,7 @@ func (d *Device) InstallPackage(ctx context.Context, paths []string) error {
 
 // UninstallApp implements driver.AppManager.
 func (d *Device) UninstallApp(ctx context.Context, id string) error {
-	err := uninstallBundle(ctx, d.l.base, id)
+	err := uninstallBundle(ctx, d.cur().base, id)
 	d.appsChanged()
 	return d.gone(err)
 }
@@ -279,7 +279,7 @@ func (d *Device) stopApp(ctx context.Context, id string) error {
 	if len(pids) == 0 {
 		return nil // not running
 	}
-	svc, err := dialCoreDevice(d.l.entry, appService)
+	svc, err := dialCoreDevice(d.link().entry, appService)
 	if err != nil {
 		return err
 	}

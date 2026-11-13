@@ -26,6 +26,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/ProtonMail/go-crypto v1.4.1 // indirect
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect

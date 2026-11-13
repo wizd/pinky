@@ -10,7 +10,7 @@ These rules are for everyone working on the code, people and agents alike. Sever
 | `internal/driver/android/` | Android driver session | Not `companion/` below it |
 | `internal/driver/android/companion/`, `android/companion/` | Companion session | Kotlin app and its Go client |
 | `internal/driver/ios/` | iOS driver session | |
-| `internal/video/`, `ui/`, `assets/` | Desktop client session | |
+| `internal/video/`, `ui/`, `internal/gwtext/`, `assets/` | Desktop client session | `internal/gwtext` also speaks for the phones' cores (`internal/standalone`) |
 | `internal/gateway/` (but `api.go`), `internal/policy/`, `internal/approval/`, `internal/history/`, `internal/mcp/`, `cmd/pinky/` | Main session | Integrates everything |
 | `internal/update/`, `ui/update.go`, `cmd/pinky/update.go`, `cmd/pinky/shimconn.go` | Auto-update session | The feed contract with the release pipeline is in `docs/notes/updates.md` |
 | `docs/` | Anyone | Keep DESIGN.md as the reference; add notes under `docs/notes/<area>.md` |

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	mg "github.com/egoist/mygo/ui"
 
+	"github.com/DIYgod/pinky/cmd/pinky/locales"
 	"github.com/DIYgod/pinky/internal/agents"
 	"github.com/DIYgod/pinky/internal/gateway"
 	"github.com/DIYgod/pinky/ui/fakeapi"
@@ -254,6 +256,79 @@ func TestConnectAgentsNoneFound(t *testing.T) {
 	}
 }
 
+// TestConnectAgentsInView: while no agent has connected, Settings › Agents
+// says to connect one below, and Connect an agent comes right under that,
+// before Ask Pinky, so that the way to connect one shows without scrolling
+// in the default window and the smallest, in each language, whether Pinky
+// found agents on this computer or not. Once one has connected, Ask Pinky
+// comes first again.
+func TestConnectAgentsInView(t *testing.T) {
+	sizes := [][2]int{{1280, 820}, {960, 620}}
+	for _, f := range []struct {
+		what  string
+		list  []agents.Status
+		first func() string // the label of the first way to connect
+	}{
+		{"agents found", []agents.Status{{ID: "claude-code", Name: "Claude Code", Found: true}, {ID: "claude-desktop", Name: "Claude Desktop", Found: true}, {ID: "codex", Name: "Codex"}},
+			func() string { return locales.ConnectConnectLabel("Claude Code") }},
+		{"none found", []agents.Status{{ID: "claude-code", Name: "Claude Code"}, {ID: "claude-desktop", Name: "Claude Desktop"}, {ID: "codex", Name: "Codex"}},
+			func() string { return locales.ConnectGet("Claude Code") }},
+	} {
+		ta, _ := firstRun(t, fakeapi.OnePhone, f.list)
+		ta.app.opt.Pilot = newFakePilot()
+		ta.page, ta.set.sec = pageSettings, secAgents
+		for _, lang := range testLanguages() {
+			inLanguage(t, lang)
+			for _, size := range sizes {
+				// The window, and one as wide that is tall enough to
+				// show everything, to tell what a whole element measures.
+				tt, tall := mg.NewTester(ta.view, size[0], size[1]), mg.NewTester(ta.view, size[0], 4000)
+				tt.SetLocale(lang)
+				tall.SetLocale(lang)
+				ta.waitFor(t, "the agents", func() bool { tt.Frame(); return ta.setup.loaded && ta.agents.loaded })
+				tt.Frame()
+				tall.Frame()
+				what := fmt.Sprintf("%s, %s, %dx%d", f.what, lang, size[0], size[1])
+				if !hasText(tt, locales.SettingsAgentsNone()) {
+					t.Errorf("%s: no word that no agent has connected: %q", what, tt.Texts())
+				}
+				for _, s := range []string{locales.ConnectIntro(), f.first()} {
+					if box, ok := wholeInView(tt, tall, s, float32(size[1])); !ok {
+						t.Errorf("%s: %q %v does not show whole without scrolling", what, s, box)
+					}
+				}
+				connect, _ := tall.Find(locales.ConnectIntro())
+				if ask, ok := tall.Find(locales.SettingsAskIntro()); !ok || ask.Y < connect.Y {
+					t.Errorf("%s: Connect an agent %v comes after Ask Pinky %v (%v)", what, connect, ask, ok)
+				}
+			}
+		}
+	}
+
+	ta, _ := setupApp(t, fakeapi.OnePhone, someAgents())
+	ta.app.opt.Pilot = newFakePilot()
+	ta.page, ta.set.sec = pageSettings, secAgents
+	tall := mg.NewTester(ta.view, 1280, 4000)
+	ta.waitFor(t, "the agents", func() bool { tall.Frame(); return ta.setup.loaded && ta.agents.loaded && len(ta.agents.list) > 0 })
+	tall.Frame()
+	connect, okConnect := tall.Find(locales.ConnectIntro())
+	ask, okAsk := tall.Find(locales.SettingsAskIntro())
+	if !okConnect || !okAsk || connect.Y < ask.Y {
+		t.Errorf("with an agent connected, Connect an agent %v (%v) comes before Ask Pinky %v (%v)", connect, okConnect, ask, okAsk)
+	}
+}
+
+// wholeInView returns the box of the element labelled s in tt's window of
+// height h, and whether it shows whole there without scrolling: in the
+// window, and as big as in tall, the same view in a window tall enough to
+// show everything.
+func wholeInView(tt, tall *mg.Tester, s string, h float32) (mg.Rect, bool) {
+	const eps = 0.5
+	box, ok := tt.Find(s)
+	full, okFull := tall.Find(s)
+	return box, ok && okFull && full.H > 0 && box.W >= full.W-eps && box.H >= full.H-eps && box.Y+box.H <= h+eps
+}
+
 func TestAgentCard(t *testing.T) {
 	one := []agents.Status{{ID: "claude-code", Name: "Claude Code", Found: true}, {ID: "codex", Name: "Codex"}}
 	ta, f := firstRun(t, fakeapi.NoPhones, one)
@@ -349,9 +424,10 @@ func TestTasksSayNoAgent(t *testing.T) {
 	}
 }
 
-// TestAgentSetupScreenshots draws Settings › Agents › Connect an agent and
-// the sidebar's card, in each of the client's languages, into
-// $PINKY_SCREENSHOTS, to look for text that is cut or overflows.
+// TestAgentSetupScreenshots draws Settings › Agents › Connect an agent,
+// before and after an agent has connected, and the sidebar's card, in each
+// of the client's languages, into $PINKY_SCREENSHOTS, to look for text
+// that is cut or overflows.
 func TestAgentSetupScreenshots(t *testing.T) {
 	dir := os.Getenv("PINKY_SCREENSHOTS")
 	if dir == "" {
@@ -361,8 +437,8 @@ func TestAgentSetupScreenshots(t *testing.T) {
 		tt := mg.NewTester(ta.view, 1280, 820)
 		ta.waitFor(t, "the agents", func() bool { tt.Frame(); return ta.setup.loaded && ta.agents.loaded })
 	}
-	save := func(ta *testApp, name string) {
-		tt := mg.NewTester(ta.view, 1280, 820)
+	saveAt := func(ta *testApp, name string, w, h int) {
+		tt := mg.NewTester(ta.view, w, h)
 		tt.Frame()
 		tt.Frame()
 		var buf bytes.Buffer
@@ -373,12 +449,23 @@ func TestAgentSetupScreenshots(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	save := func(ta *testApp, name string) { saveAt(ta, name, 1280, 820) }
 	for _, lang := range testLanguages() {
 		inLanguage(t, lang)
+		// Settings › Agents before an agent has connected, with Ask
+		// Pinky, in the default window and the smallest.
+		ta, _ := firstRun(t, fakeapi.NoPhones, []agents.Status{{ID: "claude-code", Name: "Claude Code", Found: true},
+			{ID: "claude-desktop", Name: "Claude Desktop", Found: true}, {ID: "codex", Name: "Codex"}})
+		ta.app.opt.Pilot = newFakePilot()
+		ta.page, ta.set.sec = pageSettings, secAgents
+		loaded(ta)
+		save(ta, "agents-first-"+lang)
+		saveAt(ta, "agents-first-small-"+lang, 960, 620)
+
 		list := someAgents()
 		list = append(list[:3:3], agents.Status{ID: "windsurf", Name: "Windsurf", Found: true,
 			Problem: "Pinky can't read ~/.codeium/windsurf/mcp_config.json: not valid JSON at byte 12: expected a colon"}, list[3], list[4])
-		ta, _ := setupApp(t, fakeapi.OnePhone, list)
+		ta, _ = setupApp(t, fakeapi.OnePhone, list)
 		ta.page, ta.set.sec = pageSettings, secAgents
 		loaded(ta)
 		ta.changeAgent("claude-code", false)

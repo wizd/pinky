@@ -9,8 +9,9 @@ import (
 )
 
 // Finding an app by the name an agent gives. Only a sure match is taken: the
-// id, the app's name or one of its aliases (an iPhone's home screen name,
-// driver.App.Aliases), or a well-known name below. A name that is only part
+// id, the app's name or one of its aliases (an iPhone app's bundle name when
+// its home screen shows another, driver.App.Aliases), or a well-known name
+// below. A name that is only part
 // of an app's name is not: "微信" is part of "微信读书" (WeRead), while WeChat's
 // bundle is named WeChat on an iPhone in any language (GitHub issue #7). Such
 // apps are offered to the agent to choose from instead.

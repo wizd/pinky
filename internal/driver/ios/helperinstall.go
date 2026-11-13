@@ -23,6 +23,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/danielpaulus/go-ios/ios/installationproxy"
+
 	"github.com/DIYgod/pinky/internal/driver"
 )
 
@@ -62,6 +64,9 @@ type HelperInstall struct {
 	// LocalSigning keeps Xcode to the certificates and profiles already
 	// on this Mac: it never registers the phone or makes a profile.
 	LocalSigning bool
+	// HelperOnly installs Pinky Helper even when this Pinky could install
+	// its iPhone app to host WebDriverAgent (appinstall.go).
+	HelperOnly bool
 	// Out gets what InstallHelper does, for the person.
 	Out io.Writer
 	// Progress, when not nil, gets each step as it begins
@@ -97,11 +102,11 @@ func InstallHelper(ctx context.Context, o HelperInstall) error {
 	}
 	progress(driver.HelperPreparing)
 	if runtime.GOOS != "darwin" {
-		return helperErr(driver.HelperFixXcode, errors.New("installing the iPhone helper needs a Mac with Xcode"), "")
+		return helperErr(driver.HelperFixXcode, errors.New("installing Pinky on the iPhone needs a Mac with Xcode"), "")
 	}
 	x, err := findXcode()
 	if err != nil {
-		return helperErr(driver.HelperFixXcode, fmt.Errorf("installing the iPhone helper needs Xcode: %w", err), "")
+		return helperErr(driver.HelperFixXcode, fmt.Errorf("installing Pinky on the iPhone needs Xcode: %w", err), "")
 	}
 	team := strings.ToUpper(strings.TrimSpace(o.Team))
 	if team != "" && !teamID.MatchString(team) {
@@ -204,11 +209,11 @@ func InstallHelper(ctx context.Context, o HelperInstall) error {
 	progress(driver.HelperBuilding)
 	tail, err := xr.run(ctx, driver.HelperBuilding, helperBuildArgs(src, dd, ph.UDID, team, bid, false), nil)
 	if err != nil && ctx.Err() == nil && !o.LocalSigning && needsProvisioning(tail) {
-		fmt.Fprintln(out, "No profile on this Mac signs the helper for this phone; letting Xcode get one from Apple (it may register the phone with your team).")
+		fmt.Fprintln(out, "No profile on this Mac signs Pinky on the iPhone for this phone; letting Xcode get one from Apple (it may register the phone with your team).")
 		tail, err = xr.run(ctx, driver.HelperBuilding, helperBuildArgs(src, dd, ph.UDID, team, bid, true), nil)
 	}
 	if err != nil {
-		return xcodeFailed(ctx, "building the helper", err, tail, logPath, o.LocalSigning)
+		return xcodeFailed(ctx, "building Pinky on the iPhone", err, tail, logPath, o.LocalSigning)
 	}
 	products := filepath.Join(dd, "Build", "Products")
 	app := runnerAppIn(products)
@@ -217,10 +222,10 @@ func InstallHelper(ctx context.Context, o HelperInstall) error {
 	}
 	profile, err := embeddedProfile(app)
 	if err != nil {
-		return fmt.Errorf("reading the profile Xcode signed the helper with: %w", err)
+		return fmt.Errorf("reading the profile Xcode signed Pinky on the iPhone with: %w", err)
 	}
 	if !profile.runsOn(ph.UDID) {
-		e := helperErr(driver.HelperFixSigning, fmt.Errorf("the profile Xcode signed the helper with, %q, does not include %s", profile.Name, ph.Name), logPath)
+		e := helperErr(driver.HelperFixSigning, fmt.Errorf("the profile Xcode signed Pinky on the iPhone with, %q, does not include %s", profile.Name, ph.Name), logPath)
 		if o.LocalSigning {
 			e.Hint = "Run this without --local-signing, or add the phone to your team in Xcode."
 		}
@@ -229,10 +234,41 @@ func InstallHelper(ctx context.Context, o HelperInstall) error {
 
 	// Pinky's name and icon, then the signature again.
 	if _, err := brandRunner(ctx, x, app); err != nil {
-		return fmt.Errorf("giving the helper Pinky's name and icon: %w", err)
+		return fmt.Errorf("giving the app Pinky's name and icon: %w", err)
 	}
 	if err := resignApp(ctx, x, app); err != nil {
-		return fmt.Errorf("signing the helper again: %w", err)
+		return fmt.Errorf("signing Pinky on the iPhone again: %w", err)
+	}
+
+	// Pinky's iPhone app hosting WDA in place of the helper, when this
+	// Pinky has the app's kit (appinstall.go); the helper otherwise.
+	if !o.HelperOnly {
+		start := func(args []string) (string, error) {
+			run, cancel := context.WithTimeout(ctx, helperStartTimeout)
+			defer cancel()
+			return xr.run(run, driver.HelperInstalling, args, []string{"TEST_RUNNER_USE_IP=127.0.0.1"})
+		}
+		id, appProfile, err := installApp(ctx, appInstall{x: x, xr: xr, out: out, client: client,
+			cache: o.Dir, tmp: tmp, udid: ph.UDID, team: team, runner: app, products: products,
+			local: o.LocalSigning,
+			testArgs: func(xctestrun string) []string {
+				fmt.Fprintf(out, "Installing Pinky on %s and starting WebDriverAgent in it once. Keep the phone unlocked; if it asks for its passcode to allow automation, enter it there.\n", ph.Name)
+				progress(driver.HelperInstalling)
+				return helperTestArgs(xctestrun, ph.UDID, filepath.Join(tmp, "run-app"))
+			},
+			start: start})
+		switch {
+		case err == nil:
+			fmt.Fprintf(out, "Installed Pinky (%s) on %s; WebDriverAgent answered in it and was stopped again.\n", id, ph.Name)
+			fmt.Fprintf(out, "Its signature lasts until %s. Pinky starts WebDriverAgent in it whenever it opens the phone.\n", helperDate(appProfile.Expires))
+			installs.note(ph.UDID, helperRecord{Team: team, BundleID: bid, Expires: appProfile.Expires})
+			return nil
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case errors.Is(err, errNoKit):
+		default:
+			fmt.Fprintf(out, "Could not install Pinky's iPhone app to host WebDriverAgent (%v); installing %q instead.\n", err, helperDisplayName)
+		}
 	}
 
 	// Install and start it once, as Product › Test does.
@@ -240,11 +276,11 @@ func InstallHelper(ctx context.Context, o HelperInstall) error {
 	progress(driver.HelperInstalling)
 	run, cancel := context.WithTimeout(ctx, helperStartTimeout)
 	defer cancel()
-	tail, err = xr.run(run, driver.HelperInstalling, helperTestArgs(products, ph.UDID, filepath.Join(tmp, "run")), []string{"TEST_RUNNER_USE_IP=127.0.0.1"})
+	tail, err = xr.run(run, driver.HelperInstalling, helperTestArgs(xctestrun(products), ph.UDID, filepath.Join(tmp, "run")), []string{"TEST_RUNNER_USE_IP=127.0.0.1"})
 	if err != nil {
 		if errors.Is(err, errHelperUp) {
 			fmt.Fprintf(out, "Installed %q on %s; WebDriverAgent answered and was stopped again.\n", helperDisplayName, ph.Name)
-			fmt.Fprintf(out, "Its signature lasts until %s. Pinky starts the helper whenever it opens the phone.\n", helperDate(profile.Expires))
+			fmt.Fprintf(out, "Its signature lasts until %s. Pinky starts it whenever it opens the phone.\n", helperDate(profile.Expires))
 			installs.note(ph.UDID, helperRecord{Team: team, BundleID: bid, Expires: profile.Expires})
 			return nil
 		}
@@ -256,9 +292,9 @@ func InstallHelper(ctx context.Context, o HelperInstall) error {
 			}
 			return helperErr(fix, fmt.Errorf("WebDriverAgent did not answer within %s of starting on %s", helperStartTimeout, ph.Name), logPath)
 		}
-		return xcodeFailed(ctx, "installing and starting the helper", err, tail, logPath, o.LocalSigning)
+		return xcodeFailed(ctx, "installing and starting Pinky on the iPhone", err, tail, logPath, o.LocalSigning)
 	}
-	return helperErr(helperFix(tail), fmt.Errorf("the helper's test ended before WebDriverAgent answered: %s", xcodeErrors(tail)), logPath)
+	return helperErr(helperFix(tail), fmt.Errorf("WebDriverAgent's test ended before it answered: %s", xcodeErrors(tail)), logPath)
 }
 
 // helperInstalls remembers, in Pinky's WebDriverAgent folder, the team and
@@ -354,7 +390,10 @@ func helperBundleID(want, team string, r wdaRunner) string {
 func phoneRunner(ctx context.Context, x xcode, udid string) (wdaRunner, error) {
 	e, err := findEntry(udid, false)
 	if err == nil {
-		return findRunnerApp(e)
+		var apps []installationproxy.AppInfo
+		if apps, err = userApps(e); err == nil {
+			return pickHelperApp(apps), nil
+		}
 	}
 	r, derr := devicectlRunner(ctx, x, udid)
 	if derr != nil {
@@ -618,11 +657,11 @@ func helperBuildArgs(src, dd, udid, team, bid string, updates bool) []string {
 		"PRODUCT_BUNDLE_IDENTIFIER="+bid)
 }
 
-// helperTestArgs installs the build in products on the phone and runs
-// WDA's test, which serves until it is stopped.
-func helperTestArgs(products, udid, dd string) []string {
+// helperTestArgs installs the build an xctestrun names on the phone and
+// runs WDA's test, which serves until it is stopped.
+func helperTestArgs(run, udid, dd string) []string {
 	return []string{"test-without-building",
-		"-xctestrun", xctestrun(products),
+		"-xctestrun", run,
 		"-destination", "id=" + udid,
 		"-derivedDataPath", dd,
 		"-collect-test-diagnostics", "never",
@@ -782,20 +821,20 @@ func helperHintFor(fix string, local bool) string {
 	case driver.HelperFixDeveloperMode:
 		return "Turn on Developer Mode in Settings › Privacy & Security › Developer Mode (the phone restarts), then run this again."
 	case driver.HelperFixOtherTeam:
-		return "Another team signed the helper on the phone, and iOS replaces an app only with one of its team. Name that team with --team, or a new --bundle-id to install beside it."
+		return "Another team signed Pinky Helper on the phone, and iOS replaces an app only with one of its team. Name that team with --team, or a new --bundle-id to install beside it."
 	case driver.HelperFixTrust:
 		return "On the phone, trust your developer certificate in Settings › General › VPN & Device Management, then run this again."
 	case driver.HelperFixPasscode:
 		return "Enter the phone's passcode on the phone when it asks to allow automation, then run this again."
 	case driver.HelperFixUnlock:
-		return "Unlock the phone and keep it unlocked until the helper starts, then run this again."
+		return "Unlock the phone and keep it unlocked until WebDriverAgent starts, then run this again."
 	case driver.HelperFixAppleID:
 		return "Add your Apple ID in Xcode › Settings › Accounts, or name another team with --team."
 	case driver.HelperFixSigning:
 		if local {
-			return "Xcode found no way to sign the helper for this phone. Run this without --local-signing to let Xcode get a profile, or check your team in Xcode › Settings › Accounts."
+			return "Xcode found no way to sign Pinky on the iPhone for this phone. Run this without --local-signing to let Xcode get a profile, or check your team in Xcode › Settings › Accounts."
 		}
-		return "Xcode found no way to sign the helper for this phone. Check your team in Xcode › Settings › Accounts, and that the phone is added to it."
+		return "Xcode found no way to sign Pinky on the iPhone for this phone. Check your team in Xcode › Settings › Accounts, and that the phone is added to it."
 	case driver.HelperFixDownload:
 		return "Check the internet connection, then run this again."
 	}
@@ -829,19 +868,12 @@ func resignApp(ctx context.Context, x xcode, app string) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	prefix := filepath.Join(tmp, "cert")
-	cmd := exec.CommandContext(ctx, "/usr/bin/codesign", "-d", "--extract-certificates="+prefix, app)
-	cmd.Env = x.env()
-	if b, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("reading its certificate: %v: %s", err, strings.TrimSpace(string(b)))
-	}
-	der, err := os.ReadFile(prefix + "0")
+	der, err := extractCert(ctx, x, app, tmp)
 	if err != nil {
-		return fmt.Errorf("Xcode did not sign it: %w", err)
+		return err
 	}
-	sum := sha1.Sum(der)
 	for _, args := range [][]string{
-		resignArgs(strings.ToUpper(hex.EncodeToString(sum[:])), app),
+		resignArgs(sha1Hex(der), app),
 		{"--verify", "--deep", "--strict", app},
 	} {
 		cmd := exec.CommandContext(ctx, "/usr/bin/codesign", args...)
@@ -851,6 +883,28 @@ func resignApp(ctx context.Context, x xcode, app string) error {
 		}
 	}
 	return nil
+}
+
+// extractCert reads the certificate app was signed with, through a file
+// in tmp.
+func extractCert(ctx context.Context, x xcode, app, tmp string) ([]byte, error) {
+	prefix := filepath.Join(tmp, "cert")
+	cmd := exec.CommandContext(ctx, "/usr/bin/codesign", "-d", "--extract-certificates="+prefix, app)
+	cmd.Env = x.env()
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("reading its certificate: %v: %s", err, strings.TrimSpace(string(b)))
+	}
+	der, err := os.ReadFile(prefix + "0")
+	if err != nil {
+		return nil, fmt.Errorf("Xcode did not sign it: %w", err)
+	}
+	return der, nil
+}
+
+// sha1Hex is a certificate's SHA-1 as codesign names an identity by it.
+func sha1Hex(der []byte) string {
+	sum := sha1.Sum(der)
+	return strings.ToUpper(hex.EncodeToString(sum[:]))
 }
 
 // resignArgs sign app with the identity whose certificate has this SHA-1,

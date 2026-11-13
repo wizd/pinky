@@ -59,6 +59,11 @@ func (p *Provider) Disconnect(ctx context.Context, id string) error {
 	if id == "" {
 		return nil
 	}
+	// The addresses it was last connected at over Wireless debugging go
+	// too: pairing it again keeps a new one.
+	if err := p.net.keepPaired(func(g string) bool { return guidSerial(g) != id }); err != nil {
+		p.cfg.logf("android: %s: forgetting its Wireless debugging address: %v", id, err)
+	}
 	if n, ok := p.net.get(id); ok {
 		if err := p.net.update(id, func(m *netPhone) { *m = netPhone{} }); err != nil {
 			p.cfg.logf("android: %s: forgetting its addresses: %v", id, err)

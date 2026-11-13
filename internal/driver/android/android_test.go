@@ -92,6 +92,29 @@ func TestInfoFromEntry(t *testing.T) {
 	}
 }
 
+// TestEmulatorSerial: only "emulator-" and a console port is an emulator
+// on this computer; a phone connected by an address that starts so is not,
+// and neither is a USB device so named (Virtual lifts the credentials rule
+// where allowed).
+func TestEmulatorSerial(t *testing.T) {
+	for serial, want := range map[string]bool{
+		"emulator-5554": true, "emulator-6012": true,
+		"emulator-": false, "emulator-phone:5555": false, "emulator-5554:5555": false, "emulator-55a4": false,
+		"3e8be48e": false, "192.168.1.2:5555": false, "adb-3e8be48e-AbCdEf._adb-tls-connect._tcp": false,
+	} {
+		if got := emulatorSerial(serial); got != want {
+			t.Errorf("emulatorSerial(%q) = %v, want %v", serial, got, want)
+		}
+		if info := infoFromEntry(adb.DeviceEntry{Serial: serial, State: "device"}); info.Virtual != want {
+			t.Errorf("infoFromEntry(%q).Virtual = %v, want %v", serial, info.Virtual, want)
+		}
+	}
+	// A phone on a cable whose serial reads like an emulator's.
+	if info := infoFromEntry(adb.DeviceEntry{Serial: "emulator-5554", USB: "1-2", State: "device"}); info.Virtual {
+		t.Errorf("a USB device named emulator-5554 is virtual: %+v", info)
+	}
+}
+
 func TestMatchApp(t *testing.T) {
 	apps := []driver.App{
 		{ID: "com.android.settings", Name: "\u8bbe\u7f6e", System: true},
@@ -354,8 +377,8 @@ func TestFindCompanionAPK(t *testing.T) {
 		t.Fatalf("$PINKY_COMPANION_APK: %q, %v", p, err)
 	}
 	cands := companionAPKCandidates()
-	if len(cands) != 4 || !strings.HasSuffix(cands[1], "pinky-companion.apk") ||
-		!strings.HasSuffix(cands[2], filepath.Join("..", "Resources", "pinky-companion.apk")) && !strings.Contains(cands[2], "Resources") {
+	if len(cands) != 4 || !strings.HasSuffix(cands[1], "pinky-android.apk") ||
+		!strings.HasSuffix(cands[2], filepath.Join("..", "Resources", "pinky-android.apk")) && !strings.Contains(cands[2], "Resources") {
 		t.Errorf("candidates = %q", cands)
 	}
 }

@@ -18,6 +18,9 @@ type link struct {
 	tunnel *Tunnel
 	rsd    goios.RsdHandshakeResponse
 	entry  goios.DeviceEntry // routes go-ios connections through the tunnel
+	// tunnelOnly marks a link without usbmuxd (OpenOverTunnel): lockdown
+	// services go through their twins on the tunnel (shim.go).
+	tunnelOnly bool
 
 	rsdConn  io.Closer // the RSD connection the host was announced on, open for rsdLinger
 	rsdClose sync.Once

@@ -1,15 +1,17 @@
 <p align="center"><img src="assets/icon/pinky-macos-1024.png" width="112" alt=""></p>
 <h1 align="center">Pinky</h1>
-<p align="center"><b>让任何 AI Agent 用上你的 iPhone 和 Android 手机：Mac、Windows、Linux 都能跑，关键一步你说了算。</b></p>
+<p align="center"><b>让 AI 用上你的 iPhone 和 Android 手机，关键一步你说了算：可以是 Mac、Windows、Linux 上的任何 Agent，也可以是手机上的 Pinky 自己。</b></p>
 <p align="center"><a href="https://github.com/DIYgod/pinky/releases/latest">下载</a> · <a href="#开始使用">开始使用</a> · <a href="#常见问题">常见问题</a> · <a href="https://discord.gg/S27b7SHjng">Discord</a></p>
 <p align="center"><a href="README.md">English</a> · 简体中文 · <a href="README.ja.md">日本語</a></p>
 <p align="center"><img src="assets/readme/demo-zh.gif" width="760" alt="Claude Code 在短信里输入回复，Pinky 扣住「发送」这一下，等你允许后才发出去"><br><sub>在 Android 16 模拟器上真实运行的 Claude Code。Pinky 默认只在付款前询问，这次还设了发消息前也要问。</sub></p>
 
-Pinky 让任何 Agent（Claude Code、Claude Desktop、Codex、Cursor，或者一段脚本）通过 MCP 操作真实的 iPhone 或 Android 手机。你在电脑上看着它干活，有风险的步骤由你批准，随时可以接管，事后还能回看。审批由 Pinky 的网关执行，不靠给 Agent 的指令。
+Pinky 让任何 Agent（Claude Code、Claude Desktop、Codex、Cursor，或者一段脚本）通过 MCP 操作真实的 iPhone 或 Android 手机。你在电脑上看着它干活，有风险的步骤由你批准，随时可以接管，事后还能回看。Pinky 也能用你选的 AI 模型自己完成任务：在电脑上交给它，或者直接在手机上的 Pinky 应用里让它做，完全不用电脑。不管任务由谁来做，审批都由 Pinky 的网关执行，不靠给 Agent 的指令。
 
-- **全平台**：一个应用，macOS（Apple 芯片和 Intel）、Windows、Linux 都能用。能操作 Android 手机（Android 10 到 17）和 iOS 17.4 及以上的 iPhone：iOS 27 及以上手机上什么都不用装；iOS 17.4 到 26 要在装有 Xcode 的 Mac 上装一次辅助应用，iOS 27 上也可以选择用它（在 iOS 27、iOS 27 以下的真机和模拟器上都试过；[详情](#手机)）。
+- **全平台**：一个应用，macOS（Apple 芯片和 Intel）、Windows、Linux 都能用。能操作 Android 手机（Android 10 到 17）和 iOS 17.4 及以上的 iPhone：iOS 27 及以上手机上什么都不用装；iOS 17.4 到 26 要在装有 Xcode 的 Mac 上装一次 iPhone 上的 Pinky，iOS 27 上也可以选择用它（在 iOS 27、iOS 27 以下的真机和模拟器上都试过；[详情](#手机)）。
 - **小巧原生**：窗口由 [MyGo](https://github.com/egoist/mygo) 在 GPU 上绘制，没有 Electron，也没有 webview：安装包 16–22 MB，在 Mac 上空闲时内存约 70 MB，CPU 0%。
 - **任何 Agent，一键接入**：在「设置 › 智能体」里点一下就能接入 Claude Code、Claude Desktop、Codex、Cursor 等；任何支持 MCP 的 Agent 都能用，在同一台电脑上或者通过 HTTP 都行。
+- **手机上的 Pinky，不用电脑也能做事**：Android 和 iPhone 上的 Pinky 应用能用你选的模型自己完成任务，DeepSeek、通义千问、Kimi、智谱 GLM、Claude、GPT、Gemini 都行，也可以用 Ollama 或 LM Studio 里的本地模型。打字或说出任务，或者把内容分享给它都可以；在 Android 上，还能用悬浮按钮问它屏幕上的内容，让它在隐藏的后台屏幕上干活，你照常用手机（[怎么设置](#pinky-on-the-phone)）。
+- **定时任务和记忆**：Pinky 可以在设定的时间执行任务，或者在某个条件满足时通知你，电脑和 Android 上都行。任务结束后，它可能会建议记住一些内容，比如你说过的偏好，你同意了才会保存（[详情](#交给-pinky)）。
 - **手机锁着也能在电脑上解锁**：在 Pinky 里保存一次手机的 PIN 码，之后每次解锁用 Touch ID、Windows Hello 或密钥环密码确认。Agent 永远看不到 PIN 码。
 - **开源免费**，Apache-2.0 协议，不用注册账号。
 
@@ -28,7 +30,7 @@ Pinky 让任何 Agent（Claude Code、Claude Desktop、Codex、Cursor，或者�
 </tr>
 </table>
 
-**状态**：pre-alpha。Claude Code 已经通过它在真机上完整跑通过（一台用 USB 连接的 Android 手机、一台 iOS 27 的 iPhone，和一台通过辅助应用连接的 iOS 18.7.11 iPhone XS Max），Agent 可以通过 stdio 或 HTTP 连接。从电脑解锁、Android 后台工作、录屏、导出、Wi-Fi 配对和手机文件都已经做好，其中一部分还在等人实际试用。现在哪些能用、怎么试，见 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
+**状态**：pre-alpha。Claude Code 已经通过它在真机上完整跑通过（一台用 USB 连接的 Android 手机、一台 iOS 27 的 iPhone，和一台通过 Pinky 助手（iPhone 上的 Pinky 的前身）连接的 iOS 18.7.11 iPhone XS Max），Agent 可以通过 stdio 或 HTTP 连接。手机上的 Pinky 已经在 Mi 10 Pro（Android 17）和 iPhone 13 mini（iOS 27.0.1）上用真实模型完成过任务。从电脑解锁、Android 后台工作、录屏、导出、Wi-Fi 配对和手机文件都已经做好，其中一部分还在等人实际试用。现在哪些能用、怎么试，见 [docs/ACCEPTANCE.md](docs/ACCEPTANCE.md)。
 
 ## 开始使用
 
@@ -42,7 +44,7 @@ Pinky 让任何 Agent（Claude Code、Claude Desktop、Codex、Cursor，或者�
 | **Windows** | Windows 10 或 11，64 位（x64） |
 | **Linux** | 64 位 PC（x86-64），Ubuntu 20.04、Debian 11 或更新的系统（glibc 2.29 或更高），以及 GTK 3 |
 | **Android 手机** | Android 10 到 17，一根 USB 线。Pinky 自带 adb；Windows 上个别手机要装 USB 驱动，Linux 上要开放 USB 访问权限（[见下文](#windows-和-linux-上的-usb)） |
-| **iPhone 或 iPad** | iOS 17.4 或更高版本，设置时需要一根 USB 线；之后也可以通过 Wi-Fi 使用（[见下文](#通过-wi-fi-使用-iphone-和-ipad)）。Pinky 会自己准备好 iPhone，用的是 Apple 的开发者磁盘映像：它随 Xcode 提供，你也可以让 Pinky 从第三方镜像下载（[见下文](#iphone)）。iOS 17.4 到 26 还要在 iPhone 上装一个辅助应用（[见下文](#ios-174-到-26-的-iphone)） |
+| **iPhone 或 iPad** | iOS 17.4 或更高版本，设置时需要一根 USB 线；之后也可以通过 Wi-Fi 使用（[见下文](#通过-wi-fi-使用-iphone-和-ipad)）。Pinky 会自己准备好 iPhone，用的是 Apple 的开发者磁盘映像：它随 Xcode 提供，你也可以让 Pinky 从第三方镜像下载（[见下文](#iphone)）。iOS 17.4 到 26 还要装 iPhone 上的 Pinky（[见下文](#ios-174-到-26-的-iphone)） |
 | **模拟器** | 可选，代替手机或者和手机一起用：装了 Xcode 的 Mac 上的 iOS 模拟器，或者 Android Studio 的 Android 模拟器。模拟器在它们那里创建，由 Pinky 启动（[见下文](#手机)） |
 | **Agent** | 任何能用 MCP 服务器的 Agent，比如 Claude Code、Claude Desktop、Codex 或 Cursor |
 
@@ -66,7 +68,7 @@ Pinky 会自己检查新版本；Mac 版、用 Windows 安装程序装的 Pinky 
 
 1. 在手机上打开 USB 调试：在「设置 › 关于手机」里连续点「版本号」7 次，然后在「设置 › 系统 › 开发者选项」里打开「USB 调试」。有些品牌的菜单名称略有不同。
 2. 把手机插到电脑上。手机问是否允许 USB 调试时，点「允许」。Android 11 及以上也可以在「添加手机」里改用 Wi-Fi 配对（[不成功时](#通过-wi-fi-配对不成功时)）。Android 10 没有「无线调试」：插上线后，用「改用 Wi-Fi 连接…」就能换成 Wi-Fi（[见下文](#手机)）。
-3. Pinky 会提出给手机装 Pinky Companion。这是它在手机上的应用，能让读屏快很多倍，还能让 Pinky 输入任何语言。手机可能会让你允许安装一次。
+3. Pinky 会提出给手机装上它的应用，也就是手机上的 Pinky（在手机上显示为 Pinky），能让读屏快很多倍，还能让 Pinky 输入任何语言。手机可能会让你允许安装一次。
 
 每台手机都有「体检」，在投屏下方的 ··· 菜单里。它会列出哪些能用、没通过的怎么改，比如小米的「USB 调试（安全设置）」开关。
 
@@ -77,7 +79,7 @@ Pinky 会自己检查新版本；Mac 版、用 Windows 安装程序装的 Pinky 
 <table>
 <tr>
 <td width="50%" valign="top"><img src="assets/readme/add-android-zh.png" width="100%" alt="选了小米的「添加手机 › Android」：在哪里打开开发者选项，以及要打开的三个 USB 调试开关"><br><sub>「添加手机 › Android」，选了小米。</sub></td>
-<td width="50%" valign="top"><img src="assets/readme/checkup-zh.png" width="100%" alt="一台 Redmi 的体检：adb、连接和调试都通过了，Pinky Companion 和点按输入要处理，并给出了步骤"><br><sub>一台 Redmi 的「体检」，有两项要处理。</sub></td>
+<td width="50%" valign="top"><img src="assets/readme/checkup-zh.png" width="100%" alt="一台 Redmi 的体检：adb、连接和调试都通过了，手机上的 Pinky 和点按输入要处理，并给出了步骤"><br><sub>一台 Redmi 的「体检」，有两项要处理。</sub></td>
 </tr>
 </table>
 
@@ -131,7 +133,7 @@ iPhone 或 iPad 和电脑在同一个 Wi-Fi 下，并且电脑在 Wi-Fi 上列�
 - Pinky 没用过的，比如家人和这台电脑配对过的 iPad，会显示为「在 Wi-Fi 上发现」。在你选择「使用」（Pinky 会通过 Wi-Fi 完成准备）或「忽略」（插上线之前它都不会再出现在列表里）之前，Pinky 只读取它的名字、型号和 iOS 版本，不做任何其他事，Agent 也看不到它。
 - 锁定的 iPhone 或 iPad 在 Wi-Fi 上会显示为「已锁定（Wi-Fi）」，你解锁后 Pinky 才会连接它：它休眠时大约每分钟都会从网络上掉线一次，这时去连接会点亮它的屏幕。
 - 通过 Wi-Fi 准备手机：信任这台电脑需要插线；开发者模式开关还没显示出来时，让它出现也需要插线（用过 Xcode 的手机上它已经显示了）。打开开发者模式是在手机上完成的，挂载开发者磁盘映像也可以通过 Wi-Fi 完成，约 9 秒（有线约 1.5 秒）。「添加手机 › iPhone」会写明哪一步需要插线。
-- 通过 Wi-Fi 时，Pinky 只和配对过的那台手机通信：它会核对手机第一次信任这台电脑时拿到的证书，网络上的其他设备没法冒充它。iOS 27 以下，WebDriverAgent 辅助应用的连接不加密，那时的安全取决于 Wi-Fi 本身。
+- 通过 Wi-Fi 时，Pinky 只和配对过的那台手机通信：它会核对手机第一次信任这台电脑时拿到的证书，网络上的其他设备没法冒充它。iOS 27 以下，到 iPhone 上的 Pinky 里 WebDriverAgent 的连接不加密，那时的安全取决于 Wi-Fi 本身。
 
 通过 Wi-Fi 时每一步都比有线慢，截图最明显。在 iPad Pro 11 英寸（第三代，iPadOS 27.0.1）上实测，Wi-Fi 对比有线：滑动后 80 到 210 毫秒画面出现变化（有线 60 到 90 毫秒），读一次主屏幕 0.6 到 2.6 秒（0.5 到 0.6 秒），截一张图 5 秒（1 秒），视频丢包 0.2%（有线为 0）。拔掉线后，正在运行的任务约 5 秒切到 Wi-Fi；插回线后 2 到 6 秒切回有线（[详情](docs/notes/ios.md#wi-fi)）。
 
@@ -143,7 +145,7 @@ Pinky 打开手机、或者在有线和 Wi-Fi 之间切换时，会显示「正�
 
 #### iOS 17.4 到 26 的 iPhone
 
-iOS 27 以下的 iPhone，只能通过手机上的一个辅助应用接收来自电脑的点按和输入：WebDriverAgent，要在装有 Xcode 的 Mac 上用你自己的 Apple ID 签名并安装一次：插上 iPhone，在 Pinky 里它的页面上点「安装辅助应用」（或者在「添加手机 › 连接旧款 iPhone」里点），或者在「终端」运行 `pinkyctl helper install`。两种方式都会构建、签名并装好，手机上显示为「Pinky 助手」，用 Pinky 的图标；在 Pinky 窗口里装时，每一步都会显示出来，Xcode 等手机解锁时也会提醒你（[怎么装](docs/notes/ios.md#installing-the-webdriveragent-helper)，也可以直接用 Xcode 装）。用免费 Apple ID 的话，每 7 天要重新安装一次：到期前两天，手机页面和体检会提醒你，点「重新安装」即可；到期后，手机会显示为「需要设置」并说明原因（[怎么重新安装](docs/notes/ios.md#when-the-helpers-signature-runs-out)）。目前已经在 Windows 上、用一台 iOS 18.7.11 的 iPhone XS Max 试过（有线和 Wi-Fi）。不装它的话，Pinky 只能显示和读取屏幕（限 Mac）、打开 App，不能点按、滑动或输入。不支持 iOS 17.3 及更早版本。
+iOS 27 以下的 iPhone，只能通过手机上一个运行 WebDriverAgent 的应用接收来自电脑的点按和输入：iPhone 上的 Pinky，也就是 Pinky 自己的 App，要在装有 Xcode 的 Mac 上用你自己的 Apple ID 签名并安装一次：插上 iPhone，在 Pinky 里它的页面上点「安装 iPhone 上的 Pinky」（或者在「添加手机 › 连接旧款 iPhone」里点），或者在「终端」运行 `pinkyctl helper install`。两种方式都会构建、签名并装好；在 Pinky 窗口里装时，每一步都会显示出来，Xcode 等手机解锁时也会提醒你（[怎么装](docs/notes/ios.md#installing-pinky-for-iphone)）。电脑上的 Pinky 使用这台手机时，iPhone 上的 App 会显示出来。2026 年 11 月之前 Pinky 装的是「Pinky 助手」，它照样能用；构建不了 iPhone 上的 Pinky 时，Pinky 仍会装 Pinky 助手（`pinkyctl helper install --helper-only` 指定装它）。用免费 Apple ID 的话，每 7 天要重新安装一次：到期前两天，手机页面和体检会提醒你，点「重新安装」即可；到期后，手机会显示为「需要设置」并说明原因（[怎么重新安装](docs/notes/ios.md#when-pinky-for-iphones-signature-runs-out)）。Pinky 助手已经在 Windows 上、用一台 iOS 18.7.11 的 iPhone XS Max 试过（有线和 Wi-Fi）；iPhone 上的 Pinky 已在 iOS 27.0.1 的 iPhone 13 mini 上覆盖 Pinky 助手装好，电脑能启动和停止它的测试服务；在 iOS 17.4 到 26 上还没试过。不装它的话，Pinky 只能显示和读取屏幕（限 Mac）、打开 App，不能点按、滑动或输入。不支持 iOS 17.3 及更早版本。
 
 ### 3. 把 Pinky 接入你的 Agent
 
@@ -172,31 +174,32 @@ iOS 27 以下的 iPhone，只能通过手机上的一个辅助应用接收来自
 
 ### 手机
 
-- **Android**：通过 USB 或 Wi-Fi 连接（[见上文](#android)）。Pinky 通过 adb 和内置的 scrcpy server 工作。它的伴侣应用随 Pinky 一起提供，读一次屏约 70 毫秒（不装要 2 秒），输入任何语言都不经过剪贴板：手机页面会提出帮你安装（手机可能会让你允许一次）。它的无障碍服务只在 Agent 操作手机时开启，因为银行 App 不肯和这样的服务一起运行（[原因](#常见问题)）。在 Android 13 及以上，Agent 在后台显示器上工作，手机自己的屏幕可以熄屏锁着。App 画在屏幕上、却没有告诉无障碍树的文字（比如超级 App 里的小程序和其他网页、游戏、地图），在 macOS 和 Windows 上会从屏幕画面里识别出来（OCR），Agent 一样能读到、点到。已屏蔽的应用只有在你为这次任务放行后才会这样识别，锁着的手机从不识别，画面也不会保留。
+- **Android**：通过 USB 或 Wi-Fi 连接（[见上文](#android)）。Pinky 通过 adb 和内置的 scrcpy server 工作。手机上的 Pinky 是它在手机上的应用，随 Pinky 一起提供，读一次屏约 70 毫秒（不装要 2 秒），输入任何语言都不经过剪贴板：手机页面会提出帮你安装（手机可能会让你允许一次）。它的无障碍服务只在 Agent 操作手机时开启，因为银行 App 不肯和这样的服务一起运行（[原因](#常见问题)）。在 Android 13 及以上，Agent 在后台显示器上工作，手机自己的屏幕可以熄屏锁着。App 画在屏幕上、却没有告诉无障碍树的文字（比如超级 App 里的小程序和其他网页、游戏、地图），在 macOS 和 Windows 上会从屏幕画面里识别出来（OCR），Agent 一样能读到、点到。已屏蔽的应用只有在你为这次任务放行后才会这样识别，锁着的手机从不识别，画面也不会保留。
 - **Android 10 的 Wi-Fi 连接**：Android 10 没有「无线调试」。插上手机后，在手机画面下方的 ⋯ 菜单（或「设置 › 手机」）里选「改用 Wi-Fi 连接…」：Pinky 会让手机的 adb 在网络上监听（`adb tcpip`，5555 端口），再通过手机的 Wi-Fi 地址连上它，并告诉你什么时候可以拔线。手机回到这个网络时会自动重连，地址变了也能找到。开着时，同一个网络里的任何电脑都可以尝试连接这台手机：如果不是你自己在连接时手机弹出「允许 USB 调试吗？」，请点「取消」；只在你信任的 Wi-Fi 上使用。这会持续到手机重启；重启后插一次线，再点「重新启用 Wi-Fi 连接」。同一个菜单里的「停止 Wi-Fi 连接」可以关掉它（[详情](docs/away-from-home.md#wi-fi-without-wireless-debugging)）。
 - **iPhone**：通过 USB 或 Wi-Fi 连接（[见上文](#通过-wi-fi-使用-iphone-和-ipad)），由 Pinky 准备好（[见上文](#iphone)）；iPad 也一样。Pinky 能做什么，取决于 iOS 版本和连接方式；连接方式可以在「设置 › 手机」里为每台 iPhone 单独选（「自动」按版本选，见下表）：
 
   | iOS | 方式 | 能做什么 | 测试过的设备 |
   | --- | --- | --- | --- |
   | 27 及以上 | Xcode 的 Device Hub 协议；手机上什么都不装 | 除双指缩放外的全部功能。输入文字时会先粘贴，再把你的剪贴板恢复原样 | iPhone 13 mini，iOS 27.0.1 |
-  | 17.4 及以上，装了辅助应用 | WebDriverAgent 辅助应用（手机上显示为「Pinky 助手」），在装有 Xcode 的 Mac 上从 Pinky 窗口或用 `pinkyctl helper install` 装一次（[怎么装](docs/notes/ios.md#installing-the-webdriveragent-helper)）：iOS 17.4 到 26 自动使用，iOS 27 上由你选 | 全部功能，而且手机不共享屏幕，所以拒绝屏幕共享的银行 App 照常能用（测试中有星展银行 digibank 和招商银行）。比 Device Hub 慢：读一次主屏幕约 7 秒（Device Hub 不到 0.5 秒），点一下要 0.5 到 0.8 秒。辅助应用启动前，iOS 偶尔会要求在手机上输入锁屏密码。实时画面在 macOS 和 Windows 上都能用 | iPhone 13 mini，iOS 27.0.1，选了辅助应用；iPhone XS Max，iOS 18.7.11，在 Windows 上试过实时画面（有线和 Wi-Fi），以及辅助应用的点按键和滑动；iOS 18.5 和 26.5 模拟器 |
-  | 17.4 到 26，不装辅助应用 | 只用开发者服务；什么都不装 | 看画面（每秒几帧，限 macOS 和 Windows）、读屏幕（位置靠 OCR，限 macOS）、打开 App 和链接。不能点按、滑动、输入或回到主屏幕：没有辅助应用，手机不接受输入 | 同样的服务在 iOS 27.0.1 上测过；还没在 iOS 27 以下的真机上试过 |
+  | 17.4 及以上，装了 iPhone 上的 Pinky | 内含 WebDriverAgent 的 iPhone 上的 Pinky（或以前装的 Pinky 助手），在装有 Xcode 的 Mac 上从 Pinky 窗口或用 `pinkyctl helper install` 装一次（[怎么装](docs/notes/ios.md#installing-pinky-for-iphone)）：iOS 17.4 到 26 自动使用，iOS 27 上由你选 | 全部功能，而且手机不共享屏幕，所以拒绝屏幕共享的银行 App 照常能用（测试中有星展银行 digibank 和招商银行）。比 Device Hub 慢：读一次主屏幕约 7 秒（Device Hub 不到 0.5 秒），点一下要 0.5 到 0.8 秒。它启动前，iOS 偶尔会要求在手机上输入锁屏密码。实时画面在 macOS 和 Windows 上都能用 | 用 iPhone 上的 Pinky：iPhone 13 mini，iOS 27.0.1，已装好，电脑能启动和停止它的测试服务。用 Pinky 助手：iPhone 13 mini，iOS 27.0.1，选了它；iPhone XS Max，iOS 18.7.11，在 Windows 上试过实时画面（有线和 Wi-Fi），以及它的按键和滑动；iOS 18.5 和 26.5 模拟器 |
+  | 17.4 到 26，不装 iPhone 上的 Pinky | 只用开发者服务；什么都不装 | 看画面（每秒几帧，限 macOS 和 Windows）、读屏幕（位置靠 OCR，限 macOS）、打开 App 和链接。不能点按、滑动、输入或回到主屏幕：没有 iPhone 上的 Pinky，手机不接受输入 | 同样的服务在 iOS 27.0.1 上测过；还没在 iOS 27 以下的真机上试过 |
   | 17.3 及更早 | | 不支持：17.4 之前的连接需要管理员权限，iOS 16 及更早还需要当前 Xcode 已不再包含的开发者磁盘映像 | |
 
-  辅助应用是 Appium 的 WebDriverAgent，用你自己的 Apple ID 签名。用免费 Apple ID 签名可以用 7 天，付费开发者账户可以用一年。Pinky 会在 iPhone 上读取签名的到期时间：到期前两天，手机页面和体检会提醒你重新安装（在装有 Xcode 的 Mac 上点 Pinky 里的「重新安装」，或运行 `pinkyctl helper install`）；到期后，手机会显示为「需要设置」并说明原因，而不是启动辅助应用失败（[怎么重新安装](docs/notes/ios.md#when-the-helpers-signature-runs-out)）。
-- **iPhone 的屏幕共享**：Pinky 串流 iPhone 的画面时，iOS 会告诉各个 App 屏幕正在共享，有些银行 App（比如星展银行 digibank 和招商银行）会拒绝运行或者发出警告。这时 iOS 也不让 App 使用相机和麦克风，所以相机里是黑的，扫不了码。反过来也一样：有 App 正在使用相机或麦克风时（比如通话、FaceTime、相机、语音备忘录），iOS 27 不让 Pinky 通过 Device Hub 显示这台 iPhone。这时它的页面会显示「相机或麦克风正在使用中」和处理方法，通话结束或那个 App 关掉后，Pinky 会自动连接。Pinky 只在这些时候串流：手机页面或卡片在 Pinky 里打开着、有 Agent 在操作它，以及之后的 30 秒；过后这些 App 就恢复正常。通过 CoreDevice 连接时，Agent 用不了这些 App。再装上 WebDriverAgent 辅助应用，连接方式保持「自动」（「设置 › 手机」）：任务平时走 CoreDevice，打开星展银行 digibank 或招商银行时，或者 Agent 要求时，Pinky 会把这个任务临时切到不共享屏幕的辅助应用，任务结束后再切回 CoreDevice。也可以让这台 iPhone 的所有任务都通过辅助应用连接。
+  iPhone 上的 Pinky 内含 Appium 的 WebDriverAgent，用你自己的 Apple ID 签名。用免费 Apple ID 签名可以用 7 天，付费开发者账户可以用一年。Pinky 会在 iPhone 上读取签名的到期时间：到期前两天，手机页面和体检会提醒你重新安装（在装有 Xcode 的 Mac 上点 Pinky 里的「重新安装」，或运行 `pinkyctl helper install`）；到期后，手机会显示为「需要设置」并说明原因，而不是启动失败（[怎么重新安装](docs/notes/ios.md#when-pinky-for-iphones-signature-runs-out)）。
+- **iPhone 的屏幕共享**：Pinky 串流 iPhone 的画面时，iOS 会告诉各个 App 屏幕正在共享，有些银行 App（比如星展银行 digibank 和招商银行）会拒绝运行或者发出警告。这时 iOS 也不让 App 使用相机和麦克风，所以相机里是黑的，扫不了码。反过来也一样：有 App 正在使用相机或麦克风时（比如通话、FaceTime、相机、语音备忘录），iOS 27 不让 Pinky 通过 Device Hub 显示这台 iPhone。这时它的页面会显示「相机或麦克风正在使用中」和处理方法，通话结束或那个 App 关掉后，Pinky 会自动连接。Pinky 只在这些时候串流：手机页面或卡片在 Pinky 里打开着、有 Agent 在操作它，以及之后的 30 秒；过后这些 App 就恢复正常。通过 CoreDevice 连接时，Agent 用不了这些 App。再装上 iPhone 上的 Pinky，连接方式保持「自动」（「设置 › 手机」）：任务平时走 CoreDevice，打开星展银行 digibank 或招商银行时，或者 Agent 要求时，Pinky 会把这个任务临时切到不共享屏幕的 iPhone 上的 Pinky，任务结束后再切回 CoreDevice。也可以让这台 iPhone 的所有任务都通过 iPhone 上的 Pinky 连接。
 - **模拟器**：iOS 模拟器（Mac 上要装 Xcode）和 Android 模拟器（来自 Android Studio）也能当手机用。「添加手机 › 虚拟手机」列出这台电脑上的模拟器：点「启动」启动一台，运行起来后它就作为手机出现，标着「模拟器」；点「关闭」关掉它。Pinky 启动的 Android 模拟器没有声音，这样蓝牙耳机不会被切到麦克风模式。只有你能启动模拟器，Agent 没有这个工具。实时画面、录屏、审批和规则都和真机一样。Pinky 像 Android Studio 那样找 Android SDK（先看 `ANDROID_HOME`，再看 `ANDROID_SDK_ROOT`，最后是 Android Studio 默认的安装位置），找到后 Android 模拟器用起来就像一台插着线的 Android 手机。iOS 模拟器第一次用时，Pinky 会用你的 Xcode 构建 Appium 的 WebDriverAgent：源码来自固定的一个版本，构建前先校验文件，不签名，也不需要 Apple ID。这需要 20 秒到几分钟，构建结果一直沿用到 Xcode 更新。Pinky 不会创建模拟器，也不会下载系统映像：请在 Xcode（Window › Devices and Simulators）或 Android Studio 的 Device Manager 里创建（[详情](docs/notes/ios.md#ios-simulators)）。
 - **锁着的手机**：Pinky 从不让手机一直亮着，只在每一步之前唤醒屏幕。在「设置 › 手机」里保存手机的 PIN 码，就能在电脑上用 Touch ID 解锁。Agent 永远看不到 PIN 码。Android 上，这在 AOSP 风格的锁屏上验证过（Mi 10 Pro 上的 LineageOS，Android 10、16 和 17 模拟器）；小米、三星、OPPO、一加、vivo、荣耀和华为的锁屏只有根据已知信息写的测试覆盖，Pinky 读不准 PIN 码键盘时什么都不会输入（[详情](docs/notes/integration.md#unlocking-other-android-phones)）。
-- **双指缩放**：Agent 可以用两根手指放大、缩小地图、照片和网页，也可以双指旋转它们。你在 Pinky 的手机画面上也可以：在触控板上双指捏合（Linux 上仅限 Wayland），或者像 Xcode 的 Simulator 那样按住 Option（Windows 和 Linux 上是 Alt）拖动，第二根手指会出现在屏幕中心另一侧、和指针相对的位置。和你的其他触摸一样，这会让 Agent 暂停。iPhone 通过 WebDriverAgent 辅助应用双指缩放。iOS 27 选「自动」时，无论是 Agent 还是你双指缩放，Pinky 都会换到辅助应用（你的第一次捏合只会触发切换，要等几秒），用完再换回来；没装辅助应用时不能双指缩放，Agent 会收到说明。
-- **拖动**：Agent 可以用 `phone_drag` 拖动：先按住把东西拿起来，经过它指定的几个点移动，需要时停一停，再松手。这样就能把 App 图标移到主屏幕的其他页面（在屏幕边缘停一下就会翻页）或文件夹里，也能调整列表顺序、拖动滑块。规则和审批把拖动当作滑动来判断，手指碰到的每个点下面的东西都会检查，审批里的截图会画出整条路线。Android 和 iPhone（通过 Device Hub 或 WebDriverAgent 辅助应用）都能拖动。已在 Android 模拟器和 iOS 模拟器上试过，还没在真机上试过。
+- **双指缩放**：Agent 可以用两根手指放大、缩小地图、照片和网页，也可以双指旋转它们。你在 Pinky 的手机画面上也可以：在触控板上双指捏合（Linux 上仅限 Wayland），或者像 Xcode 的 Simulator 那样按住 Option（Windows 和 Linux 上是 Alt）拖动，第二根手指会出现在屏幕中心另一侧、和指针相对的位置。和你的其他触摸一样，这会让 Agent 暂停。iPhone 通过 iPhone 上的 Pinky 双指缩放。iOS 27 选「自动」时，无论是 Agent 还是你双指缩放，Pinky 都会换到 iPhone 上的 Pinky（你的第一次捏合只会触发切换，要等几秒），用完再换回来；没装 iPhone 上的 Pinky 时不能双指缩放，Agent 会收到说明。
+- **拖动**：Agent 可以用 `phone_drag` 拖动：先按住把东西拿起来，经过它指定的几个点移动，需要时停一停，再松手。这样就能把 App 图标移到主屏幕的其他页面（在屏幕边缘停一下就会翻页）或文件夹里，也能调整列表顺序、拖动滑块。规则和审批把拖动当作滑动来判断，手指碰到的每个点下面的东西都会检查，审批里的截图会画出整条路线。Android 和 iPhone（通过 Device Hub 或 iPhone 上的 Pinky）都能拖动。已在 Android 模拟器和 iOS 模拟器上试过，还没在真机上试过。
 - **文件**：在 Android 上，Agent 可以在手机的 Pinky 文件夹（`/sdcard/Pinky`，手机上它们唯一能碰到的地方）和电脑上的一个文件夹之间拷贝文件，往手机上拷贝之前会先问你。拷到那里的图片会出现在手机的相册和图片选择器里，Agent 可以在聊天应用里把它发出去。另一台电脑上的 Agent 碰不到电脑上的那个文件夹，所以它会先把文件发给 Pinky：小文件直接放在调用里，大一些的发到 Pinky 给它的一次性链接。之后把文件拷到手机上，照样要你同意（[详情](docs/mcp.md#uploading-a-file)）。iPhone 上没有这个功能。
 - **用于 bug 报告的截图和报告**：测试 App 的 Agent 可以把截图存成文件，也可以在任务结束时保存任务报告（带截图的步骤，HTML 和 JSON 各一份），放进 bug 报告或 pull request。这些文件存在电脑上这台手机的文件夹里，iPhone 也可以；保存不会问你，因为手机上什么都没变。里面只有 Agent 本来就能看到的内容：验证码被遮住，手机锁着或开着被屏蔽的 App 时（包括你在这次任务里允许过的）不会保存。任务的录屏既不遮验证码，也不遮被屏蔽的 App，所以只有你允许，Agent 才拿得到：Agent 导出录过屏的任务时，Pinky 每次都会问你要不要把录屏（报告旁边的一个 MP4）也给它，任何预设和「始终允许」都不会替你答应。你拒绝或没回应，Agent 就只拿到报告。另一台电脑上的 Agent 会为每个文件拿到一个一次性下载链接（[详情](docs/mcp.md#saving-screenshots-and-reports)）。
-- **链接**：Agent 可以用 `phone_launch` 打开链接：网页、App 自己的链接（`myapp://…`），以及打电话、发短信和写邮件的链接。打开之前，Pinky 先找出手机会用哪个 App 打开这个链接，再把它当作打开那个 App、并点了链接所代表的东西来判断：被屏蔽的 App 的链接照样被拦下，任务范围外的 App 的链接会被拒绝，付款链接和付款按钮一样要等你点头。读取手机上的文件、运行代码或运行快捷指令的链接（`file:`、`content:`、`intent:`、`javascript:`、`data:`、快捷指令）一律拒绝，手机会让你挑选用哪个 App 打开的链接也会拒绝。审批和「活动」里会写明链接和打开它的 App。iPhone 上，网页链接在 Safari 里打开；通过 WebDriverAgent 辅助应用连接时，需要 WebDriverAgent 4.11 或更新版本（[详情](docs/mcp.md#opening-a-link)）。
+- **链接**：Agent 可以用 `phone_launch` 打开链接：网页、App 自己的链接（`myapp://…`），以及打电话、发短信和写邮件的链接。打开之前，Pinky 先找出手机会用哪个 App 打开这个链接，再把它当作打开那个 App、并点了链接所代表的东西来判断：被屏蔽的 App 的链接照样被拦下，任务范围外的 App 的链接会被拒绝，付款链接和付款按钮一样要等你点头。读取手机上的文件、运行代码或运行快捷指令的链接（`file:`、`content:`、`intent:`、`javascript:`、`data:`、快捷指令）一律拒绝，手机会让你挑选用哪个 App 打开的链接也会拒绝。审批和「活动」里会写明链接和打开它的 App。iPhone 上，网页链接在 Safari 里打开；通过 iPhone 上的 Pinky 连接时，需要 WebDriverAgent 4.11 或更新版本（[详情](docs/mcp.md#opening-a-link)）。
 - **你开发的应用**：Agent 可以从电脑上这台手机的文件夹安装应用（Android 上是一个 APK，或同一个应用的一组拆分 APK；iPhone 上是为这台 iPhone 做了开发签名的 `.ipa` 或 `.app`），也可以更新、卸载和强行停止它，写代码的 Agent 就能把自己的构建装到手机上、打开、检查。安装和卸载都会先问你，并写明应用的名称、ID、版本和签名者；选「在此任务中允许」后，同一个应用、同样签名的后续构建会直接安装，不再问你；选「更多选项 › 始终允许」后，这个 Agent 在这台手机上以后的任务里也不再问，直到你在「设置 › 安全」里撤销。换了签名者或换了应用仍会询问，卸载每次都会问。Pinky 自己的应用、系统应用、金融应用、密码管理器和你屏蔽的应用，都不能被覆盖安装、卸载或停止（[详情](docs/mcp.md#phone_app)）。
 - **应用日志**：Agent 在测试某个应用时，可以读这个应用自己的日志和崩溃报告，看看它为什么出错。每个任务里第一次读时，Pinky 会先问你（选「在此任务中允许」，这个任务剩下的时间就不再问；选「更多选项 › 始终允许」，这个 Agent 在这台手机上读这个应用的日志就不再问，直到你在「设置 › 安全」里收回）；如果是开发版（Android 上的 debug 版，iPhone 上用 Xcode 装的应用），就不问。Agent 只拿得到这个应用自己的日志，拿不到别的应用和系统的，也永远读不到被屏蔽的应用、银行和钱包应用、密码管理器、手机自带的应用和 Pinky 自己的日志。历史记录只记下读了多少行，不留日志内容。iPhone 不保留 Pinky 能读到的日志记录，所以在 iPhone 上，Pinky 从 Agent 第一次读开始监听，直到任务结束（[详情](docs/mcp.md#phone_logs)）。
-- **测试 App**：Agent 可以拨动开发者测试时用的开关：旋转屏幕、切换浅色和深色外观、模拟位置，以及用另一种语言和地区打开某个 App。这些都会改动手机的设置，所以在真机上要你先同意（选「在此任务中允许」，这次任务后面的改动就不再问；选「更多选项 › 始终允许」，这个 Agent 在这台手机上改设置就不再问，直到你在「设置 › 安全」里收回）；在模拟器上会直接进行，除非你选了不只在付款前询问。任务结束时 Pinky 会把它们都改回来，期间你自己改过的则保持不动。屏幕方向和外观在 Android 和装了助手的 iPhone 上可用；模拟位置在 Android 模拟器、iOS 模拟器和装了助手的 iPhone 上可用；换语言在 Android 13 及以上和 iPhone 上可用（[详情](docs/mcp.md#phone_device)）。你也可以自己旋转屏幕：手机画面下方 ⋯ 菜单里的「旋转」（iPhone 和 iPad 要装好 WebDriverAgent 辅助应用：在 iOS 27 上 Pinky 会为这次旋转换到它，Agent 旋转屏幕和双指缩放时也会把任务换过去）。它和在画面上触摸一样，会让正在手机屏幕上工作的 Agent 暂停，在隐藏的第二块屏幕上工作的则不受影响。屏幕方向已在三星 Galaxy A12（Android 13）、Pixel 9a（Android 17）、iPhone 12 Pro Max（iOS 18）、iPhone Air（iOS 27）和 iPad mini（iPadOS 27）上试过，其余的已在 Android 模拟器和 iOS 模拟器上试过，还没在真机上试过。
+- **测试 App**：Agent 可以拨动开发者测试时用的开关：旋转屏幕、切换浅色和深色外观、模拟位置，以及用另一种语言和地区打开某个 App。这些都会改动手机的设置，所以在真机上要你先同意（选「在此任务中允许」，这次任务后面的改动就不再问；选「更多选项 › 始终允许」，这个 Agent 在这台手机上改设置就不再问，直到你在「设置 › 安全」里收回）；在模拟器上会直接进行，除非你选了不只在付款前询问。任务结束时 Pinky 会把它们都改回来，期间你自己改过的则保持不动。屏幕方向和外观在 Android 和装了 iPhone 上的 Pinky 的 iPhone 上可用；模拟位置在 Android 模拟器、iOS 模拟器和装了 iPhone 上的 Pinky 的 iPhone 上可用；换语言在 Android 13 及以上和 iPhone 上可用（[详情](docs/mcp.md#phone_device)）。你也可以自己旋转屏幕：手机画面下方 ⋯ 菜单里的「旋转」（iPhone 和 iPad 要装好 iPhone 上的 Pinky：在 iOS 27 上 Pinky 会为这次旋转换到它，Agent 旋转屏幕和双指缩放时也会把任务换过去）。它和在画面上触摸一样，会让正在手机屏幕上工作的 Agent 暂停，在隐藏的第二块屏幕上工作的则不受影响。屏幕方向已在三星 Galaxy A12（Android 13）、Pixel 9a（Android 17）、iPhone 12 Pro Max（iOS 18）、iPhone Air（iOS 27）和 iPad mini（iPadOS 27）上试过，其余的已在 Android 模拟器和 iOS 模拟器上试过，还没在真机上试过。
 - **移除手机**：手机 ⋯ 菜单里的「移除这台手机…」（手机离线时它的页面上、「所有手机」里它的卡片上、侧栏里它的右键菜单和「设置 › 手机」里也有）会把它从列表里去掉，并删除它保存的 PIN 码和设置。它的任务、截图和录屏会留在「活动」里，除非你勾选把它们也删掉；正在这台手机上运行的任务会停止。插着线的手机会立刻作为一台新手机回来，直到你拔掉它。通过 Wi-Fi 连接的手机会断开，并且不再出现在列表里，即使 adb 自己又连上了它；要加回来，就在「添加手机」里重新配对，或者插上线。通过 Wi-Fi 连接的 iPhone 或 iPad，在你插上线之前都不会再出现在列表里。Pinky 不会解除手机和电脑的配对：它的 USB 调试或无线调试配对，以及 iPhone 的信任，都会留给其他应用使用（[详情](docs/notes/gateway.md#removing-a-phone)）。
-- **暂停手机**：手机 ⋯ 菜单里的「暂停连接」（侧栏里它的右键菜单和「所有手机」里它的卡片上也有）会把手机留在 Pinky 里，但停止它的屏幕串流和 Pinky 与它的连接：iPhone 的隧道和辅助应用，Android 手机的 scrcpy 和配套应用连接。手机上正在运行的任务会结束，智能体会被告知它已暂停，Pinky 也不会再通过 Wi-Fi 重新连接它。重启 Pinky 后它仍然是暂停状态。在它的页面上点「恢复」，或在右键菜单里选「恢复连接」，或者用数据线连上，就能恢复。插着线时暂停的手机会一直暂停，直到你拔掉再插上，这样给充电中的手机暂停就不会马上自己恢复。手机页面顶部会显示手机是否正在向 Pinky 串流屏幕；iPhone 在你最后一次查看或操作 30 秒后停止串流。没有任务在运行的 iPhone，在「所有手机」里显示的是最后一帧画面而不是实时画面，所以 Pinky 停在这一页也不会让 iPhone 一直亮屏或保持屏幕共享（[详情](docs/notes/gateway.md#pausing-a-phone)）。
+- **暂停手机**：手机 ⋯ 菜单里的「暂停连接」（侧栏里它的右键菜单和「所有手机」里它的卡片上也有）会把手机留在 Pinky 里，但停止它的屏幕串流和 Pinky 与它的连接：iPhone 的隧道和 WebDriverAgent，Android 手机的 scrcpy 和与手机上的 Pinky 的连接。手机上正在运行的任务会结束，智能体会被告知它已暂停，Pinky 也不会再通过 Wi-Fi 重新连接它。重启 Pinky 后它仍然是暂停状态。在它的页面上点「恢复」，或在右键菜单里选「恢复连接」，或者用数据线连上，就能恢复。插着线时暂停的手机会一直暂停，直到你拔掉再插上，这样给充电中的手机暂停就不会马上自己恢复。手机页面顶部会显示手机是否正在向 Pinky 串流屏幕；iPhone 在你最后一次查看或操作 30 秒后停止串流。没有任务在运行的 iPhone，在「所有手机」里显示的是最后一帧画面而不是实时画面，所以 Pinky 停在这一页也不会让 iPhone 一直亮屏或保持屏幕共享（[详情](docs/notes/gateway.md#pausing-a-phone)）。
+- **离开电脑时处理审批**：网页投屏通过 Tailscale 提供后（「设置 › 手机 › 网页投屏」），打开「在浏览器中处理审批」，点「添加手机」旁的「生成链接」，在你自己的手机上打开这个链接。手机会为这台电脑创建一个通行密钥并显示一串数字；「设置」里显示同样的数字时，选好这个浏览器在哪台手机上，再点「允许」。Agent 使用那台手机时以及用完后的 30 秒内，它上面的网页不能回答任何审批，因为操作手机的一方也能点「允许」。之后网页会列出等你处理的步骤，附带截图和 Agent 想点的位置，在网页上「允许」或「拒绝」要点两次，第二次会要求用面容 ID、指纹或手机密码确认。网页只能对付款、发送或 Agent 的提问回答「允许」（只算这一步）或「拒绝」；新 Agent、被屏蔽的 App 和交接仍在 Pinky 窗口里处理。60 秒内没有回答仍然算拒绝，电脑和手机上谁先回答就以谁为准。Pinky 退出后会忘记你添加的手机（[详情](docs/notes/remote-approvals.md)）。已用模拟手机试过，还没在 iPhone 的 Safari 上试过。
 
 ### 不在家里的手机
 
@@ -211,15 +214,36 @@ Android 手机不必和电脑在同一个网络里。电脑和手机都装上 [T
 
 ### 交给 Pinky
 
-自己没有 Agent？简单的任务，Pinky 可以自己在一台手机上做完。在「设置 › 智能体」的「交给 Pinky」里选一个服务，填上它的 API 密钥：可以通过 Anthropic 的 API（或兼容它的服务）用 Claude，也可以通过兼容 OpenAI API 的服务用别的模型，这时还要填服务地址和模型名称。密钥和手机的 PIN 码一样，保存在 Mac 的钥匙串、Windows 凭据管理器或你的密钥环里，只发送给这个服务。
+自己没有 Agent？Pinky 可以自己在一台手机上把任务做完。在「设置 › 智能体」的「交给 Pinky」里选一个服务，填上它的 API 密钥。DeepSeek、通义千问、Kimi、智谱 GLM、硅基流动、火山方舟、OpenRouter、Anthropic、OpenAI、Gemini、Ollama 和 LM Studio 都有现成的设置；其他兼容 Anthropic 或 OpenAI API 的服务，填上服务地址和模型名称也能用。保存时会马上检查模型，出了问题会说清楚是什么问题。密钥和手机的 PIN 码一样，保存在 Mac 的钥匙串、Windows 凭据管理器或你的密钥环里，只发送给这个服务。「用量」里可以看到 Pinky 自己的智能体今天、最近 7 天和最近 30 天用了多少 token，按服务和模型分开列，知道价格的还会显示费用；这些数据只存在你的电脑上。
 
-然后在手机页面「任务」顶部写下任务，比如「定一个 7:00 的闹钟」，点「开始」（或按 ⌘↩，Windows 和 Linux 上是 Ctrl+Enter）；在「所有手机」里要先选手机。Pinky 会以「Pinky」这个 Agent 的身份一步步操作，和其他 Agent 走同一条路：你的规则、审批、已屏蔽的应用、「接管」、「全部停止」和录屏对它都有效，它的任务也会记在「活动」里。它从不输入密码和一次性验证码，遇到时会把手机交给你。点「停止」会立刻结束任务。
+然后在手机页面「任务」顶部写下任务，比如「定一个 7:00 的闹钟」，点「开始」（或按 ⌘↩，Windows 和 Linux 上是 Ctrl+Enter）；在「所有手机」里要先选手机。点「询问屏幕」会开始一个关于手机当前画面的任务。Pinky 会以「Pinky」这个 Agent 的身份一步步操作，和其他 Agent 走同一条路：你的规则、审批、已屏蔽的应用、「接管」、「全部停止」和录屏对它都有效，它的任务也会记在「活动」里。它从不输入密码和一次性验证码（除非你允许了在虚拟手机上输入，而且任务里给了），遇到时会把手机交给你。点「停止」会立刻结束任务。它工作时，你可以在任务框里给它发消息，Pinky 读到之前都可以修改或撤回；任务结束后，点「继续」可以发一条新消息让它接着做。
 
-每个任务做到 100 步、20 分钟或 2 美元就会停下，以先到者为准；这些上限可以在「设置 › 智能体」里改，等你操作的时间不算在内。费用按 Anthropic 的价格计算；Pinky 不知道价格的模型，按每百万 token 1 美元计算。「交给 Pinky」不会记住上一个任务，一次只用一台手机：更复杂的事，还是接入一个 Agent（[详情](docs/notes/builtin-agent.md)）。
+每个任务做到 100 步、20 分钟或 2 美元就会停下，以先到者为准；这些上限可以在「设置 › 智能体」里改，等你操作的时间不算在内。费用按 Anthropic 的价格计算；Pinky 不知道价格的模型，按每百万 token 1 美元计算。「交给 Pinky」一次只用一台手机：更复杂的事，还是接入一个 Agent（[详情](docs/notes/builtin-agent.md)）。
+
+**记忆**：任务结束后，Pinky 可能会建议记住一些内容供以后的任务使用，比如你说过的偏好，或者在某个 App 里更快的操作方法；只有你点了「记住」才会保存。在「设置 › 智能体 › 记忆」里可以查看、编辑、删除这些记忆，也可以关掉记忆。记忆从不保存密码、验证码、卡号、账号、证件号、电话号码或地址，每台设备各存各的。Pinky 还熟悉微信、支付宝、美团、淘宝、小红书、高德地图、Google 地图、Apple 地图、时钟、计算器和设置：打开它们时会先读一份简短的使用指南（[详情](docs/notes/builtin-agent.md#memory-and-app-guides)）。
+
+**定时任务**：在手机页面的「定时任务」下点「新建定时任务…」，可以让任务只执行一次，或者每天、每个工作日、每周、每隔几小时执行，也可以只在某个条件满足时通知你。定时任务在电脑和 Android 上运行（iPhone 上不行）。没人看着的时候，它从不付款，需要审批时会发通知问你；手机锁着、正在用或者关机时会跳过这一次，并留下说明。
+
+你的 Agent 也可以把整个任务交给 Pinky，不用自己一步步操作手机：`phone_task_run` 用你在这里设好的模型和上限开始任务，`phone_task_wait`、`phone_task_status`、`phone_task_list` 用来跟进，`phone_task_steer` 用来补充要求或让它接着做，`phone_task_cancel` 用来取消。这样的任务以那个 Agent 的身份进行，而不是以 Pinky 的身份：它第一次连接时会问你，「设置 › 智能体」里给它的权限和你的规则照样有效，审批也只有你能回答。「任务」顶部的框会显示这个任务和交来它的 Agent：你也可以在那里给它发消息、点「继续」让它接着做，任务仍以那个 Agent 的身份进行；点「停止」就会结束，之后 Agent 不能再让它继续。Pinky 的窗口开着时才能用，`pinky daemon` 里不行（[详情](docs/mcp.md#phone_task_run)）。脚本也可以在终端里这样做：`pinkyctl task run "设一个 7:00 的闹钟"` 会等任务做完并显示结果，它以名为「Pinky CLI」的 Agent 身份进行（也可以用 `-as "Nightly tests"` 另起名字），`pinkyctl task status|steer|cancel|list` 用来跟进（[详情](docs/mcp.md#from-a-shell-pinkyctl-task)）。
+
+<a id="pinky-on-the-phone"></a>
+
+### 手机上的 Pinky
+
+手机上的 Pinky 应用（在手机上就叫 Pinky）也能自己在这台手机上完成简单的任务，不需要电脑。它和「交给 Pinky」一样，用你选的 AI 模型和 API 密钥：在手机上的 Pinky 里写下任务，点「开始」，Pinky 就离开自己的界面，到其他 App 里操作，你在旁边看着。Pinky 的规则在手机上同样有效：有风险的步骤会先问你（「设置 › Pinky 应在何时询问你？」），遇到密码和验证码会把手机交给你，到了上限或你点「停止」就停下，做过的任务都在它的「活动」里。密钥只保存在手机上，也只发给那个服务。手机上的 Pinky 和电脑上的一样，提供同样的模型服务、保存时的检查和用量统计。你可以用说的代替打字，在它工作时给它发消息，任务结束后点「继续」让它接着做；你同意保存的记忆在它自己的「设置 › 记忆」里。电脑上的 Pinky 正在使用这台手机时，应用会告诉你，等它用完就可以在手机上开始任务。电脑上的 Pinky 会在手机页面上提示一次，「设置 › 手机」里的「在手机上做任务」也有说明和设置方法。
+
+- **Android**：在 Pinky 的手机页面上点「安装」装上 Pinky 的应用；不用电脑也行：在手机上打开最新版本的 [`pinky-android.apk`](https://github.com/DIYgod/pinky/releases/latest/download/pinky-android.apk) 并安装（[详见](#install-companion-by-hand)）。在手机上打开 Pinky，按它的步骤来：先在 Android 的无障碍设置里打开 Pinky（Android 13 起，系统可能要你先在 Pinky 的应用信息里允许受限设置，应用里有说明），再选择 AI 模型并添加 API 密钥。之后 Pinky 会提出让自己保持运行，因为 Android 和一些手机厂商会在后台停掉应用。任务进行时，其他 App 上方会浮着一个小胶囊显示 Pinky 在做什么，需要你处理时会弹出卡片。Android 上的 Pinky 还能：
+  - 在隐藏的「后台屏幕」上执行任务，并用一个小悬浮窗显示进度，你可以同时照常用手机（「设置 › 后台屏幕」；需要 Android 13 及以上，并打开无线调试）；
+  - 在其他 App 上方显示「悬浮按钮」，用来问 Pinky 屏幕上的内容：双击打字提问，长按说话（「设置 › 这台手机」，或者用它的快捷设置图块）；
+  - 从其他 App 把文字、链接和图片分享给 Pinky 来开始任务，或者用快捷设置图块新建任务；
+  - 像电脑上一样执行定时任务（见上文）。
+
+  已在 Mi 10 Pro（LineageOS，Android 17）上用真实模型试过。
+- **iPhone**：在装有 Xcode 的 Mac 上安装 Pinky 的应用：在手机页面或「设置 › 手机」里点「安装 iPhone 上的 Pinky」，或者运行 `pinkyctl helper install`（[怎么装](docs/notes/ios.md#installing-pinky-for-iphone)）。在 iPhone 上打开 Pinky，按它的步骤来：先「让 Pinky 与这台 iPhone 配对」（iOS 27 上在 iPhone 的「设置」里输入 Pinky 显示的配对码；iOS 27 以下要在装有 Pinky 的 Mac 上配对一次），再「打开 Pinky 的 VPN」（它让 Pinky 在手机上就能连到这台手机），最后选择 AI 模型并添加 API 密钥。需要你确认的事会在 Pinky 里等你，也会发通知；实时活动会显示任务和「停止」按钮。「在 Pinky 中新建任务」快捷指令会打开 Pinky，带上任务，以及从共享表单传来的文字或链接，直接就能开始。带自己 VPN 的应用需要付费的 Apple 开发者账号；用免费 Apple ID 时，Pinky 会构建一个轻量版应用，它要配合 App Store 上的 LocalDevVPN 使用（[详情](docs/notes/iphone-app.md)）。已在 iPhone 13 mini（iOS 27.0.1）上用真实模型试过一个简单任务，任务由调试版启动（[这次运行](docs/notes/iphone-app.md#a-real-model-on-the-phone-run)）。
 
 ### 更新
 
-Pinky 在启动时和之后每隔几小时检查一次新版本，有新版本时会显示一张卡片，写着更新了什么，附「立即更新」和「以后再说」。打开「设置 › 高级 › 自动更新」时（默认打开），它会在没有 Agent 在干活、你也有十分钟没用 Pinky 时自己装好，还会更新空闲的 Android 手机上的 Pinky Companion，更新后它的无障碍服务保持关闭，直到下一个任务。截至 2026 年 11 月 8 日的版本都用公开的密钥签名，遇到这样的 Pinky Companion，Pinky 会卸载它，重新安装用 Pinky 私有密钥签名的版本，并告诉你；如果手机在通过 USB 安装应用前会询问，手机页面会说明原因，等你点「更新」；手机不让通过 USB 安装应用时，每个新版本侧栏都会有一张卡片告诉你一次，由你手动安装（[怎么装](#install-companion-by-hand)）。更新之后，「新功能」会列出自你原来的版本以来的变化（Pinky 显示中文时来自 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)，否则来自英文的 [CHANGELOG.md](CHANGELOG.md)）。
+Pinky 在启动时和之后每隔几小时检查一次新版本，有新版本时会显示一张卡片，写着更新了什么，附「立即更新」和「以后再说」。打开「设置 › 高级 › 自动更新」时（默认打开），它会在没有 Agent 在干活、你也有十分钟没用 Pinky 时自己装好，还会更新空闲手机上的 Pinky 应用，更新后它的无障碍服务保持关闭，直到下一个任务。截至 2026 年 11 月 8 日的版本都用公开的密钥签名，遇到这样的手机上的 Pinky，Pinky 会卸载它，重新安装用 Pinky 私有密钥签名的版本，并告诉你；如果手机在通过 USB 安装应用前会询问，手机页面会说明原因，等你点「更新」；手机不让通过 USB 安装应用时，每个新版本侧栏都会有一张卡片告诉你一次，由你手动安装（[怎么装](#install-companion-by-hand)）。更新之后，「新功能」会列出自你原来的版本以来的变化（Pinky 显示中文时来自 [CHANGELOG.zh-CN.md](CHANGELOG.zh-CN.md)，否则来自英文的 [CHANGELOG.md](CHANGELOG.md)）。
 
 - **macOS**：Pinky.app 会先核对下载文件的校验和、确认它由 Pinky 的开发者签名并经过 Apple 公证，再替换自己；新版本启动不了就退回旧版本。Homebrew cask 装的那份也会这样自己更新，它已经是最新时 `brew upgrade` 不会动它。直接从磁盘映像里运行的、或者放在你没有写权限的文件夹里的 Pinky，会告诉你怎么更新。
 - **Windows**：用安装程序装的 Pinky 会在核对校验和后静默运行新的安装程序，启动新版本，新版本启动不了就退回旧版本。免安装版会帮你下载安装程序。
@@ -260,7 +284,7 @@ Windows 上 Agent 通过命名管道连接 Pinky，Claude、Codex 桌面版这�
 <details>
 <summary><b>哪些东西 Agent 看不到？</b></summary>
 
-银行、钱包和密码管理器类 App（Pinky 自带一份名单，可以在「设置 › 安全」里从手机上的应用中挑选添加）：Agent 拿不到它们的画面，它们的通知也会被藏起来，下拉通知栏和锁屏上也一样。别的界面上出现被屏蔽的 App 时，比如通知栏或横幅里它的通知、最近任务里它的卡片，Agent 只会读到那里有东西被隐藏了，Agent 拿到的截图和「活动」里的截图也会用灰块遮住（录屏里保持原样，所以录屏留在你的电脑上：只有你在某次导出时允许，Agent 才拿得到）。Agent 不能往密码框和验证码框里输入。Agent 在任务中需要用银行或钱包 App 时，Pinky 会先问你。你允许的话，Agent 在这次任务剩下的时间里可以打开和读取这个 App，你的规则在那里照样会问，Pinky 也不会留下它的截图和录屏：只有画面上才有的文字，Pinky 在内存里看一眼画面识别出来，只把文字交给 Agent，不给图。密码管理器不会提供这个选项。
+银行、钱包和密码管理器类 App（Pinky 自带一份名单，可以在「设置 › 安全」里从手机上的应用中挑选添加）：Agent 拿不到它们的画面，它们的通知也会被藏起来，下拉通知栏和锁屏上也一样。别的界面上出现被屏蔽的 App 时，比如通知栏或横幅里它的通知、最近任务里它的卡片，Agent 只会读到那里有东西被隐藏了，Agent 拿到的截图和「活动」里的截图也会用灰块遮住（录屏里保持原样，所以录屏留在你的电脑上：只有你在某次导出时允许，Agent 才拿得到）。Agent 不能往密码框和验证码框里输入。想在模拟器上用测试账号测试登录时，可以在「设置 › 安全 › 允许在虚拟手机上输入密码」里放开（默认关闭），真机上始终不行。Agent 在任务中需要用银行或钱包 App 时，Pinky 会先问你。你允许的话，Agent 在这次任务剩下的时间里可以打开和读取这个 App，你的规则在那里照样会问，Pinky 也不会留下它的截图和录屏：只有画面上才有的文字，Pinky 在内存里看一眼画面识别出来，只把文字交给 Agent，不给图。密码管理器不会提供这个选项。
 
 一次性验证码会在 Agent 读到之前被打码：不管是在短信、邮件、通知里还是屏幕上别的地方，「您的验证码为 482913」到 Agent 那里都是「您的验证码为 ••••••」，Agent 拿到的截图和「活动」里的截图也会用灰块把验证码遮住。价格、电话号码、日期和跟验证码无关的文字里的数字都保持原样。录屏里的验证码保持原样，所以录屏留在你的电脑上：只有你在 Agent 导出某次任务报告时允许，它才拿得到。可以在「设置 › 安全 › 对智能体隐藏验证码」里关掉。
 
@@ -276,38 +300,38 @@ Pinky 不会传。截图、录屏和记录都存在你的电脑上，默认保�
 <details>
 <summary><b>Pinky 会在手机上装什么？</b></summary>
 
-Android 上，你点「安装」后会装上 Pinky Companion，之后 Pinky 会帮它保持最新，并且只在 Agent 工作时开启它的无障碍服务（[原因](#常见问题)）。iPhone 上，iOS 27 及以上不装任何应用：Pinky 只是像 Xcode 那样挂载 Apple 的开发者磁盘映像。iOS 17.4 到 26 上是 WebDriverAgent 辅助应用，要你在装有 Xcode 的 Mac 上装一次（在 Pinky 里点「安装辅助应用」，或运行 `pinkyctl helper install`，[怎么装](docs/notes/ios.md#installing-the-webdriveragent-helper)），手机上显示为「Pinky 助手」。
+Android 上，你点「安装」后会装上手机上的 Pinky，它在手机上显示为 Pinky（2026 年 11 月之前叫 Pinky Companion）。之后 Pinky 会帮它保持最新，并且只在 Agent 工作时开启它的无障碍服务（[原因](#常见问题)）。iPhone 上，iOS 27 及以上不装任何应用：Pinky 只是像 Xcode 那样挂载 Apple 的开发者磁盘映像。iOS 17.4 到 26 上是内含 WebDriverAgent 的 iPhone 上的 Pinky，要你在装有 Xcode 的 Mac 上装一次（在 Pinky 里点「安装 iPhone 上的 Pinky」，或运行 `pinkyctl helper install`，[怎么装](docs/notes/ios.md#installing-pinky-for-iphone)），手机上显示为 Pinky（2026 年 11 月之前是「Pinky 助手」）。
 
 </details>
 
 <a id="install-companion-by-hand"></a>
 <details>
-<summary><b>怎么手动安装 Pinky Companion？</b></summary>
+<summary><b>怎么手动安装手机上的 Pinky？</b></summary>
 
-有的手机不让电脑通过 USB 安装应用，比如没插 SIM 卡的小米手机打不开「USB安装」，这时可以自己安装 Pinky Companion。它的安装包 `pinky-companion.apk` 就在 Pinky 里：
+有的手机不让电脑通过 USB 安装应用，比如没插 SIM 卡的小米手机打不开「USB安装」，这时可以自己安装手机上的 Pinky。它的安装包 `pinky-android.apk` 就在 Pinky 里：
 
-- **macOS：** 在应用里面，路径是 `Pinky.app/Contents/Resources/pinky-companion.apk`：在「应用程序」里右键 Pinky，选「显示包内容」。
+- **macOS：** 在应用里面，路径是 `Pinky.app/Contents/Resources/pinky-android.apk`：在「应用程序」里右键 Pinky，选「显示包内容」。
 - **Windows：** 在 Pinky 所在的文件夹里，和 `Pinky.exe` 放在一起。
 - **Linux：** 在 `.tar.gz` 解压出来的文件夹里，和 `pinky` 放在一起；用 `.deb` 安装的在 `/opt/pinky/` 里。
 
-通过 USB 安装失败时，手机页面上的「显示 pinky-companion.apk」会帮你找到这个文件。把它拷到手机上（用数据线或聊天软件发过去都行），在手机上打开安装；手机可能会先让你允许用来打开它的应用安装应用。装好后 Pinky 会认出它，因为应用和签名都一样，就不会再提示安装了。
+通过 USB 安装失败时，手机页面上的「显示 pinky-android.apk」会帮你找到这个文件。把它拷到手机上（用数据线或聊天软件发过去都行），在手机上打开安装；手机可能会先让你允许用来打开它的应用安装应用。装好后 Pinky 会认出它，因为应用和签名都一样，就不会再提示安装了。
 
-在小米、Redmi 和 POCO 手机上，Pinky 点按、输入和开启 Pinky Companion 的无障碍服务，还需要打开「开发者选项」里的「USB调试（安全设置）」，打开后要重启手机才生效。这个开关和「USB安装」一样要联网向小米核验，也可能要求插 SIM 卡。没有它，Pinky Companion 装上了也开不起来，Pinky 在这台手机上也没法点按和输入。
+在小米、Redmi 和 POCO 手机上，Pinky 点按、输入和开启手机上的 Pinky 的无障碍服务，还需要打开「开发者选项」里的「USB调试（安全设置）」，打开后要重启手机才生效。这个开关和「USB安装」一样要联网向小米核验，也可能要求插 SIM 卡。没有它，手机上的 Pinky 装上了也开不起来，Pinky 在这台手机上也没法点按和输入。
 
-只有 Pinky Companion 自己的代码改了，它才会出新版本，不是 Pinky 每次更新都有。打开「自动更新」时，Pinky 会通过 USB 试着装一次新版本；手机拒绝的话，侧栏会有一张卡片告诉你，附「显示 pinky-companion.apk」，这个版本 Pinky 也不会再试。按上面的方法装上新的 `pinky-companion.apk` 就行。关掉「自动更新」时，打开手机页面就能看到新版本。
+只有手机上的 Pinky 自己的代码改了，它才会出新版本，不是 Pinky 每次更新都有。打开「自动更新」时，Pinky 会通过 USB 试着装一次新版本；手机拒绝的话，侧栏会有一张卡片告诉你，附「显示 pinky-android.apk」，这个版本 Pinky 也不会再试。按上面的方法装上新的 `pinky-android.apk` 就行。关掉「自动更新」时，打开手机页面就能看到新版本。
 
 </details>
 
 <details>
-<summary><b>银行等 App 会发现 Pinky Companion 吗？</b></summary>
+<summary><b>银行等 App 会发现手机上的 Pinky 吗？</b></summary>
 
-无障碍服务开着的时候，它们能发现。恶意软件常常滥用无障碍服务，所以很多银行 App 在发现某个不是从应用商店装的 App 开着无障碍服务时，会拒绝登录：马来西亚的银行（Maybank、CIMB、HSBC 以及马来西亚银行公会的其他成员，2024 年起）和新加坡的银行（DBS、OCBC、UOB，2023 年起）都是这样，其他地方也有。Pinky Companion 就是这样的 App，因为它是 Pinky 通过 USB 装上的。微信、抖音、小红书这类 App 也能看到这个服务，并且会留意自动化操作；我们还没听说它们因为 Pinky Companion 采取过措施，但让 Agent 操作它们可能违反它们的用户协议。
+无障碍服务开着的时候，它们能发现。恶意软件常常滥用无障碍服务，所以很多银行 App 在发现某个不是从应用商店装的 App 开着无障碍服务时，会拒绝登录：马来西亚的银行（Maybank、CIMB、HSBC 以及马来西亚银行公会的其他成员，2024 年起）和新加坡的银行（DBS、OCBC、UOB，2023 年起）都是这样，其他地方也有。手机上的 Pinky 就是这样的 App，因为它是 Pinky 通过 USB 装上的。微信、抖音、小红书这类 App 也能看到这个服务，并且会留意自动化操作；我们还没听说它们因为手机上的 Pinky 采取过措施，但让 Agent 操作它们可能违反它们的用户协议。
 
 App 也能看到手机开着 USB 调试或无线调试，Pinky 在每台安卓手机上都需要它；有些 App（包括一些银行 App）在它开着时会提醒你，或者不让你用。只要这台手机还在用 Pinky，它就一直开着。
 
 所以 Pinky 只在 Agent 操作手机时才开启这个服务：任务开始时开启，任务结束或你接管手机后几秒关闭，Agent 一分钟没有操作也会关闭。其余时间它都是关着的，这些 App 照常能用。Agent 工作期间（哪怕是在手机的后台显示器上），它们能看到这个服务：这时要用它们，先在 Pinky 里点「接管」，或者结束任务。
 
-如果完全不想让 Pinky 开启这个服务，在手机上卸载 Pinky Companion（Android 的「设置 › 应用」）。没有它 Pinky 照样能用，只是慢一些：读一次屏约 2 秒而不是 70 毫秒，输入英文以外的文字要经过手机的剪贴板。手机页面上的「以后再说」可以收起 Pinky 重新安装它的提示。
+如果完全不想让 Pinky 开启这个服务，从手机上卸载 Pinky（Android 的「设置 › 应用 › Pinky」）。没有它 Pinky 照样能用，只是慢一些：读一次屏约 2 秒而不是 70 毫秒，输入英文以外的文字要经过手机的剪贴板。手机页面上的「以后再说」可以收起 Pinky 重新安装它的提示。
 
 </details>
 
@@ -331,7 +355,7 @@ App 也能看到手机开着 USB 调试或无线调试，Pinky 在每台安卓�
 
 ```sh
 make check   # 构建（CGO_ENABLED=0）、vet、测试
-make app     # macOS：带 FFmpeg 和伴侣应用的 Pinky.app，以及 .dmg
+make app     # macOS：带 FFmpeg 和手机上的 Pinky 的 Pinky.app，以及 .dmg
 ```
 
 各系统的构建步骤、FFmpeg 和 adb 的打包方式、测试和代码结构，见英文版的 [Build from source](README.md#build-from-source)、[Build and test](README.md#build-and-test) 和 [Code layout](README.md#code-layout)。开发文档都是英文的：

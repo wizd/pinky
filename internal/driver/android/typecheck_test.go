@@ -3,11 +3,14 @@ package android
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/driver/android/companion"
 	"github.com/DIYgod/pinky/internal/screen"
 )
@@ -93,6 +96,7 @@ type textPhone struct {
 	mu       sync.Mutex
 	setText  func(req map[string]any) (any, *companion.Error)
 	sets     int
+	globals  []string // the global actions asked for, as "enter@7"
 	field    string
 	password bool
 	noField  bool
@@ -115,6 +119,8 @@ func (p *textPhone) answer(req map[string]any) (any, *companion.Error) {
 	case "set_text":
 		p.sets++
 		return p.setText(req)
+	case "global":
+		p.globals = append(p.globals, fmt.Sprintf("%v@%v", req["action"], req["display"]))
 	case "tree":
 		var root map[string]any
 		if !p.noField {
@@ -269,5 +275,77 @@ func TestFieldCheck(t *testing.T) {
 	var none *fieldCheck
 	if err := none.after(context.Background(), "x", false, false, true, nil, false); err != nil {
 		t.Fatalf("a nil check: %v", err)
+	}
+}
+
+// newTextBackground is background display 7 on a textPhone whose
+// companion reads other displays and takes their input, as on a Xiaomi
+// phone, and whose keyboard types letters as they are.
+func newTextBackground(t *testing.T) (*textPhone, *Background) {
+	p, d, _ := newTextPhone(t, companion.FeatureSetTextFallback, companion.FeatureDisplays, companion.FeatureDisplayInput)
+	d.stateMu.Lock()
+	d.imeKeys, d.imeAt = true, time.Now() // no shell to ask
+	d.stateMu.Unlock()
+	return p, &Background{d: d, display: 7, l: &live{}, viaCompanion: true, closed: make(chan struct{})}
+}
+
+// TestBackgroundSubmitKeepsNote: the enter that submits text typed on a
+// background display keeps the note the typing left; a key of its own
+// starts afresh.
+func TestBackgroundSubmitKeepsNote(t *testing.T) {
+	refused := &companion.Error{Code: "action_failed", Message: "the app did not accept ACTION_PASTE"}
+	for _, tc := range []struct {
+		name     string
+		text     string
+		opt      driver.TypeOptions
+		result   map[string]any // set_text's answer; nil refuses
+		password bool
+		noField  bool
+		wantNote string
+	}{
+		// The companion writes the text into a field that hides it, and
+		// leaves the enter to the driver.
+		{name: "written by the companion", text: "你好", opt: driver.TypeOptions{Submit: true},
+			result: map[string]any{"window": 1, "node": 7, "password": true, "method": "set_text"}, wantNote: noteHidden},
+		// The companion refuses, and the field check after typing notes
+		// what it could not read. Appending nothing sends nothing through
+		// scrcpy, which this test has no session for.
+		{name: "typed into a field that hides its text", opt: driver.TypeOptions{Append: true, Submit: true},
+			password: true, wantNote: noteHidden},
+		{name: "typed with no field to read", opt: driver.TypeOptions{Append: true, Submit: true},
+			noField: true, wantNote: noteUnread},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, b := newTextBackground(t)
+			p.set(func() {
+				p.password, p.noField = tc.password, tc.noField
+				p.setText = func(map[string]any) (any, *companion.Error) {
+					if tc.result == nil {
+						return nil, refused
+					}
+					return tc.result, nil
+				}
+			})
+			if err := b.Type(context.Background(), tc.text, tc.opt); err != nil {
+				t.Fatal(err)
+			}
+			p.set(func() {
+				if want := []string{"enter@7"}; !slices.Equal(p.globals, want) {
+					t.Errorf("global actions %q, want %q", p.globals, want)
+				}
+			})
+			if n := b.TakeInputNote(); n != tc.wantNote {
+				t.Errorf("note %q, want %q", n, tc.wantNote)
+			}
+		})
+	}
+
+	_, b := newTextBackground(t)
+	b.d.setInputNote(noteUnread)
+	if err := b.Key(context.Background(), driver.KeyEnter); err != nil {
+		t.Fatal(err)
+	}
+	if n := b.TakeInputNote(); n != "" {
+		t.Errorf("note %q after a key of its own, want none", n)
 	}
 }

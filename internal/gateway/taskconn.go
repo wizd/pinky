@@ -95,7 +95,7 @@ func refusesSharing(names ...string) (string, bool) {
 // connection for a task. The caller holds g.mu.
 func switchingLine(d *device) string {
 	if d.switching == wayHelper {
-		return "Switching to the helper"
+		return "Switching to Pinky on the iPhone"
 	}
 	return "Switching to CoreDevice"
 }
@@ -149,7 +149,7 @@ func (g *Gateway) useConnection(ctx context.Context, l *lease, way string, need 
 		// What phone_device changed is put back through the helper when
 		// the task ends: CoreDevice could not.
 		if asked {
-			return nil, fmt.Sprintf("Pinky keeps %s on the WebDriverAgent helper until the task ends, to put back what phone_device changed through it. Call phone_device with reset first to go back now.", d.name())
+			return nil, fmt.Sprintf("Pinky keeps %s on Pinky on the iPhone until the task ends, to put back what phone_device changed through it. Call phone_device with reset first to go back now.", d.name())
 		}
 		return nil, ""
 	}
@@ -160,7 +160,7 @@ func (g *Gateway) useConnection(ctx context.Context, l *lease, way string, need 
 			case asked:
 				return nil, fmt.Sprintf("Pinky did not change how %s connects, because %s. Connect again with this connection once that is over.", d.name(), why)
 			case need.what != "":
-				return nil, fmt.Sprintf("Pinky did not move %s to the WebDriverAgent helper for %s, because %s.", d.name(), need.what, why)
+				return nil, fmt.Sprintf("Pinky did not move %s to Pinky on the iPhone for %s, because %s.", d.name(), need.what, why)
 			}
 			return nil, ""
 		}
@@ -182,13 +182,13 @@ func (g *Gateway) useConnection(ctx context.Context, l *lease, way string, need 
 	}
 	// To the helper: only when it is installed.
 	if c, ok := connectionWay(cc.Connections(ctx, d.id), wayHelper); !ok || !c.Available {
-		reason := "the WebDriverAgent helper is not installed on it"
+		reason := "Pinky on the iPhone is not installed on it"
 		if ok && c.Detail != "" {
 			reason = strings.TrimSuffix(c.Detail, ".")
 		}
-		note := fmt.Sprintf("Pinky could not move %s to the WebDriverAgent helper: %s.", d.name(), reason)
+		note := fmt.Sprintf("Pinky could not move %s to Pinky on the iPhone: %s.", d.name(), reason)
 		if why != "" {
-			note += fmt.Sprintf(" %s refuses to run while the screen is shared, which CoreDevice does: tell the person it needs the helper installed (Settings › Phones).", why)
+			note += fmt.Sprintf(" %s refuses to run while the screen is shared, which CoreDevice does: tell the person it needs Pinky on the iPhone installed (Settings › Phones).", why)
 		}
 		return nil, note
 	}
@@ -206,7 +206,7 @@ func (g *Gateway) useConnection(ctx context.Context, l *lease, way string, need 
 	}
 	if !there || now != wayHelper {
 		// It did not come up on the helper: back to the person's choice.
-		detail := "the helper did not start"
+		detail := "Pinky on the iPhone did not start"
 		g.mu.Lock()
 		switch {
 		case d.openErr != nil:
@@ -215,22 +215,22 @@ func (g *Gateway) useConnection(ctx context.Context, l *lease, way string, need 
 			detail = strings.TrimSuffix(d.info.Detail, ".")
 		}
 		g.mu.Unlock()
-		g.log.Warn("task connection: the helper did not start", "device", d.id, "detail", detail)
+		g.log.Warn("task connection: Pinky on the iPhone did not start", "device", d.id, "detail", detail)
 		if res := g.switchTo(ctx, d, cc, ""); res != nil {
 			return res, ""
 		}
-		note := fmt.Sprintf("Pinky could not move %s to the WebDriverAgent helper (%s), so the task stays on CoreDevice.", d.name(), detail)
+		note := fmt.Sprintf("Pinky could not move %s to Pinky on the iPhone (%s), so the task stays on CoreDevice.", d.name(), detail)
 		if why != "" {
 			note += fmt.Sprintf(" %s may refuse to run while the screen is shared.", why)
 		}
 		return nil, note
 	}
-	note := "Pinky moved this task to the WebDriverAgent helper, which shares no screen"
+	note := "Pinky moved this task to Pinky on the iPhone, which shares no screen"
 	switch {
 	case why != "":
 		note += fmt.Sprintf(", because %s refuses to run while the screen is shared", why)
 	case need.what != "":
-		note = fmt.Sprintf("Pinky moved this task to the WebDriverAgent helper for %s, which only the helper does on this phone", need.what)
+		note = fmt.Sprintf("Pinky moved this task to Pinky on the iPhone for %s, which only it does on this phone", need.what)
 	}
 	return nil, note + ". Reading the screen is slower there (several seconds on a home screen). The phone goes back to CoreDevice after the task."
 }
@@ -249,11 +249,11 @@ func connectionWay(cs driver.Connections, id string) (driver.Connection, bool) {
 func wayName(way string) string {
 	switch way {
 	case wayHelper:
-		return "the WebDriverAgent helper"
+		return "Pinky on the iPhone"
 	case wayCoreDevice:
 		return "CoreDevice"
 	case "accessibility":
-		return "accessibility only (no helper)"
+		return "accessibility only (without Pinky on the iPhone)"
 	}
 	return way
 }
@@ -292,7 +292,7 @@ func (g *Gateway) switchTo(ctx context.Context, d *device, cc driver.ConnectionC
 	g.mu.Unlock()
 	why := "switching to CoreDevice"
 	if way == wayHelper {
-		why = "switching to the helper"
+		why = "switching to Pinky on the iPhone"
 	}
 	g.setOffline(d, why)
 	go func() {

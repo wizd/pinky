@@ -710,10 +710,10 @@ func (p *Provider) runner(e goios.DeviceEntry) (string, error) {
 // Sentences for a chosen connection the phone cannot use, and for the
 // passcode the phone asks for before the helper can control it.
 const (
-	coreDeviceTooOld = "Connecting without the helper needs iOS 27 or later; this iPhone runs iOS %s. Choose Automatic or WebDriverAgent in Settings > Phones."
-	wdaMissing       = "The WebDriverAgent helper is not installed on this iPhone. Install it once on a Mac with Xcode, with Install the helper in Pinky's window or pinkyctl helper install (docs/notes/ios.md, \"Installing the WebDriverAgent helper\"), or choose another connection in Settings > Phones."
-	automationAsk    = "Enter the passcode on the iPhone: iOS asks for it now and then before the WebDriverAgent helper can control the phone."
-	automationMissed = "The iPhone asked for its passcode to let the WebDriverAgent helper control it. If it still asks, enter the passcode there. Pinky tries again in a few minutes, or at once when you reconnect the iPhone or choose its connection again in Settings > Phones."
+	coreDeviceTooOld = "Connecting without Pinky on the iPhone needs iOS 27 or later; this iPhone runs iOS %s. Choose Automatic or Pinky on the iPhone in Settings > Phones."
+	wdaMissing       = "Pinky is not installed on this iPhone. Install it once on a Mac with Xcode, with Install Pinky on the iPhone in Pinky's window or pinkyctl helper install (docs/notes/ios.md, \"Installing Pinky on the iPhone\"), or choose another connection in Settings > Phones."
+	automationAsk    = "Enter the passcode on the iPhone: iOS asks for it now and then before Pinky on the iPhone can control the phone."
+	automationMissed = "The iPhone asked for its passcode to let Pinky on the iPhone control it. If it still asks, enter the passcode there. Pinky tries again in a few minutes, or at once when you reconnect the iPhone or choose its connection again in Settings > Phones."
 )
 
 // coreDeviceTooOldState fills in a phone the person chose to connect

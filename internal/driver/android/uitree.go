@@ -17,6 +17,10 @@ import (
 // uiNode is one node of a uiautomator dump.
 type uiNode struct {
 	Class, Package, Text, Desc, ResID, Hint string
+	// HasHint is set when the dump has the hint attribute (Android 16 and
+	// later). Without it an empty field's text is its hint, and nothing
+	// tells the two apart.
+	HasHint bool
 
 	Checkable, Checked, Clickable, Enabled, Focusable, Focused bool
 	Scrollable, LongClickable, Password, Selected              bool
@@ -119,7 +123,7 @@ func nodeFromAttrs(attrs []xml.Attr) *uiNode {
 		case "resource-id":
 			n.ResID = v
 		case "hint":
-			n.Hint = v
+			n.Hint, n.HasHint = v, true
 		case "checkable":
 			n.Checkable = v == "true"
 		case "checked":
@@ -337,6 +341,9 @@ func (c *converter) element(n *uiNode, path []string, parentLabel string) (scree
 		Path:   strings.Join(path, "/"),
 		ID:     n.ResID,
 	}
+	if isInputNode(n) {
+		e.Content = inputContent(n)
+	}
 	if n.Focused {
 		e.States = append(e.States, screen.StateFocused)
 	}
@@ -395,6 +402,18 @@ func ownLabel(n *uiNode) string {
 		return s
 	}
 	return cleanLabel(n.Desc)
+}
+
+// inputContent is the text typed into an input, as ownLabel shows it: ""
+// while the field shows its hint, and for password fields. A dump without
+// the hint attribute cannot say whether a field's text was typed or is its
+// hint, so nothing in it counts as typed: the policy then judges the field
+// by all of its label, and an empty one-time-code field stays one.
+func inputContent(n *uiNode) string {
+	if n.Password || !n.HasHint || n.Text == n.Hint {
+		return ""
+	}
+	return cleanLabel(n.Text)
 }
 
 // cleanLabel collapses whitespace and cuts long text.

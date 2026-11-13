@@ -91,6 +91,23 @@ android {
         // The abstract socket the service listens on; Pinky's Go client
         // knows both builds' (internal/driver/android/companion).
         buildConfigField("String", "SOCKET_NAME", "\"pinky_companion\"")
+        // The socket of Pinky's Go core, for Pinky's own screens on the
+        // phone (internal/standalone/control.go). Only this app's uid may
+        // open it.
+        buildConfigField("String", "CORE_SOCKET", "\"pinky_core\"")
+    }
+
+    // Pinky's Go core (libpinkycore.so, internal/standalone/libcore), which
+    // runs tasks on the phone itself: scripts/androidcore.sh builds it into
+    // build/go/jniLibs, for arm64, with a tiny stand-in for armeabi-v7a and
+    // x86_64 so that one APK installs on every phone. Both build types carry
+    // it when it was built; a release always does (scripts/dist.sh checks),
+    // and runs tasks on the phone only once on_phone_ui is on there
+    // (docs/notes/android-app.md).
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("build/go/jniLibs")
+        }
     }
 
     signingConfigs {
@@ -115,6 +132,7 @@ android {
             // create.
             applicationIdSuffix = ".dev"
             buildConfigField("String", "SOCKET_NAME", "\"pinky_companion_dev\"")
+            buildConfigField("String", "CORE_SOCKET", "\"pinky_core_dev\"")
         }
         release {
             isMinifyEnabled = true
@@ -196,4 +214,11 @@ androidComponents {
         }
         variant.sources.assets?.addGeneratedSourceDirectory(asset, CompanionVersionAsset::outputDir)
     }
+}
+
+dependencies {
+    // Unit tests of the plain Kotlin rules (app/src/test): no phone needed.
+    testImplementation("junit:junit:4.13.2")
+    // org.json as Android has it, for the rules that read the core's JSON.
+    testImplementation("org.json:json:20180813")
 }

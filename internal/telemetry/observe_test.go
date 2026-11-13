@@ -242,7 +242,16 @@ func TestCountsAgentsAndPerson(t *testing.T) {
 	wg := WrapGateway(g, c)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go c.Observe(ctx, wg)
+	observed := make(chan struct{})
+	go func() {
+		c.Observe(ctx, wg)
+		close(observed)
+	}()
+	// Observe reads observeEvery: it is over before the interval goes back.
+	t.Cleanup(func() {
+		cancel()
+		<-observed
+	})
 
 	m := mcp.New(g, "test")
 	m.Use(c.MCPMiddleware())

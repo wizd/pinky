@@ -54,6 +54,10 @@ read_only_devices: []
 # Mask digit codes (such as one-time codes) in notifications.
 mask_codes: true
 
+# Let agents type passwords and one-time codes on virtual phones (emulators
+# and Simulators on this computer), for testing sign-ins. Phones never.
+virtual_credentials: false
+
 rules:
   - name: Finance apps
     match: { category: finance }

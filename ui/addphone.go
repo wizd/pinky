@@ -74,35 +74,43 @@ func (a *app) addPhonePage(c *mg.Context) {
 	mg.Column(c).Grow(1).Center().Padding(0, sp6, sp8, sp6).Background(p.bg2).Children(func() {
 		card := mg.Scroll(c).FillWidth().MaxWidth(480).MaxHeight(max(h-64, 240)).Padding(sp8).Radius(rSheet).Background(p.panel).Border(1, p.line).Gap(sp5).Label(locales.AddPhoneLabel())
 		shadow(c, card).Children(func() {
-			mg.Row(c).MinHeight(22).AlignItems(mg.Center).Margin(0, 0, -6, 0).Children(func() {
-				if s.step != "choose" && linkButton(c, locales.AddPhoneBack()).Clicked() {
-					switch s.step {
-					case "qr", "tailnet":
-						s.step = "android"
-					default:
-						s.step, s.old, s.oldPick, s.since = "choose", false, "", time.Time{}
+			// Back and Cancel, on a row of their own where there is one
+			// of them: the first step of a first phone has neither, and
+			// an empty row would leave a gap over its title.
+			if s.step != "choose" || len(a.devices) > 0 {
+				mg.Row(c).MinHeight(22).AlignItems(mg.Center).Margin(0, 0, -6, 0).Children(func() {
+					if s.step != "choose" && linkButton(c, locales.AddPhoneBack()).Clicked() {
+						switch s.step {
+						case "qr", "tailnet":
+							s.step = "android"
+						default:
+							s.step, s.old, s.oldPick, s.since = "choose", false, "", time.Time{}
+						}
+						s.snapshot(a)
 					}
-					s.snapshot(a)
-				}
-				mg.Spacer(c)
-				if len(a.devices) > 0 && quietButton(c, locales.AddPhoneCancel()).Clicked() {
-					a.page = pagePhones
+					mg.Spacer(c)
+					if len(a.devices) > 0 && quietButton(c, locales.AddPhoneCancel()).Clicked() {
+						a.page = pagePhones
+					}
+				})
+			}
+			// Each step fades in where the last one was.
+			mg.Column(c.Key(s.step)).Gap(sp5).Transition(swapIn()).Children(func() {
+				switch s.step {
+				case "android":
+					a.addAndroid(c)
+				case "qr":
+					a.addQR(c)
+				case "tailnet":
+					a.addTailnet(c)
+				case "iphone":
+					a.addIPhone(c)
+				case "virtual":
+					a.addVirtual(c)
+				default:
+					a.addChoose(c)
 				}
 			})
-			switch s.step {
-			case "android":
-				a.addAndroid(c)
-			case "qr":
-				a.addQR(c)
-			case "tailnet":
-				a.addTailnet(c)
-			case "iphone":
-				a.addIPhone(c)
-			case "virtual":
-				a.addVirtual(c)
-			default:
-				a.addChoose(c)
-			}
 		})
 	})
 }
@@ -178,7 +186,7 @@ func (a *app) addChoose(c *mg.Context) {
 func tileIcon(c *mg.Context, ic *mg.SVG) mg.Element {
 	p := pal(c)
 	b := mg.Box(c).Size(36, 36).Radius(rControl).Background(p.bg3).Center().Shrink(0)
-	b.Children(func() { mg.Icon(c, ic).FontSize(20).TextColor(p.ink2) })
+	b.Children(func() { mg.Icon(c, ic).FontSize(iconLarge).TextColor(p.ink2) })
 	return b
 }
 
@@ -210,7 +218,7 @@ func (a *app) addQR(c *mg.Context) {
 			}
 			mg.Column(c).Size(208, 208).Center().Gap(8).Padding(16).Children(func() {
 				if st.state == "failed" {
-					mg.Icon(c, icAlert).FontSize(26).TextColor(hex("#975800"))
+					mg.Icon(c, icAlert).FontSize(iconHero).TextColor(hex("#975800"))
 					mg.Text(c, locales.PairingNoCode()).FontSize(fsSmall).TextColor(hex("#5b5b64"))
 				} else {
 					spinner(c)
@@ -223,7 +231,7 @@ func (a *app) addQR(c *mg.Context) {
 		// may help, and a new QR code.
 		mg.Column(c).Gap(10).Padding(sp3, 14).Radius(rControl).Background(p.bg2).Role(mg.RoleStatus).Children(func() {
 			mg.Row(c).Gap(10).AlignItems(mg.Start).Children(func() {
-				mg.Icon(c, icAlert).FontSize(16).TextColor(p.amberDot).Shrink(0)
+				mg.Icon(c, icAlert).FontSize(iconBody).TextColor(p.amberDot).Shrink(0)
 				mg.Text(c, st.err).Grow(1).MinWidth(0)
 			})
 			mg.Row(c).Gap(10).Justify(mg.End).Wrap().Children(func() {

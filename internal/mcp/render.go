@@ -61,6 +61,14 @@ func StatusLine(res *gateway.Result) string {
 	if res.Setup != "" {
 		parts = append(parts, "setup: "+res.Setup)
 	}
+	if res.Scan != nil {
+		parts = append(parts, fmt.Sprintf("pages: %d", res.Scan.Pages))
+		parts = append(parts, "stop: "+res.Scan.Stop)
+		parts = append(parts, fmt.Sprintf("complete: %v", res.Scan.Complete))
+		if res.Scan.Truncated {
+			parts = append(parts, "partial: true")
+		}
+	}
 	if !res.Full && res.Screen != nil && len(res.Diff) == 0 && len(res.Steps) == 0 && !res.Early {
 		// After a read that settle_ms made early, the action may not have
 		// shown yet: "no change" could make the agent repeat it.
@@ -142,6 +150,17 @@ func writeResult(b *strings.Builder, res *gateway.Result, indent string) {
 				l += " · clone of " + a.CloneOf.Name
 			}
 			line(l)
+		}
+	}
+	if res.Scan != nil {
+		for _, page := range res.Scan.Sections {
+			line(fmt.Sprintf("screen %d", page.Number))
+			for _, content := range page.Lines {
+				line("- " + content)
+			}
+		}
+		if res.Scan.Continuation != "" {
+			line("continuation: " + res.Scan.Continuation)
 		}
 	}
 	switch {

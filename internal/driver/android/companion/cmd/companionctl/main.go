@@ -40,7 +40,12 @@ commands:
                        print the screen (or the raw JSON tree)
   settext [-append] [-submit] [-id ID] [-x X -y Y] TEXT
                        write TEXT into the focused (or chosen) field
-  events [KIND...]     print events until interrupted
+  events [KIND...]     print events until interrupted; without "claim"
+                       among the kinds, the phone counts it as a desktop
+                       Pinky's implicit claim
+  claim [-task T]      claim the phone as desktop Pinky does while its
+                       agent works, print claim events, and give it back
+                       when interrupted; Stop on the phone ends it sooner
   idle [MAX_MS]        wait for the screen to settle
   bench [N]            time N companion trees against N uiautomator dumps
   coldstart [-cold] [N]
@@ -146,7 +151,7 @@ func dispatch(ctx context.Context, c *companion.Client, run *companion.ExecRunne
 		return coldstart(ctx, c, run, args)
 	}
 	switch cmd {
-	case "ping", "tree", "settext", "events", "idle", "bench":
+	case "ping", "tree", "settext", "events", "claim", "idle", "bench":
 	default:
 		return fmt.Errorf("unknown command %q", cmd)
 	}
@@ -177,6 +182,8 @@ func dispatch(ctx context.Context, c *companion.Client, run *companion.ExecRunne
 		return setText(ctx, c, args)
 	case "events":
 		return events(ctx, c, args)
+	case "claim":
+		return claim(ctx, c, args)
 	case "idle":
 		max := 3 * time.Second
 		if len(args) > 0 {
@@ -271,10 +278,99 @@ func events(ctx context.Context, c *companion.Client, args []string) error {
 		return err
 	}
 	for ev := range sub.C() {
-		b, _ := json.Marshal(ev)
-		fmt.Printf("%s %s\n", ev.Time.Format("15:04:05.000"), b)
+		showEvent(ev)
 	}
 	return sub.Err()
+}
+
+func showEvent(ev companion.Event) {
+	b, _ := json.Marshal(ev)
+	fmt.Printf("%s %s\n", ev.Time.Format("15:04:05.000"), b)
+}
+
+// claim holds the phone as desktop Pinky does while its agent works
+// (FeatureClaim): it claims on a subscription to claim events and prints
+// them until interrupted, then gives the phone back. Stop on the phone
+// ends the claim sooner.
+func claim(ctx context.Context, c *companion.Client, args []string) error {
+	fs := flag.NewFlagSet("claim", flag.ContinueOnError)
+	task := fs.String("task", "", "the task the phone shows")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	info, err := c.Ping(ctx) // also measures the clock skew
+	if err != nil {
+		return err
+	}
+	if !info.Has(companion.FeatureClaim) {
+		return errors.New("claim: this app takes no claims")
+	}
+	// Not ctx: the subscription has to outlive the interrupt to give the
+	// phone back.
+	sub, err := c.Events(context.Background(), companion.EventClaim)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+	// A request's reply comes after the events sent before it: go on
+	// reading them while it waits.
+	ask := func(req func(context.Context) error) error {
+		rctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		done := make(chan error, 1)
+		go func() { done <- req(rctx) }()
+		for {
+			select {
+			case err := <-done:
+				return err
+			case ev, ok := <-sub.C():
+				if !ok {
+					return <-done
+				}
+				showEvent(ev)
+			}
+		}
+	}
+	err = ask(func(ctx context.Context) error { return sub.Claim(ctx, companion.ByComputer, *task) })
+	var busy *companion.Error
+	if errors.As(err, &busy) && busy.Code == companion.CodeBusy {
+		return fmt.Errorf("claim: the phone is busy: %s holds it (task %q, implicit %v)", busy.By, busy.Task, busy.Implicit)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(os.Stderr, "claimed; interrupt to give the phone back")
+	for {
+		select {
+		case ev, ok := <-sub.C():
+			if !ok {
+				return sub.Err()
+			}
+			showEvent(ev)
+			if ev.Kind == companion.EventClaim && ev.Stopped {
+				fmt.Fprintln(os.Stderr, "Stop on the phone ended the claim")
+				return nil
+			}
+		case <-ctx.Done():
+			if err := ask(sub.Release); err != nil {
+				return fmt.Errorf("claim: release: %w", err)
+			}
+			fmt.Fprintln(os.Stderr, "released")
+			// Show the event that says who holds the phone now.
+			wait := time.After(500 * time.Millisecond)
+			for {
+				select {
+				case ev, ok := <-sub.C():
+					if !ok {
+						return nil
+					}
+					showEvent(ev)
+				case <-wait:
+					return nil
+				}
+			}
+		}
+	}
 }
 
 // bench times companion trees, then uiautomator dumps, of the screen in

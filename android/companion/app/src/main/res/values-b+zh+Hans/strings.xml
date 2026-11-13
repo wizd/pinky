@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simplified Chinese. Pinky is the app's name in every language. The
+     debug page's strings stay English: it is for Pinky's tests. -->
+<resources>
+    <string name="app_name">Pinky</string>
+    <string name="service_label">Pinky</string>
+    <string name="service_description">让 Pinky 为你在这台手机上的 Pinky 里开始的任务读取屏幕、点按、滑动和输入文字；为此开启后，它会一直开着，直到你在这里关闭。它也让电脑上的 Pinky 在 Agent 操作这台手机时读取屏幕上的控件并输入文字；在不接受 USB 调试点按的手机上，也由它来点按和滑动。Pinky 只在 Agent 在这里工作时通过 USB 调试开启这项服务，任务结束或你接管后几秒钟就关闭；Pinky 断开一分钟后，它也会自己关闭。银行等 App 能看到开着的无障碍服务。在这里关闭只管到下一个任务；如果完全不想让 Pinky 使用它，卸载这个应用即可：没有它 Pinky 照样能用，只是慢一些。在不允许 Pinky 通过 USB 调试开启它的手机上，需要你在这里自己开启，它会一直开着，直到你在这里关闭。</string>
+</resources>

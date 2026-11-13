@@ -113,17 +113,17 @@ func (a *app) phoneWiFiMenu(c *mg.Context, d gateway.DeviceView, close func()) {
 	}
 	switch {
 	case st.Stopped && d.Info.Connection == "usb":
-		if menuItem(c, locales.WiFiUseAgain(), mg.Color{}).Clicked() {
+		if menuItem(c, icWifi, locales.WiFiUseAgain(), mg.Color{}).Clicked() {
 			close()
 			a.setPhoneWiFi(d, true)
 		}
 	case st.On:
-		if menuItem(c, locales.WiFiStop(), mg.Color{}).Clicked() {
+		if menuItem(c, icWifiOff, locales.WiFiStop(), mg.Color{}).Clicked() {
 			close()
 			a.setPhoneWiFi(d, false)
 		}
 	case st.Missing == "":
-		if menuItem(c, locales.WiFiUse(), mg.Color{}).Clicked() {
+		if menuItem(c, icWifi, locales.WiFiUse(), mg.Color{}).Clicked() {
 			close()
 			a.askPhoneWiFi(d)
 		}
@@ -256,7 +256,7 @@ func (a *app) phoneWiFiDialog(c *mg.Context) {
 			mg.Text(c, locales.WiFiDialogWhat(nonEmpty(addr, "Wi-Fi"))).FontSize(fsSmall).TextColor(p.ink2)
 			mg.Column(c).Gap(6).Padding(10, 12).Radius(8).Background(p.amberTint).Border(1, p.amberLine).Children(func() {
 				mg.Row(c).Gap(8).AlignItems(mg.Start).Children(func() {
-					mg.Icon(c, icAlert).FontSize(15).TextColor(p.amberDot).Shrink(0)
+					mg.Icon(c, icAlert).FontSize(iconBody).TextColor(p.amberDot).Shrink(0)
 					mg.Text(c, locales.WiFiDialogRisk()).FontSize(fsSmall).Grow(1).MinWidth(0)
 				})
 			})

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,10 @@ type Status struct {
 	// Tailnet is the tailnet's name, such as "example.com" or
 	// "someone@gmail.com".
 	Tailnet string
+	// Owner is the login of the person this computer is signed in to the
+	// tailnet as, such as "someone@example.com"; "" when the computer is
+	// tagged (it then belongs to no person) or Tailscale does not say.
+	Owner string
 	// Self is this computer on the tailnet; Peers the other devices.
 	Self  Device
 	Peers []Device
@@ -291,6 +296,7 @@ type rawStatus struct {
 	Health         []string
 	Self           *rawPeer
 	Peer           map[string]*rawPeer
+	User           map[string]rawUser
 	MagicDNSSuffix string
 	CurrentTailnet *struct {
 		Name            string
@@ -299,8 +305,14 @@ type rawStatus struct {
 	}
 }
 
+type rawUser struct {
+	LoginName string
+}
+
 type rawPeer struct {
 	ID           string
+	UserID       int64
+	Tags         []string
 	HostName     string
 	DNSName      string
 	OS           string
@@ -329,6 +341,9 @@ func Parse(b []byte) (Status, error) {
 	}
 	if raw.Self != nil {
 		st.Self = raw.Self.device()
+		if len(raw.Self.Tags) == 0 && raw.Self.UserID != 0 {
+			st.Owner = raw.User[strconv.FormatInt(raw.Self.UserID, 10)].LoginName
+		}
 	}
 	for _, p := range raw.Peer {
 		if p != nil {

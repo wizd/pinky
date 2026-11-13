@@ -195,22 +195,27 @@ func (p *prep) preparePinch(a Action, cur *screen.Screen, byRef func(int) (*scre
 }
 
 // describePinch says a pinch for history: "Zoomed in on “Map”", "Zoomed
-// out", "Turned “Photo” with two fingers". label is the target's, in
-// quotes, or empty.
-func describePinch(a Action, label string) string {
+// out", "Turned “Photo” with two fingers"; or, when ask is set, in the
+// imperative for an approval's title: "Zoom in on “Map”". label is the
+// target's, in quotes, or empty.
+func describePinch(a Action, label string, ask bool) string {
+	zoomed, turned := "Zoomed", "Turned"
+	if ask {
+		zoomed, turned = "Zoom", "Turn"
+	}
 	switch s := a.pinchScale(); {
 	case s > 1 && label != "":
-		return "Zoomed in on " + label
+		return zoomed + " in on " + label
 	case s > 1:
-		return "Zoomed in"
+		return zoomed + " in"
 	case s < 1 && label != "":
-		return "Zoomed out on " + label
+		return zoomed + " out on " + label
 	case s < 1:
-		return "Zoomed out"
+		return zoomed + " out"
 	case label != "":
-		return "Turned " + label + " with two fingers"
+		return turned + " " + label + " with two fingers"
 	}
-	return "Turned with two fingers"
+	return turned + " with two fingers"
 }
 
 // Touch2 is Touch for two fingers at once, for the person's pinch on the

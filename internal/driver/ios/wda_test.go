@@ -224,6 +224,42 @@ func TestPickWDARunner(t *testing.T) {
 	if got := pickWDARunner([]installationproxy.AppInfo{app("com.facebook.WebDriverAgentRunner.xctrunner", "WebDriverAgentRunner-Runner")}); got != "com.facebook.WebDriverAgentRunner.xctrunner" {
 		t.Errorf("picked %q", got)
 	}
+	// Pinky's app hosting WDA wins over the helper the phone keeps.
+	host := installationproxy.AppInfo{"CFBundleIdentifier": "pinky.abcde12345", "CFBundleName": "Pinky",
+		"CFBundleExecutable": "Pinky", wdaHostKey: true}
+	plain := installationproxy.AppInfo{"CFBundleIdentifier": "pinky.abcde12345", "CFBundleName": "Pinky", "CFBundleExecutable": "Pinky"}
+	helper := app("pinky.abcde12345.WebDriverAgentRunner.xctrunner", "WebDriverAgentRunner-Runner")
+	for _, apps := range [][]installationproxy.AppInfo{{helper, host}, {host, helper}} {
+		if got := pickWDARunner(apps); got != "pinky.abcde12345" {
+			t.Errorf("picked %q, want Pinky's app hosting WDA", got)
+		}
+	}
+	if got := pickWDARunner([]installationproxy.AppInfo{plain, helper}); got != "pinky.abcde12345.WebDriverAgentRunner.xctrunner" {
+		t.Errorf("picked %q, want the helper: the app holds no WDA", got)
+	}
+}
+
+// TestPickHelperApp: an install replaces the helper, never Pinky's app
+// hosting WDA, which pickRunnerApp prefers; with only the app there it
+// keeps the app's team.
+func TestPickHelperApp(t *testing.T) {
+	host := installationproxy.AppInfo{"CFBundleIdentifier": "pinky.abcde12345.lite", "CFBundleName": "Pinky",
+		"CFBundleExecutable": "Pinky", wdaHostKey: true,
+		"Entitlements": map[string]any{"application-identifier": "ABCDE12345.pinky.abcde12345.lite"}}
+	helper := installationproxy.AppInfo{"CFBundleIdentifier": "com.example.wda.xctrunner",
+		"CFBundleName": "WebDriverAgentRunner-Runner", "CFBundleExecutable": "WebDriverAgentRunner-Runner"}
+	for _, apps := range [][]installationproxy.AppInfo{{host, helper}, {helper, host}} {
+		if got := pickHelperApp(apps); got.BundleID != "com.example.wda.xctrunner" {
+			t.Errorf("picked %q, want the helper", got.BundleID)
+		}
+	}
+	got := pickHelperApp([]installationproxy.AppInfo{host})
+	if got.BundleID != "" || appIDTeam(got.AppID) != "ABCDE12345" {
+		t.Errorf("only the app: got %+v, want no bundle id and the app's team", got)
+	}
+	if got := pickHelperApp(nil); got != (wdaRunner{}) {
+		t.Errorf("no apps: got %+v", got)
+	}
 }
 
 func TestTouchRecorder(t *testing.T) {
@@ -337,7 +373,8 @@ func TestAVCCToAnnexB(t *testing.T) {
 }
 
 func TestToNV12(t *testing.T) {
-	// JPEG's 4:2:0 pictures copy straight; odd sizes are cropped to even.
+	// JPEG's 4:2:0 samples are full range and are scaled to video range as
+	// they are copied; odd sizes are cropped to even.
 	img, err := jpeg.Decode(bytes.NewReader(jpegBytes(t, 33, 65, color.RGBA{200, 30, 60, 255})))
 	if err != nil {
 		t.Fatal(err)
@@ -347,8 +384,19 @@ func TestToNV12(t *testing.T) {
 		t.Fatalf("size %dx%d, planes %d %d", w, h, len(y), len(uv))
 	}
 	yc := img.(*image.YCbCr)
-	if y[0] != yc.Y[0] || uv[0] != yc.Cb[0] || uv[1] != yc.Cr[0] {
-		t.Fatalf("planes not copied: %d %d %d", y[0], uv[0], uv[1])
+	if y[0] != fullToVideoY[yc.Y[0]] || uv[0] != fullToVideoC[yc.Cb[0]] || uv[1] != fullToVideoC[yc.Cr[0]] {
+		t.Fatalf("planes not scaled to video range: %d %d %d", y[0], uv[0], uv[1])
+	}
+	// Both planes must stay inside the video range, whatever the picture is.
+	for _, v := range y {
+		if v < 16 || v > 235 {
+			t.Fatalf("luma %d outside video range", v)
+		}
+	}
+	for _, v := range uv {
+		if v < 16 || v > 240 {
+			t.Fatalf("chroma %d outside video range", v)
+		}
 	}
 	// RGBA goes through BT.601: white is Y 235, gray chroma.
 	rgba := image.NewRGBA(image.Rect(0, 0, 4, 4))
@@ -358,6 +406,26 @@ func TestToNV12(t *testing.T) {
 	y, uv, _, _ = toNV12(rgba)
 	if y[0] < 233 || y[0] > 236 || uv[0] < 127 || uv[0] > 129 || uv[1] < 127 || uv[1] > 129 {
 		t.Fatalf("white: Y %d, Cb %d, Cr %d", y[0], uv[0], uv[1])
+	}
+}
+
+// TestToNV12RoundTrip checks the property that makes the scaling safe to
+// apply to every picture rather than to one: a decoder that reads NV12 the
+// standard way gets back the sample the JPEG carried, for every value from
+// black to white. No picture is brightened or darkened by the conversion, so
+// none is treated specially.
+func TestToNV12RoundTrip(t *testing.T) {
+	for v := 0; v < 256; v++ {
+		if got := (int(fullToVideoY[v]) - 16) * 255 / 219; got < v-2 || got > v+2 {
+			t.Fatalf("luma %d came back as %d", v, got)
+		}
+		c := fullToVideoC[v]
+		if c < 16 || c > 240 {
+			t.Fatalf("chroma %d outside video range: %d", v, c)
+		}
+		if got := 128 + (int(c)-128)*255/224; got < v-2 || got > v+2 {
+			t.Fatalf("chroma %d came back as %d", v, got)
+		}
 	}
 }
 

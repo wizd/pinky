@@ -168,6 +168,50 @@ func TestIconSliders(t *testing.T) {
 	}
 }
 
+// A swipe commits only on a slider it may slide. Scrolling 淘宝's order
+// list up from its "删除订单" button, with prices all over the screen, is
+// a scroll (field report: read-only mode refused it as a payment), while a
+// swipe along "Slide to pay" or its track, a diagonal one across it, and a
+// full swipe on a row's revealed "删除" still ask.
+func TestSwipeOnlySlidesSliders(t *testing.T) {
+	e := commitsEngine(t)
+	shop := screen.App{Name: "Example Shop", ID: "com.example.shop"}
+	del := screen.Element{Role: screen.RoleButton, Label: "删除订单", Bounds: screen.Rect{X: 396, Y: 1086, W: 261, H: 138}}
+	price := screen.Element{Role: screen.RoleText, Label: "实付款 ¥262.59", Bounds: screen.Rect{X: 700, Y: 1000, W: 400, H: 60}}
+	scr := &screen.Screen{Width: 1179, Height: 2556, Elements: []screen.Element{del, price}}
+	up := screen.Point{X: 0, Y: 1200}
+	right := screen.Point{X: 600, Y: 0}
+	for _, c := range []struct {
+		name string
+		t    screen.Element
+		move screen.Point
+		want Decision
+	}{
+		{"scroll from a button", del, up, Allow},
+		{"scroll from a wide row", screen.Element{Role: screen.RoleText, Label: "支付宝", Bounds: screen.Rect{X: 40, Y: 900, W: 600, H: 80}}, screen.Point{Y: -900}, Allow},
+		{"slide along the button", del, right, Ask},
+		{"slide to pay", screen.Element{Role: screen.RoleOther, Label: "Slide to pay", Bounds: screen.Rect{X: 60, Y: 2200, W: 1060, H: 140}}, right, Ask},
+		{"vertical slider", screen.Element{Role: screen.RoleOther, Label: "Slide to pay", Bounds: screen.Rect{X: 500, Y: 800, W: 160, H: 900}}, screen.Point{Y: -700}, Ask},
+		{"unknown move", del, screen.Point{}, Ask},
+		{"square knob", screen.Element{Role: screen.RoleOther, ID: "com.example.shop:id/slide_to_pay", Bounds: screen.Rect{X: 60, Y: 2200, W: 140, H: 140}}, right, Ask},
+		{"scroll a little sideways", del, screen.Point{X: 300, Y: 1200}, Allow},
+		{"diagonal slide to pay", screen.Element{Role: screen.RoleOther, Label: "Slide to pay", Bounds: screen.Rect{X: 60, Y: 2200, W: 1060, H: 140}}, screen.Point{X: 600, Y: -700}, Ask},
+		{"full swipe on a revealed action", screen.Element{Role: screen.RoleButton, Label: "删除", Bounds: screen.Rect{X: 979, Y: 1000, W: 200, H: 240}}, screen.Point{X: -800}, Ask},
+		{"square knob up", screen.Element{Role: screen.RoleOther, ID: "com.example.shop:id/slide_to_pay", Bounds: screen.Rect{X: 60, Y: 2200, W: 140, H: 140}}, screen.Point{Y: -600}, Ask},
+	} {
+		tt := c.t
+		v := e.Evaluate(Input{Op: OpSwipe, App: shop, Screen: scr, Target: &tt, Move: c.move})
+		if v.Decision != c.want {
+			t.Errorf("%s: %+v, want %v", c.name, v, c.want)
+		}
+	}
+	// A scrolling list that says "Pay" is no slider either.
+	list := screen.Element{Role: screen.RoleList, Label: "Pay later", States: []string{screen.StateScrollable}}
+	if v := e.Evaluate(Input{Op: OpSwipe, App: shop, Screen: scr, Target: &list}); v.Decision != Allow {
+		t.Errorf("scrolling a list labelled Pay: %+v", v)
+	}
+}
+
 func TestInstallIcons(t *testing.T) {
 	e := commitsEngine(t)
 	get := el(screen.RoleButton, "", "com.android.vending:id/download_button")

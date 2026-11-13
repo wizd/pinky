@@ -91,6 +91,19 @@ func (a *API) MediaPath(ctx context.Context, id string) (string, error) {
 	return path, nil
 }
 
+// Close removes the screenshots MediaPath wrote, with their temporary
+// folder. The tests, which make a fake each, and the demo call it when
+// they are done, or every fake that showed a screenshot would leave a
+// folder behind. The fake answers on afterwards, without those files.
+func (a *API) Close() {
+	a.mu.Lock()
+	dir := a.mediaDir
+	a.mu.Unlock()
+	if dir != "" {
+		os.RemoveAll(dir)
+	}
+}
+
 // halve scales a picture down by two, averaging each 2×2 block.
 func halve(src image.Image) image.Image {
 	b := src.Bounds()

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,6 +36,17 @@ type extraDev struct {
 
 	pkgs      map[string]driver.Package // phone_app: a file holding a key is that package
 	installed map[string]string         // phone_app: scripted packages installed, id to version
+
+	conn atomic.Value // string: Info's Connection, when set
+}
+
+// Info implements driver.Device; it takes no lock, as callers may hold x.mu.
+func (x *extraDev) Info() driver.Info {
+	info := x.Device.Info()
+	if c, _ := x.conn.Load().(string); c != "" {
+		info.Connection = c
+	}
+	return info
 }
 
 type memFile struct {

@@ -2,6 +2,7 @@ package android
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,17 +21,36 @@ const (
 
 func newReconnectFake(t *testing.T) (*fakeADB, *Provider) {
 	f := startFakeADB(t)
+	return f, newReconnectProvider(t, f, "")
+}
+
+// newReconnectProvider returns a provider that reconnects the fake's
+// paired phones and keeps their addresses in netFile ("" in memory). Its
+// probes of kept addresses never leave the test: an address in
+// f.unreachable does not answer, any other does.
+func newReconnectProvider(t *testing.T, f *fakeADB, netFile string) *Provider {
 	cfg := f.config()
 	cfg.ReconnectWiFi = true
+	cfg.NetworkFile = netFile
 	cfg.KnownHosts = func() ([]string, error) {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		return slices.Clone(f.known), nil
 	}
-	old := reconnectSearch
-	reconnectSearch = 300 * time.Millisecond
-	t.Cleanup(func() { reconnectSearch = old })
-	return f, NewProvider(cfg)
+	old, oldVerify := reconnectSearch, keptVerify
+	reconnectSearch, keptVerify = 300*time.Millisecond, 2*time.Second
+	t.Cleanup(func() { reconnectSearch, keptVerify = old, oldVerify })
+	p := NewProvider(cfg)
+	p.wifi.probe = func(_ context.Context, addr string) error {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.probes = append(f.probes, addr)
+		if f.unreachable[addr] {
+			return errors.New("dial tcp " + addr + ": i/o timeout")
+		}
+		return nil
+	}
+	return p
 }
 
 func (f *fakeADB) counts() (browses int, connects []string) {

@@ -17,7 +17,9 @@ func (a *app) rightPanel(c *mg.Context) {
 	mg.Scroll(c).Width(rightPanelWidth).Shrink(0).BorderWidth(0, 0, 0, 1).BorderColor(p.line).Background(p.wing).
 		Padding(sp5, sp4).Gap(sp6).Label(locales.NeedsAndTasksLabel()).Children(func() {
 		if len(a.needs) > 0 {
-			mg.Column(c).Label(locales.NeedsSection()).Children(func() {
+			// The first request brings Needs you in with it, and the last
+			// takes it away; the cards between come and go on their own.
+			mg.Column(c.Key("needs")).Label(locales.NeedsSection()).Transition(cardIn()).Children(func() {
 				sectionLabel(c, locales.NeedsSection())
 				mg.Column(c).Gap(sp3).Children(func() {
 					for _, n := range a.needs {
@@ -32,13 +34,19 @@ func (a *app) rightPanel(c *mg.Context) {
 		if d := a.device(a.sel); d != nil && d.Features.Companion {
 			a.companionCard(c, *d)
 		}
-		mg.Column(c).Label(locales.TasksSection()).Children(func() {
+		if d := a.device(a.sel); d != nil {
+			a.phoneTasksCard(c, *d)
+		}
+		// Tasks slides down as a request arrives over it in Needs you, and
+		// back up as the request goes.
+		mg.Column(c.Key("tasks")).Label(locales.TasksSection()).Transition(slide()).Children(func() {
 			sectionLabel(c, locales.TasksSection())
 			mg.Column(c).Gap(8).Children(func() {
 				a.askBox(c)
 				a.taskList(c)
 			})
 		})
+		a.scheduledSection(c)
 	})
 }
 
@@ -85,7 +93,7 @@ func emptyWell(c *mg.Context, ic *mg.SVG, text string, extra func()) {
 	p := pal(c)
 	mg.Column(c).Padding(sp6, sp5).Gap(sp3).Radius(rCard).Background(p.ink.Alpha(0.035)).AlignItems(mg.Center).Children(func() {
 		mg.Box(c).Size(40, 40).Radius(20).Background(p.card).Border(1, p.line).Justify(mg.Center).AlignItems(mg.Center).Children(func() {
-			mg.Icon(c, ic).FontSize(18).TextColor(p.ink3)
+			mg.Icon(c, ic).FontSize(iconLarge).TextColor(p.ink3)
 		})
 		mg.Text(c, text).FontSize(fsSmall).LineHeight(1.5).TextColor(p.ink2).TextAlign(mg.Center).MaxWidth(220)
 		if extra != nil {
@@ -100,6 +108,11 @@ func (a *app) needCard(c *mg.Context, n gateway.NeedView, floating bool) {
 	p := pal(c)
 	card := mg.Column(c).Padding(14).Radius(rCard).Background(p.amberTint).Border(1, p.amberLine).Gap(2)
 	card = raised(c, card)
+	if !floating {
+		// In Needs you a request arrives and leaves; the floating panel
+		// is a window of its own, which shows at once.
+		card.Transition(cardIn())
+	}
 	card.Children(func() {
 		needEyebrow(c, n)
 		mg.Text(c, needTitle(n)).FontSize(fsHeadline).FontWeight(fwSemibold).LineHeight(1.35).Margin(6, 0, 0, 0)
@@ -481,7 +494,7 @@ func (a *app) stepList(c *mg.Context, t gateway.TaskView, last int) {
 			key := fmt.Sprintf("%s/%d", t.ID, s.Index)
 			shot := a.hasShot(s)
 			open := shot && a.previews[key]
-			mg.Column(c.Key(i)).Gap(8).Role(mg.RoleListItem).Children(func() {
+			mg.Column(c.Key(i)).Gap(8).Role(mg.RoleListItem).Transition(rowIn()).Children(func() {
 				var row mg.Element
 				if shot {
 					row = mg.ButtonBase(c).Radius(rSmall).Gap(10).AlignItems(mg.Start).Justify(mg.Start).
@@ -503,9 +516,9 @@ func (a *app) stepList(c *mg.Context, t gateway.TaskView, last int) {
 						case stepNow:
 							dot(c, p.green, true)
 						case stepYou:
-							mg.Icon(c, icPerson).FontSize(15).TextColor(p.ink2)
+							mg.Icon(c, icPerson).FontSize(iconBody).TextColor(p.ink2)
 						default:
-							mg.Icon(c, icCheck).FontSize(15).TextColor(p.ink3)
+							mg.Icon(c, icCheck).FontSize(iconBody).TextColor(p.ink3)
 						}
 					})
 					mg.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
@@ -527,7 +540,7 @@ func (a *app) stepList(c *mg.Context, t gateway.TaskView, last int) {
 					if shot {
 						// Hidden until the row is pointed at or focused: most
 						// steps have one, and a camera on each is noise.
-						cam := mg.Icon(c, icCamera).FontSize(13).TextColor(p.ink3).Margin(3, 2, 0, 0).Shrink(0)
+						cam := mg.Icon(c, icCamera).FontSize(iconSmall).TextColor(p.ink3).Margin(3, 2, 0, 0).Shrink(0)
 						if !row.Hovered() && !row.Focused() && !open {
 							cam.Opacity(0)
 						}

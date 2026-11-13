@@ -19,7 +19,7 @@ import (
 	"github.com/DIYgod/pinky/internal/driver/android/companion/companiontest"
 )
 
-// quietPhone plays a phone with Pinky Companion for the driver: its
+// quietPhone plays a phone with Pinky on the phone for the driver: its
 // accessibility setting, its package manager, and the app's socket, which
 // answers while the service is listed and drops every connection when it
 // stops being listed, as the service does when it is turned off.
@@ -39,8 +39,11 @@ type quietPhone struct {
 	uninstalls int
 	writes     int // settings put and delete
 	conns      map[net.Conn]bool
-	others     int      // connections of other clients, counted in ping
-	features   []string // what ping lists
+	others     int                      // connections of other clients, counted in ping
+	features   []string                 // what ping lists
+	onPhone    bool                     // ping's on_phone
+	claimSubs  []net.Conn               // connections subscribed to claim events
+	wmu        map[net.Conn]*sync.Mutex // serializes writes to a connection
 	// reply answers a request instead of the defaults when it returns a
 	// result or an error.
 	reply func(req map[string]any) (any, *companion.Error)
@@ -55,7 +58,7 @@ func newQuietPhone(t *testing.T) *quietPhone {
 		t.Fatal(err)
 	}
 	p := &quietPhone{t: t, ln: ln, unset: true, app: companion.Release, installed: true, code: 400,
-		signer: "5ca1ab1e", conns: map[net.Conn]bool{}}
+		signer: "5ca1ab1e", conns: map[net.Conn]bool{}, wmu: map[net.Conn]*sync.Mutex{}}
 	go p.serve()
 	t.Cleanup(func() {
 		ln.Close()
@@ -98,6 +101,7 @@ func (p *quietPhone) serve() {
 		on := p.listedLocked()
 		if on {
 			p.conns[c] = true
+			p.wmu[c] = &sync.Mutex{}
 		}
 		p.mu.Unlock()
 		if !on {
@@ -112,6 +116,7 @@ func (p *quietPhone) handle(c net.Conn) {
 	defer func() {
 		p.mu.Lock()
 		delete(p.conns, c)
+		p.claimSubs = slices.DeleteFunc(p.claimSubs, func(s net.Conn) bool { return s == c })
 		p.mu.Unlock()
 		c.Close()
 	}()
@@ -134,12 +139,18 @@ func (p *quietPhone) handle(c net.Conn) {
 		case "ping":
 			p.mu.Lock()
 			n := len(p.conns) + p.others
-			features := p.features
+			features, onPhone := p.features, p.onPhone
 			p.mu.Unlock()
 			result = map[string]any{"protocol": companion.ProtocolVersion, "version": "2026.1108.9", "connections": n,
-				"idle_disable_ms": 60000, "time": time.Now().UnixMilli(), "displays": []int{0}, "features": features}
+				"idle_disable_ms": 60000, "time": time.Now().UnixMilli(), "displays": []int{0}, "features": features,
+				"on_phone": onPhone}
 		case "events":
 			result = map[string]any{"kinds": req["kinds"]}
+			if kinds, _ := req["kinds"].([]any); slices.Contains(kinds, any("claim")) {
+				p.mu.Lock()
+				p.claimSubs = append(p.claimSubs, c)
+				p.mu.Unlock()
+			}
 		case "tree":
 			if result == nil && cerr == nil {
 				result = map[string]any{"display": map[string]any{"id": 0, "width": 1080, "height": 2400}, "windows": []any{}, "time": time.Now().UnixMilli()}
@@ -154,9 +165,35 @@ func (p *quietPhone) handle(c net.Conn) {
 			msg = map[string]any{"id": req["id"], "ok": false, "error": cerr}
 		}
 		b, _ := json.Marshal(msg)
-		if _, err := c.Write(append(b, '\n')); err != nil {
+		if err := p.write(c, b); err != nil {
 			return
 		}
+	}
+}
+
+// write sends a line to a connection, between the events pushed to it.
+func (p *quietPhone) write(c net.Conn, b []byte) error {
+	p.mu.Lock()
+	m := p.wmu[c]
+	p.mu.Unlock()
+	if m == nil {
+		return net.ErrClosed
+	}
+	m.Lock()
+	defer m.Unlock()
+	_, err := c.Write(append(b, '\n'))
+	return err
+}
+
+// pushClaim sends a claim event to every connection subscribed to them.
+func (p *quietPhone) pushClaim(ev map[string]any) {
+	ev["event"], ev["time"], ev["display"] = "claim", time.Now().UnixMilli(), -1
+	b, _ := json.Marshal(ev)
+	p.mu.Lock()
+	subs := slices.Clone(p.claimSubs)
+	p.mu.Unlock()
+	for _, c := range subs {
+		_ = p.write(c, b)
 	}
 }
 
@@ -239,7 +276,7 @@ func quietDevice(t *testing.T, p *quietPhone, apk string) (*Device, func() []str
 	if apk != "" {
 		t.Setenv("PINKY_COMPANION_APK", apk)
 	} else {
-		t.Setenv("PINKY_COMPANION_APK", "/nonexistent/pinky-companion.apk")
+		t.Setenv("PINKY_COMPANION_APK", "/nonexistent/pinky-android.apk")
 	}
 	var logs []string
 	var mu sync.Mutex

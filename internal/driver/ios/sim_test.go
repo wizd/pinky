@@ -129,7 +129,7 @@ func TestParseSimApps(t *testing.T) {
         CFBundleName = "WebDriverAgentRunner-Runner";
     };
 }`
-	apps, err := parseSimApps([]byte(out))
+	apps, err := parseSimApps([]byte(out), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

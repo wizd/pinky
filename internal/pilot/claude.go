@@ -41,6 +41,7 @@ type claude struct {
 	betas    []string
 	history  []anMessage
 	trim     bool
+	pending  []image // pictures for the person's next message (attach)
 }
 
 // fallbackModels are the models that take server-side fallbacks.
@@ -171,6 +172,8 @@ func newClaude(cfg Config, key string, hc *http.Client, system string, tools []t
 	return c
 }
 
+func (c *claude) setKey(key string) { c.key = key }
+
 // header is what each request carries besides its body. The key goes as
 // a bearer token, as the API's version asks; a service of the person's
 // gets it in X-Api-Key too, as Claude Code's ANTHROPIC_AUTH_TOKEN and
@@ -178,9 +181,11 @@ func newClaude(cfg Config, key string, hc *http.Client, system string, tools []t
 func (c *claude) header() http.Header {
 	h := http.Header{}
 	h.Set("Anthropic-Version", anthropicVersion)
-	h.Set("Authorization", "Bearer "+c.key)
-	if !c.official {
-		h.Set("X-Api-Key", c.key)
+	if c.key != "" {
+		h.Set("Authorization", "Bearer "+c.key)
+		if !c.official {
+			h.Set("X-Api-Key", c.key)
+		}
 	}
 	if len(c.betas) > 0 {
 		h.Set("Anthropic-Beta", strings.Join(c.betas, ","))
@@ -194,9 +199,17 @@ func (c *claude) send(ctx context.Context, results []result, text string) (*turn
 		blocks = append(blocks, toolResult(r))
 	}
 	if text != "" {
+		blocks = append(blocks, imageBlocks(c.pending)...)
+		c.pending = nil
 		blocks = append(blocks, anText{Type: "text", Text: text})
 	}
-	c.history = append(c.history, anMessage{Role: "user", Content: blocks})
+	if n := len(c.history); n > 0 && c.history[n-1].Role == "user" {
+		// The last send failed, and the task went on after it (Continue):
+		// the model never answered that turn, so this one adds to it.
+		c.history[n-1].Content = append(c.history[n-1].Content, blocks...)
+	} else {
+		c.history = append(c.history, anMessage{Role: "user", Content: blocks})
+	}
 	if c.trim {
 		c.clearOld()
 	}
@@ -317,16 +330,26 @@ func toolResult(r result) *anToolResult {
 	if r.text != "" || len(r.images) == 0 {
 		tr.Content = append(tr.Content, anText{Type: "text", Text: r.text})
 	}
-	for _, im := range r.images {
+	tr.Content = append(tr.Content, imageBlocks(r.images)...)
+	return tr
+}
+
+// attach keeps pictures the person shared for their next message, before
+// its text.
+func (c *claude) attach(images []image) { c.pending = append(c.pending, images...) }
+
+func imageBlocks(images []image) []any {
+	var out []any
+	for _, im := range images {
 		mt := im.mime
 		if mt == "" {
 			mt = "image/jpeg"
 		}
-		tr.Content = append(tr.Content, anImage{Type: "image", Source: anImageSource{
+		out = append(out, anImage{Type: "image", Source: anImageSource{
 			Type: "base64", MediaType: mt, Data: base64.StdEncoding.EncodeToString(im.data),
 		}})
 	}
-	return tr
+	return out
 }
 
 // clearOld clears old tool results once the history grows past keepChars.

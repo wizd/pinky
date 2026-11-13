@@ -83,7 +83,7 @@ func (d *Device) axReady(ctx context.Context) (*axSession, error) {
 			return d.ax, nil
 		}
 	}
-	a, err := dialAX(ctx, d.l.base)
+	a, err := dialAX(ctx, d.link().base)
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +150,11 @@ func (d *Device) observeWithStats(ctx context.Context, opt driver.ObserveOptions
 	if locked, lerr := d.Locked(ctx); lerr == nil && locked {
 		st.Source = "lockdown"
 		return d.lockedScreen(), st, nil
+	}
+	if d.tunnelOnly() {
+		// On the phone itself the inspector is out of reach (it goes
+		// through lockdown over usbmuxd): say what remoteAXService said.
+		return nil, st, fmt.Errorf("reading the screen: %w", err)
 	}
 	return d.observeInspector(ctx, opt, st)
 }

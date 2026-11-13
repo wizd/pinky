@@ -344,6 +344,29 @@ func TestRAXLabel(t *testing.T) {
 	}
 }
 
+// TestRAXContent checks which part of a text field's label is typed text,
+// which the credentials rule leaves out (GitHub issue #67).
+func TestRAXContent(t *testing.T) {
+	for _, c := range []struct {
+		e    raxElement
+		role string
+		want string
+	}{
+		{raxElement{Type: xcTextView, Label: "Note", Value: "Bring the code review notes"}, screen.RoleInput, "Bring the code review notes"},
+		{raxElement{Type: xcTextField, Value: "github.com/codes"}, screen.RoleInput, "github.com/codes"},
+		// iOS 27 gives an empty field its placeholder as its value.
+		{raxElement{Type: xcTextField, Value: "Alarm", ValueText: "Alarm", Placeholder: "Alarm"}, screen.RoleInput, ""},
+		{raxElement{Type: xcTextField, Label: "Code", Value: "Code"}, screen.RoleInput, ""},
+		{raxElement{Type: xcSecureTextField, Label: "Password", Value: "••••"}, screen.RoleInput, ""},
+		{raxElement{AXRole: axpRoleTextField, Traits: traitSecureText, Label: "Password", Value: "••••"}, screen.RoleInput, ""},
+		{raxElement{Label: "Clock", ValueText: "3:51 AM"}, screen.RoleButton, ""},
+	} {
+		if got := raxContent(c.e, c.role); got != c.want {
+			t.Errorf("raxContent(%+v) = %q, want %q", c.e, got, c.want)
+		}
+	}
+}
+
 func TestPixelRect(t *testing.T) {
 	for _, c := range []struct {
 		f    axpRect

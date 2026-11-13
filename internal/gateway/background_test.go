@@ -70,7 +70,7 @@ func TestBackgroundDisplay(t *testing.T) {
 	if !bg.isClosed() {
 		t.Fatal("the background display stayed open after the task")
 	}
-	if _, err := g.AgentStream(ctx, "pixel", driver.StreamOptions{}); !errors.Is(err, driver.ErrNotFound) {
+	if _, err := g.AgentStream(ctx, "pixel", driver.StreamOptions{}); !errors.Is(err, driver.ErrNotFound) || errors.Is(err, ErrOwnScreen) {
 		t.Fatalf("agent stream without a task: %v", err)
 	}
 }
@@ -459,6 +459,11 @@ func TestBackgroundOwnScreen(t *testing.T) {
 	if x.Current() != "dinely" {
 		t.Fatalf("phone %q", x.Current())
 	}
+	// No display opens for the rest of the task, which a window showing
+	// the agent's screen hears, to stop asking.
+	if _, err := g.AgentStream(ctx, "pixel", driver.StreamOptions{}); !errors.Is(err, ErrOwnScreen) || !errors.Is(err, driver.ErrNotFound) {
+		t.Fatalf("agent stream on the phone's own screen: %v", err)
+	}
 	if d := g.Devices()[0]; strings.Contains(d.StatusLine, "in the background") {
 		t.Fatalf("status line %q", d.StatusLine)
 	}
@@ -510,6 +515,9 @@ func TestBackgroundOwnScreenAgain(t *testing.T) {
 	}
 	if !bgs[0].isClosed() {
 		t.Fatal("the background display stayed open")
+	}
+	if _, err := g.AgentStream(ctx, "pixel", driver.StreamOptions{}); !errors.Is(err, ErrOwnScreen) {
+		t.Fatalf("agent stream after the task left its display: %v", err)
 	}
 	mustStatus(t, s.Act(ctx, Call{}, Action{Tool: "launch", App: "Dinely"}), StatusSettled)
 	if x.Current() != "dinely" || bgs[0].Current() == "dinely" {

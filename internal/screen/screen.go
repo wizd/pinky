@@ -80,6 +80,12 @@ type Element struct {
 	Path string
 	// ID is the platform's resource id or accessibility identifier, if any.
 	ID string
+	// Content is, for a text field, the text typed into it as Label shows
+	// it: all of Label, or its end after ", " (iOS reads a field as its name
+	// and then its value). Empty when Label shows no typed text, as for an
+	// empty field that shows its hint. The policy judges what a field is by
+	// its name, not by what someone wrote in it. It is never shown to agents.
+	Content string
 	// Masked is set when Pinky masked a one-time code in Label (policy);
 	// pictures of the screen cover Bounds. It is never shown to agents.
 	Masked bool

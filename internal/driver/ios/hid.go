@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -280,6 +281,25 @@ func (h *hidSession) touchLocked(down bool, x, y uint16) error {
 
 // button presses a hardware button by HID usage and holds it for hold.
 func (h *hidSession) button(ctx context.Context, page, usage uint64, hold time.Duration) error {
+	_, err := h.buttonListen(ctx, page, usage, hold, 0)
+	return err
+}
+
+// buttonAnswer is what the phone answered to a button press that Pinky
+// listened for (buttonListen).
+type buttonAnswer struct {
+	Replied bool
+	Reply   string // the reply, shortened for the log
+	Err     error  // the phone said the press failed (hidReplyError)
+}
+
+// buttonListen is button that, when listen is above zero, asks the phone
+// to answer the press and waits up to listen from the press for that
+// answer. dtuhidd hands an Indigo button to "the main screen button
+// service" and, when it finds none (its log: "No main screen button
+// service found for button event"), drops the press; whether it says so
+// in a reply is not known, so no answer is not a failure.
+func (h *hidSession) buttonListen(ctx context.Context, page, usage uint64, hold, listen time.Duration) (buttonAnswer, error) {
 	h.mu.Lock()
 	if h.buttons != nil && !h.buttons.alive() {
 		h.buttons.Close()
@@ -289,31 +309,140 @@ func (h *hidSession) button(ctx context.Context, page, usage uint64, hold time.D
 		b, err := dialXPC(h.entry, indigoHIDService)
 		if err != nil {
 			h.mu.Unlock()
-			return err
+			return buttonAnswer{}, err
 		}
 		h.buttons = b
 	}
 	b := h.buttons
-	if err := b.send(buttonEvent(page, usage, buttonDown), false); err != nil {
+	if listen > 0 {
+		drainReplies(b.replies)
+	}
+	start := time.Now()
+	if err := b.send(buttonEvent(page, usage, buttonDown), listen > 0); err != nil {
 		h.mu.Unlock()
-		return err
+		return buttonAnswer{}, err
 	}
 	h.held = &[2]uint64{page, usage}
 	h.mu.Unlock()
-	t := time.NewTimer(hold)
-	defer t.Stop()
-	select {
-	case <-t.C:
-	case <-ctx.Done():
+	var replies <-chan map[string]any
+	if listen > 0 {
+		replies = b.replies
+	}
+	reply, replied := holdAndListen(ctx, replies, hold)
+	if replied { // the button stays down for its whole hold
+		holdAndListen(ctx, nil, hold-time.Since(start))
 	}
 	// The release goes out even when ctx ended: a held button must come up.
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.held == nil {
-		return nil // Close released it
+	var err error
+	if h.held != nil { // else Close released it
+		h.held = nil
+		err = b.send(buttonEvent(page, usage, buttonUp), false)
 	}
-	h.held = nil
-	return b.send(buttonEvent(page, usage, buttonUp), false)
+	h.mu.Unlock()
+	if listen > 0 && !replied {
+		reply, replied = holdAndListen(ctx, replies, listen-time.Since(start))
+	}
+	var ans buttonAnswer
+	if replied {
+		ans = buttonAnswer{Replied: true, Reply: shortReply(reply), Err: hidReplyError(reply)}
+	}
+	return ans, err
+}
+
+// holdAndListen waits for d, or until ctx ends, and returns the first
+// message from replies in that time (a nil replies listens to nothing).
+func holdAndListen(ctx context.Context, replies <-chan map[string]any, d time.Duration) (map[string]any, bool) {
+	if d <= 0 {
+		select {
+		case r := <-replies:
+			return r, true
+		default:
+			return nil, false
+		}
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case r := <-replies:
+		return r, true
+	case <-t.C:
+	case <-ctx.Done():
+	}
+	return nil, false
+}
+
+// drainReplies drops the replies to earlier messages.
+func drainReplies(replies chan map[string]any) {
+	for {
+		select {
+		case <-replies:
+		default:
+			return
+		}
+	}
+}
+
+// hidReplyError is the failure a reply of a HID service reports, nil when
+// it reports none. The HID services' replies are not documented: an error
+// may come as "error" (as the keyboard's registration answers) or as
+// CoreDevice's "CoreDevice.error", at the top or in the payload, or as a
+// message type that names an error.
+func hidReplyError(m map[string]any) error {
+	if m == nil {
+		return nil
+	}
+	for _, k := range []string{"error", "CoreDevice.error"} {
+		if e, ok := m[k]; ok && e != nil {
+			if em, ok := e.(map[string]any); ok {
+				return decodeCoreDeviceError(em)
+			}
+			return fmt.Errorf("the phone answered: %v", e)
+		}
+	}
+	if p, ok := m["payload"].(map[string]any); ok {
+		if err := hidReplyError(p); err != nil {
+			return err
+		}
+	}
+	if mt, _ := m["messageType"].(string); strings.Contains(strings.ToLower(mt), "error") {
+		return fmt.Errorf("the phone answered %s: %s", mt, shortReply(m))
+	}
+	return nil
+}
+
+// shortReply is a reply as the log shows it.
+func shortReply(m map[string]any) string {
+	s := fmt.Sprintf("%v", m)
+	if len(s) > 400 {
+		s = s[:400] + "…"
+	}
+	return s
+}
+
+// probeHIDServices asks the universal HID service, on a connection of its
+// own, which HID services it knows (dtuhidd's log calls the answer
+// "connectedServiceDescriptors returning serviceIDs"). The request's shape
+// is a guess after the service's other requests ("send", "createService");
+// the answer, or that none came, is only for the log: a phone with two
+// screens may list a touchscreen for each.
+func probeHIDServices(ctx context.Context, entry goios.DeviceEntry) (string, error) {
+	l, err := dialXPC(entry, universalHIDService)
+	if err != nil {
+		return "", err
+	}
+	defer l.Close()
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	r, err := l.request(ctx, map[string]any{
+		"featureIdentifier": featureUniversalHID,
+		"messageType":       "Request",
+		"payload":           map[string]any{"connectedServiceDescriptors": map[string]any{}},
+	})
+	if err != nil {
+		return "", err
+	}
+	return shortReply(r), hidReplyError(r)
 }
 
 func buttonEvent(page, usage, state uint64) map[string]any {

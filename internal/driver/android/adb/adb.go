@@ -37,6 +37,12 @@ type Client struct {
 	// an error from it stops them: the Android driver refuses a
 	// connection over the network that is not the phone it set up.
 	Guard func(ctx context.Context, serial string) error
+	// Direct, when set, opens device services itself instead of through
+	// an adb server: Pinky's app reaches its own phone's adbd directly
+	// over Wireless debugging (package wadb). Dial and everything built
+	// on it (shell, exec, sync) then use it; host services and port
+	// forwards still need a server.
+	Direct func(ctx context.Context, serial, service string) (net.Conn, error)
 }
 
 // guard runs Guard for serial.
@@ -273,6 +279,9 @@ func (c *Client) Dial(ctx context.Context, serial, service string) (net.Conn, er
 	}
 	if err := c.guard(ctx, serial); err != nil {
 		return nil, err
+	}
+	if c != nil && c.Direct != nil {
+		return c.Direct(ctx, serial, service)
 	}
 	conn, stop, err := c.dial(ctx)
 	if err != nil {

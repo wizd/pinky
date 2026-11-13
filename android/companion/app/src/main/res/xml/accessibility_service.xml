@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  No touch exploration, no key filtering and no gestures: the service only
-  reads windows and sets text, so the phone behaves exactly as before while
-  it is on. Not an accessibility tool, so views marked
-  accessibilityDataSensitive stay hidden from it.
+  No touch exploration and no key filtering, so the phone behaves exactly as
+  before while the service is on. Gestures serve both modes: Pinky on a
+  computer taps over adb, but some phones (Xiaomi's MIUI and HyperOS) drop
+  what adb injects into a display other than the main one, so it taps and
+  swipes on its background display through the service instead. Screenshots
+  are for Pinky on the phone itself (Actions), so only builds that have it
+  ask for them (on_phone_ui); Pinky on a computer captures over adb. Not an
+  accessibility tool,
+  so views marked accessibilityDataSensitive, such as Pinky's own approval
+  card, stay hidden from it and, on Android 14 and later, drop the touches
+  it injects.
 
   flagInputMethodEditor (Android 13+) hands the service the InputConnection
   of the field the keyboard is connected to, beside the keyboard, which
@@ -14,11 +21,12 @@
     android:accessibilityEventTypes="typeAllMask"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds|flagInputMethodEditor"
-    android:canPerformGestures="false"
+    android:canPerformGestures="true"
     android:canRequestFilterKeyEvents="false"
     android:canRequestTouchExplorationMode="false"
     android:canRetrieveWindowContent="true"
+    android:canTakeScreenshot="@bool/on_phone_ui"
     android:description="@string/service_description"
     android:isAccessibilityTool="false"
     android:notificationTimeout="0"
-    android:settingsActivity="app.pinky.companion.MainActivity" />
+    android:settingsActivity="app.pinky.companion.TaskActivity" />

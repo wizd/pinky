@@ -340,12 +340,12 @@ func TestCompanionInstallCard(t *testing.T) {
 	tt := mg.NewTester(ta.view, 1280, 820)
 	ta.waitFor(t, "the companion state", func() bool { tt.Frame(); return ta.comp.state["pixel-9"] == driver.CompanionMissing })
 	tt.Frame()
-	for _, want := range []string{"Install Pinky Companion", "faster and more steadily", "type without using its clipboard", "If the phone asks, allow the install.", "Not now"} {
+	for _, want := range []string{"Install Pinky on the phone", "faster and more steadily", "type without using its clipboard", "If the phone asks, allow the install.", "Not now"} {
 		if !hasText(tt, want) {
 			t.Errorf("no %q in %q", want, tt.Texts())
 		}
 	}
-	if err := tt.Click("Install Pinky Companion on Pixel 9"); err != nil {
+	if err := tt.Click("Install Pinky on Pixel 9"); err != nil {
 		t.Fatal(err)
 	}
 	tt.Frame()
@@ -357,12 +357,12 @@ func TestCompanionInstallCard(t *testing.T) {
 		t.Errorf("installs: %v", got)
 	}
 	tt.Frame()
-	if hasText(tt, "Install Pinky Companion") {
+	if hasText(tt, "Install Pinky on the phone") {
 		t.Errorf("the card stays after the install: %q", tt.Texts())
 	}
 	ta.page, ta.set.sec = pageSettings, secPhones
 	tt.Frame()
-	if !hasText(tt, "Pinky Companion turns on only while an agent works") {
+	if !hasText(tt, "Pinky on the phone turns on only while an agent works") {
 		t.Errorf("Settings › Phones: %q", tt.Texts())
 	}
 }
@@ -371,11 +371,11 @@ func TestCompanionNotNow(t *testing.T) {
 	ta := newTestApp(t, fakeapi.Companion)
 	ta.sync()
 	tt := mg.NewTester(ta.view, 1280, 820)
-	ta.waitFor(t, "the card", func() bool { tt.Frame(); return hasText(tt, "Install Pinky Companion") })
+	ta.waitFor(t, "the card", func() bool { tt.Frame(); return hasText(tt, "Install Pinky on the phone") })
 	if err := tt.Click("Not now"); err != nil {
 		t.Fatal(err)
 	}
-	if hasText(tt, "Install Pinky Companion") || len(ta.api.Installs()) != 0 {
+	if hasText(tt, "Install Pinky on the phone") || len(ta.api.Installs()) != 0 {
 		t.Errorf("after Not now: %q", tt.Texts())
 	}
 }
@@ -450,6 +450,39 @@ func TestAgentScreenInMirror(t *testing.T) {
 	tt.Frame()
 	if _, ok := tt.Find("Pixel 9 screen, live"); !ok || hasText(tt, "Phone's screen") {
 		t.Errorf("in control, the mirror does not show the phone's screen: %q", tt.Texts())
+	}
+}
+
+// TestAgentScreenOwnScreen stops asking for the agent's display while the
+// task works on the phone's own screen, where none opens, and asks again
+// for the next task.
+func TestAgentScreenOwnScreen(t *testing.T) {
+	ta := newTestApp(t, fakeapi.Background)
+	ta.waitFor(t, "the task", func() bool { return len(ta.tasks) == 1 && running(ta.tasks[0].State) })
+	tt := mg.NewTester(ta.view, 1280, 820)
+	task := ta.tasks[0].ID
+	am := ta.mirrors["agent:pixel-9"]
+	if am == nil || am.task != task {
+		t.Fatalf("agent mirror %+v", am)
+	}
+	// Tests have no video, which stops every mirror from asking again.
+	ta.videoErr = nil
+	gen := am.gen
+	own := fmt.Errorf("no agent works on a background display of Pixel 9: %w (%w)", gateway.ErrOwnScreen, driver.ErrNotFound)
+	am.state, am.err, am.retry, am.ownTask = "failed", own, time.Now().Add(-time.Second), task
+	tt.Frame()
+	tt.Frame()
+	if am.gen != gen || am.opening {
+		t.Fatal("the mirror asked again for a display the task does not have")
+	}
+	if _, ok := tt.Find("Pixel 9 screen, live"); !ok {
+		t.Errorf("the phone's own screen does not show: %q", tt.Texts())
+	}
+	// The next task may have a display.
+	am.ownTask = "an earlier task"
+	tt.Frame()
+	if am.gen == gen {
+		t.Fatal("the mirror does not ask again for the next task's display")
 	}
 }
 

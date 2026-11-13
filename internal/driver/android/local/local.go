@@ -1,11 +1,12 @@
 // Package local drives the Android phone Pinky itself runs on, through the
-// standalone prototype's accessibility service (android/standalone) over
-// its local socket: no adb and no computer. Taps, swipes and long presses
-// are gestures the service dispatches, keys are its global actions, text
-// goes in with set_text and pictures come from its screenshots.
+// Android app's accessibility service (android/companion) over its local
+// socket: no adb and no computer. Taps, swipes and long presses are
+// gestures the service dispatches, keys are its global actions, text goes
+// in with set_text and pictures come from its screenshots.
 //
-// It is a feasibility prototype, kept apart from the shipped drivers; see
-// docs/notes/standalone-phone.md, "Prototype results (Android)".
+// Pinky's Go core on the phone (internal/standalone/libcore) uses it; see
+// docs/notes/android-app.md and docs/notes/standalone-phone.md,
+// "Prototype results (Android)".
 package local
 
 import (
@@ -17,6 +18,7 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -26,10 +28,6 @@ import (
 	"github.com/DIYgod/pinky/internal/driver/android/companion"
 	"github.com/DIYgod/pinky/internal/screen"
 )
-
-// Standalone is the prototype's build of the companion. It is not one of
-// companion.AppFor's builds: Pinky on a computer never drives it.
-var Standalone = companion.App{Package: "app.pinky.standalone", Socket: "pinky_standalone", Label: "Pinky Standalone"}
 
 // ID is the one phone's id: the phone the core runs on.
 const ID = "this-phone"
@@ -57,9 +55,10 @@ const (
 
 // Provider lists the one phone. It opens the client lazily.
 type Provider struct {
-	app companion.App
-	mu  sync.Mutex
-	dev *Device
+	app   companion.App
+	mu    sync.Mutex
+	dev   *Device
+	shell Shell // background displays (background.go)
 }
 
 // NewProvider returns the provider for the phone the caller runs on,
@@ -73,7 +72,7 @@ func (p *Provider) List(ctx context.Context) ([]driver.Info, error) {
 	if err != nil {
 		return []driver.Info{{
 			ID: ID, Platform: driver.Android, Name: "This phone", Backend: "accessibility",
-			State: driver.StateNeedsSetup, Detail: "Turn on Pinky Standalone in Accessibility settings.",
+			State: driver.StateNeedsSetup, Detail: "Turn on Pinky in Accessibility settings.",
 		}}, nil
 	}
 	return []driver.Info{d.Info()}, nil
@@ -96,6 +95,7 @@ func (p *Provider) device(ctx context.Context) (*Device, error) {
 	if err != nil {
 		return nil, err
 	}
+	d.shell = p.shell
 	p.dev = d
 	return d, nil
 }
@@ -109,6 +109,13 @@ type Device struct {
 	appsMu sync.Mutex
 	apps   []driver.App
 	appsAt time.Time
+
+	// Background displays (background.go).
+	sdk          int  // the phone's API level
+	displayInput bool // the service takes input on other displays
+	bgMu         sync.Mutex
+	shell        Shell
+	bg           *Background
 }
 
 // Open connects to the service and reads the phone's details.
@@ -120,11 +127,21 @@ func Open(ctx context.Context, app companion.App) (*Device, error) {
 		return nil, fmt.Errorf("local: %w: %w", driver.ErrOffline, err)
 	}
 	name := strings.TrimSpace(info.Manufacturer + " " + info.Model)
-	return &Device{c: c, app: app, info: driver.Info{
-		ID: ID, Platform: driver.Android, Name: name, Model: info.Model,
-		OSVersion: info.Release, Connection: "local", Backend: "accessibility",
-		State: driver.StateOnline,
-	}}, nil
+	return &Device{c: c, app: app, sdk: info.SDK,
+		displayInput: hasFeatures(info.Features, companion.FeatureDisplays, companion.FeatureDisplayInput), info: driver.Info{
+			ID: ID, Platform: driver.Android, Name: name, Model: info.Model,
+			OSVersion: info.Release, Connection: "local", Backend: "accessibility",
+			State: driver.StateOnline,
+		}}, nil
+}
+
+func hasFeatures(have []string, want ...string) bool {
+	for _, w := range want {
+		if !slices.Contains(have, w) {
+			return false
+		}
+	}
+	return true
 }
 
 // Client is the companion client, for commands the driver has no method
@@ -133,7 +150,15 @@ func (d *Device) Client() *companion.Client { return d.c }
 
 func (d *Device) Info() driver.Info { return d.info }
 
-func (d *Device) Close() error { return d.c.Close() }
+func (d *Device) Close() error {
+	d.bgMu.Lock()
+	bg := d.bg
+	d.bgMu.Unlock()
+	if bg != nil {
+		_ = bg.Close()
+	}
+	return d.c.Close()
+}
 
 // Observe reads every window's tree. The lock state and the keyboard come
 // with the tree; there is no OCR on the phone, so a screen the tree does

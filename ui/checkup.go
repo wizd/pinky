@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -49,8 +50,8 @@ type checkupRun struct {
 // errNoCheckup: the gateway runs no checkups.
 var errNoCheckup = errors.New("no checkups")
 
-var icCheckup = icon(`<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/>`)
-var icMinus = icon(`<path d="M6 12h12"/>`)
+var icCheckup = mingcute("pro/list_check_4_line")
+var icMinus = mingcute("minimize_line")
 
 // checkupOf returns the phone's last checkup, nil before the first.
 func (a *app) checkupOf(id string) *checkupRun {
@@ -128,7 +129,7 @@ func (a *app) checkupPanel(c *mg.Context, d gateway.DeviceView) {
 	run := a.keepChecked(d)
 	mg.Column(c).FillWidth().MaxWidth(560).Grow(1).MinHeight(0).Gap(14).Label(locales.CheckupFor(d.Info.Name)).Children(func() {
 		mg.Row(c).Gap(12).AlignItems(mg.Center).Shrink(0).Children(func() {
-			mg.Icon(c, icCheckup).FontSize(22).TextColor(p.ink2)
+			mg.Icon(c, icCheckup).FontSize(iconBig).TextColor(p.ink2)
 			mg.Column(c).Grow(1).MinWidth(0).Children(func() {
 				mg.Text(c, locales.CheckupFor(d.Info.Name)).FontSize(fsTitle2).FontWeight(fwSemibold).Role(mg.RoleHeading)
 				mg.Text(c, locales.CheckupIntro()).FontSize(fsSmall).TextColor(p.ink2)
@@ -166,7 +167,7 @@ func (a *app) checkupList(c *mg.Context, d gateway.DeviceView, run *checkupRun, 
 			msg = locales.CheckupFailed(errText(run.err))
 		}
 		statusBox(c, func() {
-			mg.Icon(c, icAlert).FontSize(16).TextColor(p.amberDot)
+			mg.Icon(c, icAlert).FontSize(iconBody).TextColor(p.amberDot)
 			mg.Text(c, msg).Grow(1).MinWidth(0)
 		})
 		return
@@ -185,7 +186,7 @@ func (a *app) checkupList(c *mg.Context, d gateway.DeviceView, run *checkupRun, 
 			spinner(c)
 			mg.Text(c, locales.CheckupRunning()).Grow(1).MinWidth(0)
 		case run.err != nil:
-			mg.Icon(c, icAlert).FontSize(16).TextColor(p.amberDot)
+			mg.Icon(c, icAlert).FontSize(iconBody).TextColor(p.amberDot)
 			mg.Text(c, locales.CheckupFailed(errText(run.err))).Grow(1).MinWidth(0)
 		case fix > 0:
 			dot(c, p.amberDot, false)
@@ -301,19 +302,19 @@ func checkMark(c *mg.Context, st driver.CheckStatus) {
 	switch st {
 	case driver.CheckPass:
 		box.Background(p.green).Label(locales.CheckupPassLabel()).Children(func() {
-			mg.Icon(c, icCheck).FontSize(13).TextColor(p.white)
+			mg.Icon(c, icCheck).FontSize(iconMicro).TextColor(p.white)
 		})
 	case driver.CheckFail:
 		box.Background(p.red).Label(locales.CheckupFailLabel()).Children(func() {
-			mg.Icon(c, icX).FontSize(13).TextColor(p.white)
+			mg.Icon(c, icX).FontSize(iconMicro).TextColor(p.white)
 		})
 	case driver.CheckWarn:
 		box.Background(p.amberTint).Border(1, p.amberLine).Label(locales.CheckupWarnLabel()).Children(func() {
-			mg.Icon(c, icAlert).FontSize(13).TextColor(p.amberDot)
+			mg.Icon(c, icAlert).FontSize(iconMicro).TextColor(p.amberDot)
 		})
 	default:
 		box.Border(1, p.line2).Label(locales.CheckupSkipLabel()).Children(func() {
-			mg.Icon(c, icMinus).FontSize(13).TextColor(p.ink3)
+			mg.Icon(c, icMinus).FontSize(iconMicro).TextColor(p.ink3)
 		})
 	}
 }
@@ -346,7 +347,7 @@ func (a *app) checkWords(d gateway.DeviceView, v gateway.CheckupView, ck driver.
 		if android {
 			w.title = locales.CheckADBTitle()
 		}
-		w.text = hostWords(ck.Fix)
+		w.text = hostWords(ck.Fix, ck.Detail)
 		w.detail = true
 		if w.text == "" {
 			w.text, w.detail = ck.Detail, false
@@ -372,6 +373,11 @@ func (a *app) checkWords(d gateway.DeviceView, v gateway.CheckupView, ck driver.
 		case android:
 			w.text = locales.CheckConnectionAndroidFail(d.Info.Name)
 			w.steps = []string{locales.CheckConnectionAndroidStepCable(), locales.CheckConnectionAndroidStepDebugging()}
+			if port := heldPort(v.Checks); port != "" {
+				// Another adb server holds a phone on a cable, which may be
+				// this one: that first.
+				w.steps = append([]string{locales.CheckConnectionAndroidStepOtherServer(port)}, w.steps...)
+			}
 			w.path = b.dev()
 			w.note = locales.CheckConnectionAndroidNote()
 		default:
@@ -411,6 +417,11 @@ func (a *app) checkWords(d gateway.DeviceView, v gateway.CheckupView, ck driver.
 		case "":
 			if pass {
 				w.text, w.detail = locales.CheckCompanionPass(), false
+				if a.comp.state[d.Info.ID] == driver.CompanionManualOn {
+					// On a phone where only the person can turn it on,
+					// what they turned on stays on (issue #94).
+					w.text = locales.CheckCompanionManualOn()
+				}
 			} else {
 				w.text = locales.CheckCompanionNone()
 			}
@@ -435,8 +446,15 @@ func (a *app) checkWords(d gateway.DeviceView, v gateway.CheckupView, ck driver.
 			if a.comp.state[d.Info.ID] == driver.CompanionPublicKey {
 				w.text = locales.CheckCompanionPublicKey()
 			}
+		case driver.FixTurnOnCompanionByHand:
+			// The phone ignores Pinky's change to its accessibility
+			// settings (vivo's OriginOS 6): the text says so and the note
+			// says where the switch is. An install's error would only say
+			// the same again, so it does not replace the note.
+			w.text, w.detail = locales.CheckCompanionManual(), false
+			w.note = companionManualWhere(b.id)
 		}
-		if msg := a.comp.err[d.Info.ID]; msg != "" && !pass {
+		if msg := a.comp.err[d.Info.ID]; msg != "" && !pass && ck.Fix != driver.FixTurnOnCompanionByHand {
 			w.note = msg
 		}
 	case driver.CheckInput:
@@ -526,9 +544,14 @@ func (a *app) setupStep(d gateway.DeviceView) checkWords {
 }
 
 // hostWords says what the computer lacks for Android phones, by the
-// Android driver's HostCheck codes; "" for codes of other platforms.
-func hostWords(missing string) string {
+// Android driver's HostCheck codes and, for some, its Detail; "" for
+// codes of other platforms.
+func hostWords(missing, detail string) string {
 	switch missing {
+	case "adb_other_server":
+		if port := otherServerPort(detail); port != "" {
+			return locales.CheckHostADBOtherServer(port)
+		}
 	case "adb":
 		return locales.CheckHostNoADB()
 	case "adb_server":
@@ -539,6 +562,29 @@ func hostWords(missing string) string {
 		return locales.CheckHostADBRestarts()
 	case "adb_no_network":
 		return locales.CheckHostADBNoNetwork()
+	}
+	return ""
+}
+
+// otherServerPort is the port of the other program's adb server in the
+// Detail of the Android driver's "adb_other_server", which begins
+// "Another program's adb server, on port <port>,"; "" when it has none.
+func otherServerPort(detail string) string {
+	if m := reOtherServerPort.FindStringSubmatch(detail); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+var reOtherServerPort = regexp.MustCompile(`^Another program's adb server, on port (\d+),`)
+
+// heldPort is the port of the other adb server that holds a phone on a
+// cable, from a checkup's host item; "" when there is none.
+func heldPort(checks []driver.Check) string {
+	for _, ck := range checks {
+		if ck.ID == driver.CheckHost && ck.Fix == "adb_other_server" {
+			return otherServerPort(ck.Detail)
+		}
 	}
 	return ""
 }
@@ -659,13 +705,13 @@ func menuPath(c *mg.Context, path, tap string) {
 		}
 		for i, s := range parts {
 			if i > 0 {
-				mg.Icon(c.Key(-1-i), icChevR).FontSize(12).TextColor(p.ink3)
+				mg.Icon(c.Key(-1-i), icChevR).FontSize(iconMicro).TextColor(p.ink3)
 			}
 			chip(i, s, false)
 		}
 		if tap != "" {
 			if len(parts) > 0 {
-				mg.Icon(c.Key("tap-arrow"), icChevR).FontSize(12).TextColor(p.ink3)
+				mg.Icon(c.Key("tap-arrow"), icChevR).FontSize(iconMicro).TextColor(p.ink3)
 			}
 			chip(len(parts), tap, true)
 		}

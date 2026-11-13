@@ -8,6 +8,7 @@ import (
 	"image"
 	"time"
 
+	"github.com/DIYgod/pinky/internal/approval"
 	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/screen"
 )
@@ -72,6 +73,11 @@ type DeviceView struct {
 	Status     DeviceStatus
 	StatusLine string // plain words: "Claude Code · Reorder lunch", "Idle", "Locked", "Needs setup", "Camera or microphone in use", "Offline"
 	TaskID     string // the running task, if any
+	// LeaseGen changes whenever an agent's task starts or ends on the
+	// phone, and LeaseEnded is when the last one ended (zero when none
+	// has).
+	LeaseGen   uint64
+	LeaseEnded time.Time
 	// Features says what the phone's driver offers, so the client shows
 	// only the controls that work. All false while the phone is offline.
 	Features Features
@@ -165,8 +171,12 @@ const (
 
 // NeedView is a Needs you card.
 type NeedView struct {
-	ID         string
-	Kind       NeedKind
+	ID   string
+	Kind NeedKind
+	// Approval is what an approval holds (an Ask action, an agent's first
+	// connection, phone_request_approval, a handoff); "" for the cards
+	// that are not approvals (unlocking, setup).
+	Approval   approval.Kind
 	DeviceID   string
 	DeviceName string
 	App        string // the app's display name

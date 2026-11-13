@@ -2,6 +2,8 @@ package fakeapi
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -259,5 +261,13 @@ func TestMediaAndWipe(t *testing.T) {
 	}
 	if hist, _ := a.History(ctx, gateway.HistoryQuery{}); len(hist) != 0 {
 		t.Errorf("%d tasks after WipeHistory", len(hist))
+	}
+	// Close takes the screenshots and their folder away.
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the screenshot before Close: %v", err)
+	}
+	a.Close()
+	if _, err := os.Stat(filepath.Dir(path)); !os.IsNotExist(err) {
+		t.Errorf("the screenshots' folder after Close: %v", err)
 	}
 }

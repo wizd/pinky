@@ -55,10 +55,12 @@ jobs:
       - name: Install Linux packages
         if: runner.os == 'Linux'
         run: |
-          # dbus: the private session bus of the keyring tests; the rest:
-          # the window under Xvfb (GTK 3, EGL with Mesa's software GL).
+          # dbus: the private session bus of the keyring tests; fonts-noto-cjk:
+          # a font for the Chinese and Japanese that the layout tests measure,
+          # which the runner's own fonts lay out as blanks for missing glyphs;
+          # the rest: the window under Xvfb (GTK 3, EGL with Mesa's software GL).
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends dbus dbus-x11 xvfb xauth libegl1 libegl-mesa0 libgl1-mesa-dri libepoxy0 >/dev/null
+          sudo apt-get install -y -qq --no-install-recommends dbus dbus-x11 xvfb xauth libegl1 libegl-mesa0 libgl1-mesa-dri libepoxy0 fonts-noto-cjk >/dev/null
           sudo apt-get install -y -qq --no-install-recommends libgtk-3-0t64 >/dev/null || sudo apt-get install -y -qq --no-install-recommends libgtk-3-0 >/dev/null
 
       - name: Restore FFmpeg 9 from the cache
@@ -122,7 +124,10 @@ jobs:
         if: matrix.test
         shell: bash
         run: |
-          go test ./...
+          # -count=1 runs every test instead of taking a cached result: a
+          # layout test that failed at some hours of the day stayed "ok
+          # (cached)" on main while the same commit failed where it ran.
+          go test -count=1 ./...
           # What the decoder, keyring and OCR tests did, rather than only "ok".
           go test -count=1 -v -run 'TestDecodeTestStream|TestSecretService|TestCredential|TestHello|TestRecognize|TestWindowsSetup' ./internal/video/ ./internal/secret/ ./internal/ocr/ | grep -E -e '--- |video_test.go|Windows Hello|ocr_test.go|winrt_windows_test.go'
 

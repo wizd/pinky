@@ -88,6 +88,17 @@ var raxWalkAttrs = []int{
 
 var errRAXTimeout = errors.New("remote accessibility: no answer")
 
+const (
+	// raxAnswerWait is how long a new connection waits for the phone's
+	// first answer (deviceAPIVersion).
+	raxAnswerWait = 5 * time.Second
+	// raxAnswerWaitTunnel is that wait on the phone itself
+	// (OpenOverTunnel), where no other way to read the screen is left. On
+	// an iPhone 13 mini the first answer did not come within 5 s once
+	// (2026-11-12), while the phone also started its display stream.
+	raxAnswerWaitTunnel = 15 * time.Second
+)
+
 // raxSession is one connection to raxService. Answers carry no request ID,
 // so it sends one request at a time.
 type raxSession struct {
@@ -182,7 +193,9 @@ func (t *raxTree) unnamed() bool {
 	return false
 }
 
-func dialRAX(ctx context.Context, entry goios.DeviceEntry) (*raxSession, error) {
+// dialRAX connects to raxService. The phone has wait to give its first
+// answer.
+func dialRAX(ctx context.Context, entry goios.DeviceEntry, wait time.Duration) (*raxSession, error) {
 	type result struct {
 		c   *dtx.Connection
 		err error
@@ -215,10 +228,13 @@ func dialRAX(ctx context.Context, entry goios.DeviceEntry) (*raxSession, error) 
 		"com.apple.private.DTXBlockCompression": uint64(2),
 		"com.apple.private.DTXConnection":       uint64(1),
 	})
-	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	if _, err := s.ch.MethodCallWithContext(cctx, "deviceAPIVersion"); err != nil {
 		s.Close()
+		if cctx.Err() != nil && ctx.Err() == nil {
+			return nil, fmt.Errorf("%w within %s", errRAXTimeout, wait)
+		}
 		return nil, fmt.Errorf("remote accessibility: %w", err)
 	}
 	// The phone's translator answers only for a client that needs

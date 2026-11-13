@@ -216,7 +216,7 @@ func TestIPhonePasscodeStep(t *testing.T) {
 	ta.api.ConnectIPhone()
 	ta.waitFor(t, "the iPhone", func() bool { return len(ta.devices) > 1 })
 	id := ta.iphoneView(t).Info.ID
-	const detail = "Enter the passcode on the iPhone: iOS asks for it now and then before the WebDriverAgent helper can control the phone."
+	const detail = "Enter the passcode on the iPhone: iOS asks for it now and then before Pinky on the iPhone can control the phone."
 	ta.api.SetIPhone(id, driver.Info{State: driver.StateNeedsSetup, Setup: driver.SetupPasscode, Detail: detail})
 	ta.sync()
 	for _, lang := range testLanguages() {
@@ -452,7 +452,7 @@ func TestIPhoneConnectionStep(t *testing.T) {
 func TestPasscodeStepCard(t *testing.T) {
 	step := gateway.NeedView{ID: "setup:iphone", Kind: gateway.NeedSetup, DeviceID: "iphone", DeviceName: "iPhone 13 mini",
 		Agent: "Claude Code", Title: "Enter the passcode on iPhone 13 mini",
-		Detail:  "iOS asks for it on the phone before the WebDriverAgent helper can control it, and stops asking after a while. Claude Code is waiting · Bookkeeping",
+		Detail:  "iOS asks for it on the phone before Pinky on the iPhone can control it, and stops asking after a while. Claude Code is waiting · Bookkeeping",
 		Created: time.Now()}
 	ta := shotApp(t, step)
 	if len(ta.approvals()) != 0 {

@@ -68,3 +68,15 @@ func TestFeedTheAppReads(t *testing.T) {
 		t.Errorf("the macOS asset is %s, not a zip", a.URL)
 	}
 }
+
+// TestFeedPinkyForAndroidReads: Pinky on the phone looks for its APK in the
+// feed under the platform the release writes it as.
+func TestFeedPinkyForAndroidReads(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "android", "companion", "app", "src", "main", "kotlin", "app", "pinky", "companion", "UpdateCheck.kt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `ASSET = "` + androidPlatform + `"`; !strings.Contains(string(src), want) {
+		t.Errorf("UpdateCheck.kt does not read the asset %s (no %s)", androidPlatform, want)
+	}
+}

@@ -98,6 +98,9 @@ func (d *Device) Key(ctx context.Context, k driver.Key) error {
 func (d *Device) key(ctx context.Context, k driver.Key) error {
 	switch k {
 	case driver.KeyHome:
+		if d.multi() {
+			return d.homeMulti(ctx)
+		}
 		d.inputMu.Lock()
 		defer d.inputMu.Unlock()
 		h, err := d.waitInput(ctx)

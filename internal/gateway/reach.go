@@ -109,6 +109,9 @@ func swipeArea(s *screen.Screen, e *screen.Element, dir string) (screen.Rect, *R
 	what := "the screen"
 	if e != nil {
 		area, what = e.Bounds, fmt.Sprintf("[%d]", e.Ref)
+		if e.Ref == 0 {
+			what = "the scroll area"
+		}
 	}
 	part, cut := clearPart(s, area)
 	if len(cut) == 0 {

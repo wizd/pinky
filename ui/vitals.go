@@ -123,7 +123,7 @@ func (a *app) phoneAbout(c *mg.Context, d gateway.DeviceView) {
 		if bt := v.Battery; bt != nil {
 			batteryBadge(c, *bt, fsSmall)
 		} else {
-			mg.Icon(c, icInfo).FontSize(17).TextColor(p.ink2)
+			mg.Icon(c, icInfo).FontSize(iconBody).TextColor(p.ink2)
 		}
 	})
 	mg.PopoverBase(c, b, &open, func(panel mg.Element) {
@@ -246,12 +246,12 @@ func batteryGlyph(c *mg.Context, b driver.Battery) {
 		})
 		mg.Box(c).Size(1.5, 4).Shrink(0).Radius(1).Background(p.ink3)
 		if b.Charging {
-			mg.Icon(c, icBolt).FontSize(12).TextColor(p.green).Margin(0, 0, 0, 2)
+			mg.Icon(c, icBolt).FontSize(iconMicro).TextColor(p.green).Margin(0, 0, 0, 2)
 		}
 	})
 }
 
 var (
-	icInfo = icon(`<circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/>`)
-	icBolt = filledIcon(`<path d="M13.2 2.5 5 13.6h5.6L9.8 21.5 18 10.4h-5.6z"/>`)
+	icInfo = mingcute("information_line")
+	icBolt = mingcute("flash_fill")
 )

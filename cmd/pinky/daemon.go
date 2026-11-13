@@ -23,6 +23,7 @@ import (
 	"github.com/DIYgod/pinky/internal/telemetry"
 	"github.com/DIYgod/pinky/internal/update"
 	"github.com/DIYgod/pinky/internal/vcorplink"
+	"github.com/DIYgod/pinky/internal/webmirror"
 	"github.com/DIYgod/pinky/ui"
 )
 
@@ -33,6 +34,8 @@ func runDaemon(args []string) error {
 	verbose := fs.Bool("v", false, "log debug messages")
 	noUpdates := fs.Bool("no-update-check", false, "do not look for new versions of Pinky")
 	httpAddr := fs.String("http", "", `also serve MCP over Streamable HTTP at this address, such as "`+ui.DefaultRemoteAddr+`"; each request needs the agent token (`+"`pinky token`"+`)`)
+	mirror := fs.Bool("mirror", false, "also show the phones in a web browser at "+webmirror.URL()+"; its secret link is printed to a terminal only")
+	mirrorControl := fs.Bool("mirror-control", false, "with --mirror, also let the browser use the phones; the control link is printed to a terminal only")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -88,6 +91,13 @@ func runDaemon(args []string) error {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, "MCP over HTTP at %s\n", rg.Remote.URL())
+	}
+	if *mirror {
+		if err := rg.Mirror.Set(true); err != nil {
+			return err
+		}
+		rg.Mirror.SetControl(*mirrorControl)
+		printMirrorLinks(os.Stderr, rg.Mirror.Server)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -148,6 +158,8 @@ type runningGateway struct {
 	Remote *remoteAgents
 	// MCP serves agents, over the socket and HTTP.
 	MCP *mcp.Server
+	// Mirror shows the phones in a web browser while the web mirror is on.
+	Mirror *webMirror
 
 	ln   net.Listener
 	srv  *api.Server
@@ -218,7 +230,7 @@ func startGateway(c gatewayConfig) (*runningGateway, error) {
 	}
 	log.Info("gateway ready", "socket", dirs.Socket(), "data", dataDir, "devices", len(g.Devices()), "fake", c.Fake, "pid", os.Getpid())
 	return &runningGateway{Dirs: dirs, DataDir: dataDir, Policy: pol, G: g, Remote: newRemoteAgents(m, tok, log), MCP: m,
-		ln: ln, srv: srv, log: log, fake: c.Fake}, nil
+		Mirror: newWebMirror(g, log), ln: ln, srv: srv, log: log, fake: c.Fake}, nil
 }
 
 // Serve answers agents and clients on the socket until ctx ends.
@@ -230,6 +242,9 @@ func (r *runningGateway) Serve(ctx context.Context) error {
 func (r *runningGateway) Close() {
 	if r.Remote != nil {
 		r.Remote.Close()
+	}
+	if r.Mirror != nil {
+		r.Mirror.Close()
 	}
 	r.G.Close()
 	r.ln.Close()

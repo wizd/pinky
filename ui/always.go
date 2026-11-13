@@ -137,7 +137,7 @@ func (a *app) alwaysAllowed(c *mg.Context) {
 				groupRow(c, row, i == len(st.list)-1).Padding(sp2, sp3, sp2, sp4).Children(func() {
 					if x.DeviceID != "" && x.Rule == rulePhoneSettings {
 						mg.Row(c).Size(28, 28).Radius(7).Center().Background(p.bg3).Children(func() {
-							mg.Icon(c, icSettings).FontSize(15).TextColor(p.ink2)
+							mg.Icon(c, icSettings).FontSize(iconBody).TextColor(p.ink2)
 						})
 					} else {
 						appIcon(c, name, 28, 7, 13, "")
@@ -161,7 +161,7 @@ func (a *app) alwaysAllowed(c *mg.Context) {
 					if rm.Clicked() {
 						a.takeBackAlways(k, x)
 					}
-					rm.TextColor(p.ink3).Children(func() { mg.Icon(c, icX).FontSize(14) })
+					rm.TextColor(p.ink3).Children(func() { mg.Icon(c, icX).FontSize(iconSmall) })
 				})
 			}
 		})

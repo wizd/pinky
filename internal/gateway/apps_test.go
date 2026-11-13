@@ -74,6 +74,10 @@ func TestFindAppDoesNotGuess(t *testing.T) {
 		{apps: []driver.App{weread, wechat}, q: "微信", want: "com.tencent.xin"},
 		{apps: []driver.App{weread, wechat}, q: "WeChat", want: "com.tencent.xin"},
 		{apps: []driver.App{weread, wechat}, q: "微信读书", want: "com.tencent.weread"},
+		// As the iPhone driver names it now: the home screen's name, the
+		// bundle's as an alias.
+		{apps: []driver.App{weread, {ID: "com.tencent.xin", Name: "微信", Aliases: []string{"WeChat"}}}, q: "WeChat", want: "com.tencent.xin"},
+		{apps: []driver.App{weread, {ID: "com.tencent.xin", Name: "微信", Aliases: []string{"WeChat"}}}, q: "微信", want: "com.tencent.xin"},
 		// Without the home screen's name: the well-known name.
 		{apps: []driver.App{weread, {ID: "com.tencent.xin", Name: "WeChat"}}, q: "微信", want: "com.tencent.xin"},
 		// Android: the label is 微信 already.
@@ -146,5 +150,30 @@ func TestTaskAppsDoNotGuess(t *testing.T) {
 	res = s2.Act(ctx, Call{}, Action{Tool: "launch", App: "微信"})
 	if res.Error != ErrNotFound || !strings.Contains(res.Message, "Similar: 微信读书 (com.tencent.weread)") {
 		t.Fatalf("launch: %s %s", res.Error, res.Message)
+	}
+}
+
+// phone_apps' query finds an iPhone app by its name as the home screen
+// shows it or by its bundle's own name, its alias (GitHub issue #7).
+func TestAppsQueryMatchesAliases(t *testing.T) {
+	ctx := context.Background()
+	base := demo.NewDevice("iphone", "iPhone 16 Pro", driver.IOS)
+	wechat := driver.App{ID: "com.tencent.xin", Name: "微信", Aliases: []string{"WeChat"}}
+	weread := driver.App{ID: "com.tencent.weread", Name: "微信读书"}
+	g := newDevGateway(t, base, &appsDev{base, []driver.App{weread, wechat}})
+	s := g.OpenSession(agent)
+	t.Cleanup(s.Close)
+	mustStatus(t, s.Connect(ctx, ConnectRequest{Task: "Look"}), StatusSettled)
+	for q, want := range map[string]string{"wechat": "com.tencent.xin", "微信": "com.tencent.weread,com.tencent.xin", "读书": "com.tencent.weread"} {
+		res := s.Apps(ctx, AppsRequest{Query: q})
+		mustStatus(t, res, StatusSettled)
+		var ids []string
+		for _, a := range res.Apps {
+			ids = append(ids, a.ID)
+		}
+		slices.Sort(ids)
+		if strings.Join(ids, ",") != want {
+			t.Errorf("query %q: %v, want %s", q, ids, want)
+		}
 	}
 }

@@ -345,6 +345,7 @@ func (p *Provider) connectPaired(ctx context.Context, guid, host string, own Bro
 	defer cancel()
 	c := p.cfg.Client
 	var connected string // the address the driver connected to
+	var at string        // the phone's connect service's address, once connected
 	notFound := func() error {
 		if connected == "" {
 			return fmt.Errorf("android: the phone paired, but its wireless debugging service did not show up; check that Wireless debugging is still on and the phone is on the same network: %w", driver.ErrPairedNotFound)
@@ -364,6 +365,10 @@ func (p *Provider) connectPaired(ctx context.Context, guid, host string, own Bro
 			if pairedSerial(e.Serial, guid, connected) && e.State == adb.StateDevice {
 				p.allowConn(e.Serial)
 				p.trustPaired(ctx, e, guid, host)
+				if at == "" && isAddr(e.Serial) {
+					at = e.Serial
+				}
+				p.keepPairedAddr(guid, at)
 				return p.infoFor(ctx, e.Serial)
 			}
 		}
@@ -390,7 +395,7 @@ func (p *Provider) connectPaired(ctx context.Context, guid, host string, own Bro
 				if err := c.Connect(ctx, target); err != nil {
 					p.cfg.logf("android: connecting to %s: %v", target, err)
 				} else {
-					connected = target
+					connected, at = target, addr
 				}
 			}
 		}

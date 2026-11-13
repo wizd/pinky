@@ -46,6 +46,10 @@ type wdaClient struct {
 	// (WDADevice.gone).
 	gone func(error) error
 
+	// enter, once the phone is open, runs before each request and the
+	// returned func after it: it counts the phone as used (rest_wda.go).
+	enter func() func()
+
 	mu  sync.Mutex
 	sid string // the WebDriver session
 }
@@ -176,6 +180,14 @@ func isSessionError(err error) bool {
 // call sends one request. A nil body sends no body; out, when not nil,
 // receives the answer's "value".
 func (c *wdaClient) call(ctx context.Context, hc *http.Client, method, path string, body, out any) error {
+	if c.enter != nil {
+		defer c.enter()()
+	}
+	return c.send(ctx, hc, method, path, body, out)
+}
+
+// send is call without counting a use, for ending the session when idle.
+func (c *wdaClient) send(ctx context.Context, hc *http.Client, method, path string, body, out any) error {
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -562,6 +574,6 @@ func (c *wdaClient) deleteSession(ctx context.Context) {
 	c.sid = ""
 	c.mu.Unlock()
 	if sid != "" {
-		c.call(ctx, c.hc, http.MethodDelete, "/session/"+sid, nil, nil)
+		c.send(ctx, c.hc, http.MethodDelete, "/session/"+sid, nil, nil)
 	}
 }
