@@ -194,6 +194,8 @@
     <string name="phone_check_busy">The service is busy or limited the request. Try again in a moment.</string>
     <string name="phone_check_rejected">The service refused the request.</string>
     <string name="phone_check_no_tools">The model answered but didn\'t use a tool. Pinky works through tools, so choose a model that uses them.</string>
+    <string name="phone_check_tools_unsupported">The service says this model can\'t use tools. Pinky works through tools, so choose a model that uses them.</string>
+    <string name="phone_check_tools_api">The service lets this model use tools only through OpenAI\'s Responses API, or with its reasoning turned off, and this address has no Responses API. Choose another model, or an address that offers the Responses API.</string>
     <string name="phone_check_unreachable">Pinky couldn\'t reach the API address. Check it, and that the service or server is running.</string>
     <string name="phone_check_bad_answer">The address answered, but not as an API Pinky knows. Check the API address.</string>
     <string name="phone_section_usage">Usage</string>

@@ -388,6 +388,10 @@ func (a *API) pruneLocked() bool {
 	return changed
 }
 
+// SetSmallerRecordings does nothing: the fake API's recordings are a test
+// pattern either way.
+func (a *API) SetSmallerRecordings(bool) {}
+
 // Retention reports what SetRetention set, and Recording what SetRecording
 // did, for tests.
 func (a *API) Retention() (days int, recording bool) {

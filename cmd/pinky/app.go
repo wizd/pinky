@@ -159,6 +159,9 @@ func runApp(args []string) error {
 		// What it used, by day, service and model, on this computer only.
 		Usage:    pilot.OpenUsage(filepath.Join(dirs.Data, "model-usage.json")),
 		Memories: memories,
+		// The OpenAI-compatible models that call tools only through the
+		// Responses API, as their services said.
+		APIs: pilot.OpenAPIs(filepath.Join(dirs.Data, "model-apis.json")),
 		Blocked: func(a screen.App) bool {
 			_, blocked := rg.Policy.Blocked(a)
 			return blocked
@@ -368,6 +371,7 @@ func settingsVersion(policyVersion int, devices []gateway.DeviceView) int {
 // recording, retention, iPhones over Wi-Fi and remote agents.
 func startSettings(rg *runningGateway, s ui.Settings, log *slog.Logger) {
 	rg.G.SetRecording(s.Record)
+	rg.G.SetSmallerRecordings(s.SmallerRecordings)
 	rg.G.SetRetention(s.KeepDays)
 	rg.G.SetWiFi(s.IOSWiFi)
 	if s.RemoteAgents {
@@ -447,6 +451,9 @@ func applySettings(rg *runningGateway, old, s ui.Settings, log *slog.Logger) {
 	}
 	if s.Record != old.Record {
 		rg.G.SetRecording(s.Record)
+	}
+	if s.SmallerRecordings != old.SmallerRecordings {
+		rg.G.SetSmallerRecordings(s.SmallerRecordings)
 	}
 	if s.KeepDays != old.KeepDays {
 		rg.G.SetRetention(s.KeepDays)

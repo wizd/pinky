@@ -536,3 +536,25 @@ func TestUnplacedRefReadsAgain(t *testing.T) {
 		t.Fatalf("tap did not land: %s", hd.Current())
 	}
 }
+
+// An agent whose scope is "only the apps I choose" with no app chosen can
+// use no app, as Settings › Agents says of it ("Can use no app yet"). The
+// empty list once reached the policy as no limit at all, so the agent
+// could open every app.
+func TestAgentScopeWithNoApps(t *testing.T) {
+	ctx := context.Background()
+	g, _ := newTestGateway(t)
+	s, _ := connect(t, g, "Lunch")
+	mustStatus(t, s.Act(ctx, Call{}, Action{Tool: "launch", App: "Dinely"}), StatusSettled)
+	mustStatus(t, s.Act(ctx, Call{}, Action{Tool: "key", Key: "home"}), StatusSettled)
+
+	// As stored and read back: "apps:".
+	g.SetAgentScope(agent.Name, ParseScope(Scope{Mode: ScopeApps}.String()))
+	if res := s.Act(ctx, Call{}, Action{Tool: "launch", App: "Dinely"}); res.Error != ErrScopeDenied {
+		t.Fatalf("launch with no app in the scope: %+v", res)
+	}
+	if res := s.App(ctx, AppRequest{Action: "stop", App: "Dinely"}); res.Error != ErrScopeDenied {
+		t.Fatalf("stop with no app in the scope: %+v", res)
+	}
+	mustStatus(t, s.Act(ctx, Call{}, Action{Tool: "key", Key: "home"}), StatusSettled)
+}

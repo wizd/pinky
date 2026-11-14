@@ -54,7 +54,7 @@ What these mean for the design:
 | `wda.go`, `wda_observe.go`, `wda_device.go`, `wda_run.go`, `replaytouch.go` | The WebDriverAgent path (iOS 17.4 to 26): the HTTP client over usbmuxd, its tree as elements, the device, starting the runner's test, the mirror's touches played back as gestures |
 | `ax_device.go` | The accessibility path (iOS 17.4 to 26, nothing installed) |
 | `ddi.go`, `mount.go`, `prepare.go`, `host.go` | Preparing a phone without Xcode: finding the developer disk image on the computer, mounting it, the Developer Mode switch, pairing on Windows, the background jobs and the steps in `Info.Setup`, and what the computer lacks (usbmuxd) |
-| `framestream.go`, `mjpeg.go`, `h264_darwin.go`, `h264_windows.go`, `h264_ffmpeg.go`, `annexb.go`, `h264_other.go`, `settle_frames.go` | Frames (JPEG from WDA, screenshots) to H.264 — VideoToolbox on macOS, FFmpeg's Media Foundation encoder on Windows — for the mirror and the recorder, and settling by them |
+| `framestream.go`, `mjpeg.go`, `settle_frames.go` | Frames (JPEG from WDA, screenshots) to H.264 through `internal/h264enc` (VideoToolbox on macOS, FFmpeg's Media Foundation encoder on Windows) for the mirror and the recorder, and settling by them |
 
 Coordinates are screenshot pixels, the screen the right way up in any orientation (see "Orientation"): 1125x2436 on an iPhone 13 mini in portrait, which is the size UIKit renders (375x812 points at 3x); the panel is 1080x2340 and the video 1136x2464. `Toucher` points are video pixels (the contract since 5e83552). Matching decoded frames against screenshots (row and column brightness profiles, correlation 0.998 and better on Settings and Calculator) showed the video is the screen at 1:1 in the top-left corner with black padding, 11 columns on the right and 28 rows at the bottom, so a video point is the same screen point and `Touch` only clamps points in the padding to the screen's edge. A video smaller than the screen would be scaled back up; no phone tested does that.
 
@@ -428,7 +428,7 @@ The daemons check the OS version only against iOS 18 and 26 (`__isPlatformVersio
 - **`accessibility`**, when it is not: nothing installed, and nothing to act with. The picture is screenshots (one every 100 ms while the screen changes, then one a second), the elements the inspector's walk placed by OCR, apps opened through the app service. Taps, swipes, typing and keys return `unsupported` with a sentence that names the helper: the inspector's only input, its Activate action, pressed nothing on a real phone (see "What ran where"). The provider asks such a phone again every 30 s, so a helper installed meanwhile is picked up.
 - iOS 17.0 to 17.3 and 16 and earlier are `needs_setup`, with the reason in the detail.
 
-Both settle by the picture (`settle_frames.go`): WDA's MJPEG frames (15 a second, and a still screen encodes to the same bytes) or screenshots, settled once nothing changed for 250 ms and at least 500 ms passed, as on iOS 27. On the Simulator: 0.52 s on a still screen, 0.93 s after a fling. Both send H.264 encoded with purego — VideoToolbox on macOS (`h264_darwin.go`), FFmpeg's Media Foundation `h264_mf` on Windows (`h264_ffmpeg.go`): Main profile, no B-frames, 2.5 Mbit/s, a key frame first and again after 10 s of a still picture; frames that did not change (same bytes) are skipped, as the phone's own stream does. The picture is the same from either. Linux has no encoder, so its stream fails with `unsupported`: the mirror and the recorder have no picture, but everything else keeps working — reading the screen, taps, swipes, typing, keys and the agent's own tools. The error the log shows names what is missing. WDA's MJPEG is the screen at half size, 15 fps, quality 50; `Toucher` scales the mirror's points back up and plays a drag back when the finger lifts, because WDA performs whole gestures. The mirror and the recorder need no change: they take H.264 already.
+Both settle by the picture (`settle_frames.go`): WDA's MJPEG frames (15 a second, and a still screen encodes to the same bytes) or screenshots, settled once nothing changed for 250 ms and at least 500 ms passed, as on iOS 27. On the Simulator: 0.52 s on a still screen, 0.93 s after a fling. Both send H.264 encoded with purego — VideoToolbox on macOS (`internal/h264enc/encoder_darwin.go`), FFmpeg's Media Foundation `h264_mf` on Windows (`internal/h264enc/ffmpeg_windows.go`): Main profile, no B-frames, 2.5 Mbit/s, a key frame first and again after 10 s of a still picture; frames that did not change (same bytes) are skipped, as the phone's own stream does. The picture is the same from either. Linux has no encoder, so its stream fails with `unsupported`: the mirror and the recorder have no picture, but everything else keeps working — reading the screen, taps, swipes, typing, keys and the agent's own tools. The error the log shows names what is missing. WDA's MJPEG is the screen at half size, 15 fps, quality 50; `Toucher` scales the mirror's points back up and plays a drag back when the finger lifts, because WDA performs whole gestures. The mirror and the recorder need no change: they take H.264 already.
 
 ### What ran where
 
@@ -1137,3 +1137,33 @@ An iPhone 16 Pro on iOS 27.0.1 over Wi-Fi (Windows, remote agents over Tailscale
 Tests: `TestDeviceRestsAndWakes`, `TestDeviceWakeFails` (a fake tunnel and redial: no rest while working, watched or recently used; one dial for concurrent callers; a resting phone is not gone, a failed wake is), `TestWDADeviceIdleKeepsRunner` (a fake WebDriverAgent: the runner stays, the session ends once, the next request makes a new one), `TestWDADeviceTheirsNeverRests`, and the gateway's `TestIdleWiFiPhoneLockSlower`.
 
 **A phone must still confirm:** that resting removes the stutter the reporter saw on iOS 27; how long the first call after a rest takes over Wi-Fi; that the mirror opening on a resting phone shows a picture; and that a resting phone still locks by itself and pauses and resumes. Whether the helper's runner alone slows a phone below iOS 27 is not known; if it does, Pause connection is the way out.
+
+## Typing through the helper (GitHub issue #101, 2026-11-13)
+
+Text typed through WebDriverAgent appeared one character at a time: XCTest types keys at `maxTypingFrequency`, 60 a second by default. Pinky's session now sets it to 600 (`wdaTypingFrequency` in `wda.go`, sent with the other `wdaSettings`). `/element/:id/clear` deletes at the same speed.
+
+Pasting, as the CoreDevice path does (`type.go`), was tried first and does not work here:
+
+- `/wda/setPasteboard` sets the text in 10 to 20 ms, but Command-V through XCTest's `typeKey` (`/wda/element/0/keyboardInput` with `modifierFlags` 16) pasted nothing on the iPhone: Settings' search field kept its placeholder, and the call took 1.2 to 1.4 s. On the iOS 26.5 Simulator the same paste worked in about 0.55 s.
+- `/wda/getPasteboard` reads plain text only (images and rich text could not be put back), and on iOS 16 and later, whenever the pasteboard holds text, it waits at least 2 s (its loop that answers the Allow Paste alert runs the run loop 2 s at a time).
+- No alert showed during the reads or Command-V; the phone's pasteboard was empty at the time, so a read of another app's text was not tried.
+
+Measured with `TestWDATypingProbe` (`wda_typing_device_test.go`, tag `device`), on the iPhone 13 mini, iOS 27.0.1, WDA 16.15.3 through the helper on a cable, in Settings' search field; each text was typed after clearing the field and read back as the active element's value 300 ms later:
+
+| Text | Default (60) | 300 | 600 | 1000 |
+| --- | --- | --- | --- | --- |
+| `clock` (5) | 0.41 s | 0.32 s | 0.31 to 0.32 s | 0.31 s |
+| English sentence with digits (54) | 1.14 s | 0.52 s | 0.41 to 0.42 s | 0.31 s |
+| Chinese with a full-width comma (13) | 0.52 s | 0.31 s | 0.31 to 0.32 s | 0.31 s |
+| `café ✓ 😀 naïve` (14) | 0.52 s | 0.31 s | 0.31 to 0.32 s | 0.31 s |
+| Mixed English, Chinese, emoji and punctuation (105) | 1.97 s | 0.62 s | 0.41 to 0.52 s | 0.41 to 0.43 s |
+| The same three times (318) | | | 0.82 to 0.83 s | 0.62 s |
+
+Every text read back exactly as typed, in one run at 60 and 300 and in four at 600 and 1000 (three with the 318-character text). About 0.3 s of each call is WDA's own. 600 rather than 1000 leaves room for apps slower than Settings, for little time.
+
+```sh
+PINKY_PASTEPROBE=1 PINKY_FREQS=0,600,1000 PINKY_LONG=1 PINKY_DEVICE=<udid> \
+  scripts/devlock.sh <udid> go test -tags device -count=1 -v -run TestWDATypingProbe ./internal/driver/ios/
+```
+
+`PINKY_WDA_URL` runs it against a Simulator's WDA instead; `PINKY_NOPASTE=1` skips the paste part. It saves the pasteboard (plain text) first and puts it back last, and logs only lengths and timings.

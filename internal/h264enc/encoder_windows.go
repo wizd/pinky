@@ -1,6 +1,6 @@
 //go:build windows
 
-package ios
+package h264enc
 
 import (
 	"errors"
@@ -11,24 +11,25 @@ import (
 	"github.com/DIYgod/pinky/internal/driver"
 )
 
-// h264Encoder encodes NV12 pictures of one size to Annex B H.264 with
-// FFmpeg, through the bindings in h264_ffmpeg.go. It is the Windows answer
-// to h264_darwin.go's VideoToolbox encoder, and keeps to the same settings:
-// Main profile, no B-frames, real time.
+// Encoder encodes NV12 pictures of one size to Annex B H.264 with
+// FFmpeg, through the bindings in ffmpeg_windows.go. It is the Windows
+// answer to encoder_darwin.go's VideoToolbox encoder, and keeps to the same
+// settings: Main profile, no B-frames, real time.
 //
-// One goroutine drives it, as it drives the frame stream.
-type h264Encoder struct {
-	lib    *ffmpegLib
-	name   string         // the FFmpeg encoder in use
-	codec  unsafe.Pointer // AVCodec
-	ctx    unsafe.Pointer // AVCodecContext
-	frame  unsafe.Pointer // the picture, NV12, sent again and again
-	pkt    unsafe.Pointer // what the encoder returns
-	w, h   int
-	fps    int
-	pixFmt int32  // the pictures' pixel format: this encoder's own
-	opened bool   // the encoder was opened; a context that was not is not flushed
-	config []byte // SPS and PPS, Annex B, sent with a key frame
+// One goroutine drives it.
+type Encoder struct {
+	lib     *ffmpegLib
+	name    string         // the FFmpeg encoder in use
+	codec   unsafe.Pointer // AVCodec
+	ctx     unsafe.Pointer // AVCodecContext
+	frame   unsafe.Pointer // the picture, NV12, sent again and again
+	pkt     unsafe.Pointer // what the encoder returns
+	w, h    int
+	fps     int
+	pixFmt  int32  // the pictures' pixel format: this encoder's own
+	opened  bool   // the encoder was opened; a context that was not is not flushed
+	flushed bool   // Flush ran: the encoder takes no more pictures
+	config  []byte // SPS and PPS, Annex B, sent with a key frame
 
 	// times are when the pictures of the last encode were taken, in the
 	// order it returned them. The frame stream stamps each packet with its
@@ -41,22 +42,18 @@ type h264Encoder struct {
 // pictureFormat is the pixel format the encoder takes. Windows' own encoder
 // takes NV12, the phone's pictures as they are; Cisco's OpenH264 takes
 // planar YUV 4:2:0 only, so its pictures are converted on the way in.
-func (e *h264Encoder) pictureFormat() int32 {
+func (e *Encoder) pictureFormat() int32 {
 	if e.name == "libopenh264" {
 		return e.lib.pixYUV420P
 	}
 	return e.lib.pixNV12
 }
 
-// encoderName is the FFmpeg encoder in use, for the log.
-func (e *h264Encoder) encoderName() string { return e.name }
+// Name is the FFmpeg encoder in use, for the log.
+func (e *Encoder) Name() string { return e.name }
 
-// encodedFrame is one picture as the encoder produced it.
-type encodedFrame struct {
-	data     []byte // Annex B
-	config   []byte // SPS and PPS, Annex B; only with key frames
-	keyFrame bool
-}
+// Size is the size of the pictures the encoder takes.
+func (e *Encoder) Size() (w, h int) { return e.w, e.h }
 
 // keyFrameEvery is the number of pictures between key frames: two seconds
 // of them, so that a viewer who joins the mirror gets a picture of a still
@@ -77,17 +74,17 @@ var (
 // avNoPTS is AV_NOPTS_VALUE, what FFmpeg puts in a timestamp it has none for.
 const avNoPTS int64 = -1 << 63
 
-// newH264Encoder starts a real-time H.264 encoder (Main profile, no
-// B-frames) for pictures of w by h, which must be even.
-func newH264Encoder(w, h, fps, bitRate int) (*h264Encoder, error) {
+// New starts an H.264 encoder (Main profile, no B-frames) for pictures of
+// w by h, which must be even.
+func New(w, h int, o Options) (*Encoder, error) {
 	if w <= 0 || h <= 0 || w%2 != 0 || h%2 != 0 {
 		return nil, fmt.Errorf("H.264: bad picture size %dx%d", w, h)
 	}
-	if fps <= 0 {
-		return nil, fmt.Errorf("H.264: bad frame rate %d", fps)
+	if o.FPS <= 0 {
+		return nil, fmt.Errorf("H.264: bad frame rate %d", o.FPS)
 	}
-	if bitRate <= 0 {
-		return nil, fmt.Errorf("H.264: bad bit rate %d", bitRate)
+	if o.BitRate <= 0 {
+		return nil, fmt.Errorf("H.264: bad bit rate %d", o.BitRate)
 	}
 	l, err := loadFFmpeg()
 	if err != nil {
@@ -97,9 +94,13 @@ func newH264Encoder(w, h, fps, bitRate int) (*h264Encoder, error) {
 	if err != nil {
 		return nil, h264Unsupported(err)
 	}
-	e := &h264Encoder{lib: l, name: name, codec: codec, w: w, h: h, fps: fps}
+	e := &Encoder{lib: l, name: name, codec: codec, w: w, h: h, fps: o.FPS}
 	e.pixFmt = e.pictureFormat()
-	if err := e.open(bitRate); err != nil {
+	keyEvery := o.KeyEvery
+	if keyEvery <= 0 {
+		keyEvery = o.FPS * keyFrameEvery
+	}
+	if err := e.open(o.BitRate, keyEvery); err != nil {
 		e.Close()
 		return nil, err
 	}
@@ -107,7 +108,7 @@ func newH264Encoder(w, h, fps, bitRate int) (*h264Encoder, error) {
 }
 
 // open allocates the encoder and opens it with Pinky's settings.
-func (e *h264Encoder) open(bitRate int) error {
+func (e *Encoder) open(bitRate, keyEvery int) error {
 	l := e.lib
 	ctx := l.avcodec_alloc_context3(e.codec)
 	if ctx == nil {
@@ -120,7 +121,7 @@ func (e *h264Encoder) open(bitRate int) error {
 	putRational(ctx, ctxTimeBase, h264TimeBase)
 	putRational(ctx, ctxFramerate, AVRational{Num: int32(e.fps), Den: 1})
 	putInt64(ctx, ctxBitRate, int64(bitRate))
-	putInt32(ctx, ctxGOPSize, int32(e.fps*keyFrameEvery))
+	putInt32(ctx, ctxGOPSize, int32(keyEvery))
 	putInt32(ctx, ctxMaxBFrames, 0)
 	putInt32(ctx, ctxProfile, avProfileH264Main)
 	// Let each picture's duration reach the encoder: encode sets it, and
@@ -182,7 +183,7 @@ func encoderOptions(name string) [][2]string {
 	return nil
 }
 
-// encode encodes one picture given as NV12 planes: y is w*h bytes, uv
+// Encode encodes one picture given as NV12 planes: y is w*h bytes, uv
 // w*h/2 bytes of interleaved Cb and Cr. A forced key frame starts a
 // self-contained picture, for a viewer that joins. It returns what the
 // encoder produced, which is one frame, or none when it held one back.
@@ -195,9 +196,12 @@ func encoderOptions(name string) [][2]string {
 // second. The picture's own timestamp comes back out with its packet, so
 // that the packet says when the picture was taken and not when the encoder
 // finished with it.
-func (e *h264Encoder) encode(y, uv []byte, pts time.Duration, forceKey bool) ([]encodedFrame, error) {
+func (e *Encoder) Encode(y, uv []byte, pts time.Duration, forceKey bool) ([]Frame, error) {
 	if len(y) < e.w*e.h || len(uv) < e.w*e.h/2 {
 		return nil, errors.New("H.264: short picture")
+	}
+	if e.flushed {
+		return nil, errors.New("H.264: the encoder was flushed")
 	}
 	l := e.lib
 	if r := l.av_frame_make_writable(e.frame); r < 0 {
@@ -242,18 +246,18 @@ func (e *h264Encoder) encode(y, uv []byte, pts time.Duration, forceKey bool) ([]
 	return out, nil
 }
 
-// packetTimes is when each picture of the last encode was taken, in the
+// PacketTimes is when each picture of the last encode was taken, in the
 // order encode returned them. The frame stream stamps every packet with its
 // own picture's time: an encoder that holds pictures back returns them long
 // after they were taken, and a packet stamped with the moment it came out
 // would claim a stale picture is fresh.
-func (e *h264Encoder) packetTimes() []time.Duration { return e.times }
+func (e *Encoder) PacketTimes() []time.Duration { return e.times }
 
 // packetTime is when the picture of the packet just returned was taken. The
 // encoder carries the picture's timestamp from when the picture was fed, so
 // the packet has it even when the encoder held the picture back. A packet
 // without one (a flush) belongs to the last picture fed.
-func (e *h264Encoder) packetTime() time.Duration {
+func (e *Encoder) packetTime() time.Duration {
 	ticks := getInt64(e.pkt, packetPTS)
 	if ticks == avNoPTS {
 		ticks = e.lastTicks
@@ -261,10 +265,26 @@ func (e *h264Encoder) packetTime() time.Duration {
 	return time.Duration(e.lib.av_rescale_q(ticks, h264TimeBase, nanosecondTimeBase))
 }
 
-// receive takes every packet the encoder has, as Annex B.
-func (e *h264Encoder) receive() ([]encodedFrame, error) {
+// Flush returns the pictures the encoder held back, as at the end of a
+// file; it takes no more pictures after. PacketTimes says when they were
+// taken.
+func (e *Encoder) Flush() ([]Frame, error) {
+	e.times = e.times[:0]
+	if e.flushed || !e.opened {
+		return nil, nil
+	}
+	e.flushed = true
 	l := e.lib
-	var out []encodedFrame
+	if r := l.avcodec_send_frame(e.ctx, nil); r < 0 && r != avErrorEOF {
+		return nil, l.averror("flush", r)
+	}
+	return e.receive()
+}
+
+// receive takes every packet the encoder has, as Annex B.
+func (e *Encoder) receive() ([]Frame, error) {
+	l := e.lib
+	var out []Frame
 	for {
 		r := l.avcodec_receive_packet(e.ctx, e.pkt)
 		if r == avErrorEAGAIN || r == avErrorEOF {
@@ -281,20 +301,20 @@ func (e *h264Encoder) receive() ([]encodedFrame, error) {
 }
 
 // packet copies the packet the encoder just returned.
-func (e *h264Encoder) packet() encodedFrame {
+func (e *Encoder) packet() Frame {
 	n := int(getInt32(e.pkt, packetSize))
-	var f encodedFrame
+	var f Frame
 	if n > 0 {
 		p := ptrAt(e.pkt, packetData)
 		data := append([]byte(nil), unsafe.Slice((*byte)(p), n)...)
 		if annexBStart(data) == 0 {
 			data = avccToAnnexB(data, 4)
 		}
-		f.data = data
-		f.keyFrame = getInt32(e.pkt, packetFlags)&avPktFlagKey != 0 || hasIDR(data)
+		f.Data = data
+		f.KeyFrame = getInt32(e.pkt, packetFlags)&avPktFlagKey != 0 || hasIDR(data)
 	}
-	if f.keyFrame {
-		f.config = e.parameterSets()
+	if f.KeyFrame {
+		f.Config = e.parameterSets()
 	}
 	return f
 }
@@ -302,7 +322,7 @@ func (e *h264Encoder) packet() encodedFrame {
 // parameterSets returns the SPS and PPS the encoder keeps in its context's
 // extradata, Annex B. Some encoders put them in every key frame instead,
 // and then this is empty, which the caller copes with.
-func (e *h264Encoder) parameterSets() []byte {
+func (e *Encoder) parameterSets() []byte {
 	if e.config != nil {
 		return e.config
 	}
@@ -348,13 +368,13 @@ func copyChroma(dstU unsafe.Pointer, strideU int32, dstV unsafe.Pointer, strideV
 }
 
 // Close stops the encoder and frees what it holds.
-func (e *h264Encoder) Close() {
+func (e *Encoder) Close() {
 	l := e.lib
 	if l == nil {
 		return
 	}
 	if e.ctx != nil {
-		if e.opened {
+		if e.opened && !e.flushed {
 			// Flush what the encoder held back, and drop it: the stream is
 			// ending, so no one waits for those pictures.
 			l.avcodec_send_frame(e.ctx, nil)
@@ -371,9 +391,9 @@ func (e *h264Encoder) Close() {
 	}
 }
 
-// h264Available reports whether this computer can encode H.264, saying what
-// is missing when it cannot.
-func h264Available() error {
+// Available reports whether this computer can encode H.264, saying what is
+// missing when it cannot.
+func Available() error {
 	l, err := loadFFmpeg()
 	if err != nil {
 		return h264Unsupported(err)
@@ -384,8 +404,7 @@ func h264Available() error {
 	return nil
 }
 
-// h264Unsupported marks an error as one Pinky cannot fix by itself, which
-// the app shows as a phone without a live picture.
+// h264Unsupported marks an error as one Pinky cannot fix by itself.
 func h264Unsupported(err error) error {
-	return fmt.Errorf("the live picture of iPhones below iOS 27 needs FFmpeg with an H.264 encoder: %v: %w", err, driver.ErrUnsupported)
+	return fmt.Errorf("encoding H.264 needs FFmpeg with an H.264 encoder: %v: %w", err, driver.ErrUnsupported)
 }

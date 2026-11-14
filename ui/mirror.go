@@ -57,7 +57,13 @@ type mirror struct {
 
 	picW, picH int     // the stream's picture size the right way up: the device's pixels
 	turn       int     // quarter turns clockwise that put the picture upright (driver.Packet.Turn)
-	boxW, boxH float32 // the screen's size on the window, in DIPs
+	boxW, boxH float32 // the screen's size where the person's input comes from, in DIPs (toDevice)
+	// boxes are the screen's size on each surface that shows it: the
+	// phone's page or tile, and the phone's own window (phonewindow.go),
+	// which may show it at the same time, at another size. An event takes
+	// its surface's size into boxW and boxH.
+	boxes   [surfaces][2]float32
+	inputOn surface // where the person's last input came from, which shows compose
 
 	down      bool         // a touch is down
 	lastMove  time.Time    // throttles moves
@@ -71,6 +77,17 @@ type mirror struct {
 	pinch     *mirrorPinch // two fingers are down (mirrorpinch.go)
 	compose   string       // an input method's composition
 }
+
+// surface is where a mirror shows. One mirror, and its one stream, may show
+// on the phone's page and in the phone's own window at once.
+type surface int
+
+const (
+	onPage   surface = iota // the phone's page in the main window
+	onTile                  // a tile of All phones, which takes no input
+	onWindow                // the phone's own window (phonewindow.go)
+	surfaces
+)
 
 // mirrorFor returns the phone's mirror, opening its stream if needed: a
 // still opens it again, showing its picture until the stream's first.
@@ -144,7 +161,7 @@ func (a *app) stillFor(id string) *mirror {
 // gone or offline, close.
 func (a *app) sweepMirrors() {
 	for id, m := range a.mirrors {
-		if m.used == a.buildSeq {
+		if m.used == a.buildSeq || a.inWindow(m) {
 			continue
 		}
 		if d := a.device(m.id); !m.agent && m.bitmap != nil && d != nil && d.Info.State == driver.StateOnline && d.Status != gateway.DeviceOffline {
@@ -158,8 +175,13 @@ func (a *app) sweepMirrors() {
 	}
 }
 
+// closeMirrors closes the mirrors as the main window hides or minimizes,
+// but those the phones' own windows show.
 func (a *app) closeMirrors() {
 	for id, m := range a.mirrors {
+		if a.inWindow(m) {
+			continue
+		}
 		m.close()
 		delete(a.mirrors, id)
 	}
@@ -464,11 +486,13 @@ func agentOrTheAgent(t *gateway.TaskView) string {
 	return locales.AgentGenericStart()
 }
 
-// mirrorView draws the screen inside a phone's bezel: the video, the
-// agent's overlay, the lock, and takes the person's input unless it is a
-// tile.
-func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gateway.TaskView, radius float32, tile bool) {
+// mirrorView draws the screen inside a phone's bezel, or in the phone's own
+// window: the video, the agent's overlay, the lock, and takes the person's
+// input unless it is a tile.
+func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gateway.TaskView, radius float32, where surface) {
 	p := pal(c)
+	tile := where == onTile
+	box := m.boxes[where]
 	// The agent's own display is never locked and takes no input: the
 	// person uses the phone's screen.
 	locked := a.isLocked(d) && !m.agent
@@ -483,11 +507,19 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 		scr.Label(locales.MirrorAgentScreenLabel(agentOrTheAgent(t), d.Info.Name))
 	case !tile:
 		scr.Focusable().FocusRing(false).Cursor(mg.CursorPointer).Label(locales.MirrorScreenLabel(d.Info.Name)).
-			HandleInput(func(ev mg.InputEvent) bool { return a.mirrorInput(m, d, ev) })
-		scr.TextCaret(mg.Rect{X: m.boxW/2 - 1, Y: m.boxH * 0.8, W: 2, H: 20})
+			HandleInput(func(ev mg.InputEvent) bool {
+				// The event's position is on this surface, at its size.
+				m.boxW, m.boxH = m.boxes[where][0], m.boxes[where][1]
+				m.inputOn = where
+				return a.mirrorInput(m, d, ev)
+			})
+		scr.TextCaret(mg.Rect{X: box[0]/2 - 1, Y: box[1] * 0.8, W: 2, H: 20})
 	}
 	scr.Draw(func(pt *mg.Painter, r mg.Rect) {
-		m.boxW, m.boxH = r.W, r.H
+		m.boxes[where] = [2]float32{r.W, r.H}
+		if !tile {
+			m.boxW, m.boxH = r.W, r.H
+		}
 		if pl := m.player; pl != nil {
 			if f := pl.Take(); f != nil {
 				if m.bitmap == nil {
@@ -554,7 +586,7 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 			}
 			mg.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Background(mg.RGBA(10, 12, 18, 0.62)).Opacity(shown).PassThrough()
 			// The pill sits a little below the middle, as on the prototype's lock screen.
-			pill := mg.Row(c).Attach(mg.AnchorCenter, mg.AnchorCenter).Top(m.boxH*0.04).Gap(8).AlignItems(mg.Center).
+			pill := mg.Row(c).Attach(mg.AnchorCenter, mg.AnchorCenter).Top(box[1]*0.04).Gap(8).AlignItems(mg.Center).
 				Padding(9, 14).Radius(999).Background(mg.RGBA(255, 255, 255, 0.14)).Border(1, mg.RGBA(255, 255, 255, 0.22)).
 				TextColor(hex("#ffffff")).Opacity(shown).PassThrough()
 			if tile {
@@ -583,8 +615,8 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 				}
 			})
 		}
-		if m.compose != "" && !tile {
-			mg.Text(c, m.compose).Attach(mg.AnchorBottom, mg.AnchorBottom).Bottom(28).MaxWidth(m.boxW-32).Padding(6, 10).Radius(8).
+		if m.compose != "" && !tile && m.inputOn == where {
+			mg.Text(c, m.compose).Attach(mg.AnchorBottom, mg.AnchorBottom).Bottom(28).MaxWidth(box[0]-32).Padding(6, 10).Radius(8).
 				Background(mg.RGBA(20, 20, 24, 0.9)).TextColor(hex("#ffffff")).FontSize(14).Underline().PassThrough()
 		}
 	})
@@ -802,6 +834,7 @@ func (a *app) mirrorInput(m *mirror, d gateway.DeviceView, ev mg.InputEvent) boo
 		if a.main != nil {
 			a.main.Invalidate()
 		}
+		a.invalidate() // the phone's own window
 		return true
 	}
 	return false

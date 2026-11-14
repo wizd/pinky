@@ -185,7 +185,10 @@ type Settings struct {
 	VirtualCredentials bool
 	KeepDays           int
 	Record             bool
-	DeveloperMode      bool
+	// SmallerRecordings makes each task's recording smaller when the task
+	// ends (internal/recording.Smaller); off keeps the phone's own stream.
+	SmallerRecordings bool
+	DeveloperMode     bool
 	// RemoteAgents serves MCP over Streamable HTTP at RemoteAddr, for agents
 	// that cannot start `pinky mcp`; each request needs the agent token.
 	RemoteAgents bool
@@ -352,7 +355,7 @@ func DefaultSettings() Settings {
 		BlockedApps: []BlockedApp{
 			{Name: "Northbank", Kind: "Banking"}, {Name: "Vaultly", Kind: "Passwords"}, {Name: "Coinpouch", Kind: "Wallet"},
 		},
-		UnlockFromComputer: true, HideCodes: true, KeepDays: 30, Record: true, RemoteAddr: DefaultRemoteAddr,
+		UnlockFromComputer: true, HideCodes: true, KeepDays: 30, Record: true, SmallerRecordings: true, RemoteAddr: DefaultRemoteAddr,
 		UsageStats:    usageStatsByDefault,
 		AutoUpdate:    true,
 		KeepAwakeAway: true,
@@ -438,6 +441,11 @@ type app struct {
 	// control is the banner above each phone's mirror as it shows, which
 	// changes between the person's gestures on the mirror (phone.go).
 	control map[string]controlText
+
+	// phoneWins are the phones' own windows, by phone, and winTop the
+	// phones whose window stays on top of other apps' (phonewindow.go).
+	phoneWins map[string]*phoneWin
+	winTop    map[string]bool
 
 	quitting  bool
 	focused   bool // the main window has the keyboard
@@ -550,6 +558,7 @@ func newApp(api gateway.API, opt Options) *app {
 	a.bg = bgState{on: map[string]bool{}, busy: map[string]bool{}, phone: map[string]string{}}
 	a.rec = recState{views: map[string]*recEntry{}}
 	a.control = map[string]controlText{}
+	a.phoneWins, a.winTop = map[string]*phoneWin{}, map[string]bool{}
 	if opt.Settings != nil {
 		a.settings = opt.Settings.clone()
 	} else {
@@ -693,6 +702,11 @@ func (a *app) invalidate() {
 			w.Invalidate()
 		}
 	}
+	for _, pw := range a.phoneWins {
+		if w := pw.win; w != nil && !w.IsDestroyed() {
+			w.Invalidate()
+		}
+	}
 }
 
 // watch reads the gateway's views and follows its events, a few at a
@@ -829,6 +843,7 @@ func (a *app) setAwake(on bool) {
 // them, at start; Settings passes each change the same way.
 func (a *app) applySettings() {
 	a.applyRecording(a.settings.Record)
+	a.applyRecordingSize(a.settings.SmallerRecordings)
 	a.applyRetention(a.settings.KeepDays)
 }
 
@@ -839,6 +854,12 @@ func (a *app) applySettings() {
 func (a *app) applyRecording(on bool) {
 	if rs, ok := a.api.(recordingSetter); ok {
 		a.setq.push("record", func() { rs.SetRecording(on) })
+	}
+}
+
+func (a *app) applyRecordingSize(smaller bool) {
+	if rs, ok := a.api.(recordingSizeSetter); ok {
+		a.setq.push("record-size", func() { rs.SetSmallerRecordings(smaller) })
 	}
 }
 

@@ -188,9 +188,7 @@ func (a *app) sidebarPhones(c *mg.Context) {
 			if on {
 				reveal(row, d.Info.ID)
 			}
-			if a.hasPhoneMenu() {
-				row.ContextMenu(func(m *mg.Menu) { a.phoneMenu(m, d) })
-			}
+			row.ContextMenu(func(m *mg.Menu) { a.phoneMenu(m, d) })
 			row.MinHeight(44).Label(locales.SidebarPhoneRow(d.Info.Name, statusLine(d))).Children(func() {
 				statusDot(c, d)
 				mg.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {

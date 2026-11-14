@@ -209,7 +209,7 @@ func (e *Engine) Evaluate(in Input) Verdict {
 			return Verdict{Decision: Deny, Rule: RuleUnsafeLinks, Kinds: kinds, Reason: why}
 		}
 	}
-	if len(in.ScopeApps) > 0 && !system && !appIn(app, in.ScopeApps) && !(in.Op == OpKey && in.Key == "home") {
+	if scoped(in) && !system && !appIn(app, in.ScopeApps) && !(in.Op == OpKey && in.Key == "home") {
 		return Verdict{Decision: Deny, Rule: RuleAgentScope, Kinds: kinds, Scope: true,
 			Reason: fmt.Sprintf("%s is outside this agent's scope.", appName(app))}
 	}
@@ -362,6 +362,9 @@ func (r Rule) matches(app screen.App, cats []string, kinds []Kind, in Input) boo
 	}
 	return true
 }
+
+// scoped reports whether the agent may use only the apps in in.ScopeApps.
+func scoped(in Input) bool { return in.Scoped || len(in.ScopeApps) > 0 }
 
 // appIn reports whether the app matches any entry, by id or by name.
 func appIn(app screen.App, list []string) bool {

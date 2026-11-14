@@ -1,6 +1,6 @@
 //go:build windows
 
-package ios
+package h264enc
 
 import (
 	"bytes"
@@ -17,13 +17,13 @@ import (
 // returned: Annex B, a key frame, and the SPS and PPS when the encoder
 // keeps them apart from its pictures.
 func TestH264Encode(t *testing.T) {
-	if err := h264Available(); err != nil {
+	if err := Available(); err != nil {
 		t.Skipf("no H.264 encoder to encode with: %v", err)
 	}
 	const w, h = 64, 48
-	e, err := newH264Encoder(w, h, 15, 1_000_000)
+	e, err := New(w, h, Options{FPS: 15, BitRate: 1_000_000})
 	if err != nil {
-		t.Fatalf("newH264Encoder: %v", err)
+		t.Fatalf("New: %v", err)
 	}
 	defer e.Close()
 	t.Logf("encoding with FFmpeg's %s encoder", e.name)
@@ -35,11 +35,11 @@ func TestH264Encode(t *testing.T) {
 	// pipeline, so send a run of them, as the frame stream does. Media
 	// Foundation holds back its first twelve pictures: it gives nothing
 	// back for them and starts with the thirteenth.
-	var out []encodedFrame
+	var out []Frame
 	started := -1 // the picture the encoder began giving frames back on
 	packets := 0  // the frames it gave back from there on
 	for i := 0; i < 30; i++ {
-		frames, err := e.encode(y, uv, time.Duration(i)*time.Second/15, i == 0)
+		frames, err := e.Encode(y, uv, time.Duration(i)*time.Second/15, i == 0)
 		if err != nil {
 			t.Fatalf("encode: %v", err)
 		}
@@ -63,20 +63,20 @@ func TestH264Encode(t *testing.T) {
 	t.Logf("the encoder began at picture %d and gave back %d frames for %d pictures",
 		started, packets, 30-started)
 	f := out[0]
-	if !f.keyFrame {
+	if !f.KeyFrame {
 		t.Error("the first frame, which asked for a key frame, is not one")
 	}
-	if !bytes.HasPrefix(f.data, []byte{0, 0, 0, 1}) {
-		t.Errorf("the picture does not begin with an Annex B start code: % x", f.data)
+	if !bytes.HasPrefix(f.Data, []byte{0, 0, 0, 1}) {
+		t.Errorf("the picture does not begin with an Annex B start code: % x", f.Data)
 	}
 	switch {
-	case len(f.config) > 0:
+	case len(f.Config) > 0:
 		for _, typ := range []byte{7, 8} {
-			if !annexBHasNAL(f.config, typ) {
-				t.Errorf("config lacks the NAL unit of type %d: % x", typ, f.config)
+			if !annexBHasNAL(f.Config, typ) {
+				t.Errorf("config lacks the NAL unit of type %d: % x", typ, f.Config)
 			}
 		}
-	case annexBHasNAL(f.data, 7) && annexBHasNAL(f.data, 8):
+	case annexBHasNAL(f.Data, 7) && annexBHasNAL(f.Data, 8):
 		t.Log("the encoder keeps no extradata; the SPS and PPS travel in the key frame")
 	default:
 		t.Log("the encoder gave neither extradata nor the SPS and PPS; the decoder takes them from later pictures")
@@ -84,7 +84,7 @@ func TestH264Encode(t *testing.T) {
 
 	// A second picture, without asking for a key frame, keeps the encoder
 	// going.
-	if _, err := e.encode(y, uv, 66*time.Millisecond, false); err != nil {
+	if _, err := e.Encode(y, uv, 66*time.Millisecond, false); err != nil {
 		t.Fatalf("second encode: %v", err)
 	}
 }
@@ -110,21 +110,21 @@ func TestH264AvailableWithoutFFmpeg(t *testing.T) {
 	if l, err := loadFFmpeg(); err == nil {
 		t.Skipf("FFmpeg is also in %s, so the test cannot hide it", strings.Join(l.dirs, ", "))
 	}
-	err := h264Available()
+	err := Available()
 	if err == nil {
-		t.Fatal("h264Available found an encoder in an empty folder")
+		t.Fatal("Available found an encoder in an empty folder")
 	}
 	if !errors.Is(err, driver.ErrUnsupported) {
-		t.Errorf("h264Available does not wrap driver.ErrUnsupported: %v", err)
+		t.Errorf("Available does not wrap driver.ErrUnsupported: %v", err)
 	}
 	if !strings.Contains(err.Error(), empty) {
-		t.Errorf("h264Available does not say where it looked (%s): %v", empty, err)
+		t.Errorf("Available does not say where it looked (%s): %v", empty, err)
 	}
 	if !strings.Contains(err.Error(), "avutil-61.dll") {
-		t.Errorf("h264Available does not say what is missing: %v", err)
+		t.Errorf("Available does not say what is missing: %v", err)
 	}
 	if strings.Contains(err.Error(), "macOS") {
-		t.Errorf("h264Available mentions macOS on Windows: %v", err)
+		t.Errorf("Available mentions macOS on Windows: %v", err)
 	}
 }
 

@@ -135,6 +135,37 @@ func (y *YUV) copyFrom(frame unsafe.Pointer) error {
 // toI420 converts a picture in another layout to dst's I420, at its size
 // and in its colors.
 func (d *Decoder) toI420(dst *YUV, src unsafe.Pointer) error {
+	return d.scaleInto(dst, src, d.l.pixYUV420P, -1)
+}
+
+// ScaleNV12 writes the last picture Receive returned into dst as NV12 of
+// w×h, reusing dst's planes, in BT.601 video range: what H.264 encoders
+// take, and how a stream without a color description is read back. It is
+// for encoding the picture again, smaller (internal/recording).
+func (d *Decoder) ScaleNV12(dst *YUV, w, h int) error {
+	if !d.have {
+		return errors.New("video: no picture to convert")
+	}
+	if w <= 0 || h <= 0 {
+		return fmt.Errorf("video: scale to %dx%d", w, h)
+	}
+	src, err := d.onCPU()
+	if err != nil {
+		return err
+	}
+	if src == d.sw {
+		defer d.l.av_frame_unref(d.sw)
+	}
+	dst.layout(true, w, h)
+	dst.Matrix, dst.FullRange = BT601, false
+	const smpte170m = 6 // AVCOL_SPC_SMPTE170M: BT.601
+	return d.scaleInto(dst, src, d.l.pixNV12, smpte170m)
+}
+
+// scaleInto converts and scales a picture into dst, whose layout is set, in
+// pixel format format and in dst's range. colorspace is the matrix of the
+// result, or -1 for the picture's own.
+func (d *Decoder) scaleInto(dst *YUV, src unsafe.Pointer, format, colorspace int32) error {
 	l := d.l
 	out := d.dst
 	colors := [...]uintptr{frameColorRange, frameColorPrim, frameColorTRC, frameColorspace, frameChromaLoc}
@@ -145,15 +176,22 @@ func (d *Decoder) toI420(dst *YUV, src unsafe.Pointer) error {
 	if d.asBT709 {
 		tagBT709(src)
 	}
-	for i := range 3 {
+	planes := 3
+	if dst.NV12 {
+		planes = 2
+	}
+	for i := range planes {
 		putPtr(out, frameData+uintptr(8*i), unsafe.Pointer(&dst.Planes[i][0]))
 		putInt32(out, frameLinesize+uintptr(4*i), int32(dst.Strides[i]))
 	}
 	putInt32(out, frameWidth, int32(dst.Width))
 	putInt32(out, frameHeight, int32(dst.Height))
-	putInt32(out, frameFormat, l.pixYUV420P)
+	putInt32(out, frameFormat, format)
 	for _, off := range []uintptr{frameColorPrim, frameColorTRC, frameColorspace, frameChromaLoc} {
 		putInt32(out, off, getInt32(src, off))
+	}
+	if colorspace >= 0 {
+		putInt32(out, frameColorspace, colorspace)
 	}
 	rng := int32(avColorRangeMPEG)
 	if dst.FullRange {
@@ -167,6 +205,9 @@ func (d *Decoder) toI420(dst *YUV, src unsafe.Pointer) error {
 		d.asBT709 = true
 		tagBT709(src)
 		tagBT709(out)
+		if colorspace >= 0 {
+			putInt32(out, frameColorspace, colorspace)
+		}
 		r = l.sws_scale_frame(d.sws, out, src)
 	}
 	// out describes dst only during the call. Its colors go back to what
@@ -181,6 +222,9 @@ func (d *Decoder) toI420(dst *YUV, src unsafe.Pointer) error {
 	}
 	runtime.KeepAlive(dst)
 	if r < 0 {
+		if dst.NV12 {
+			return l.averror("convert picture to NV12", r)
+		}
 		return l.averror("convert picture to I420", r)
 	}
 	return nil

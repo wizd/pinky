@@ -72,10 +72,12 @@ type model interface {
 	setKey(key string)
 }
 
-// newModel starts a conversation with the model of cfg.
-func newModel(cfg Config, key string, hc *http.Client, system string, tools []tool) (model, error) {
+// newModel starts a conversation with the model of cfg. apis says which
+// OpenAI-compatible services and models use the Responses API, and learns
+// of more (newOpenAIModel); nil is none.
+func newModel(cfg Config, key string, hc *http.Client, system string, tools []tool, apis *APIs) (model, error) {
 	if cfg.Provider == OpenAI {
-		return newOpenAI(cfg, key, hc, system, tools), nil
+		return newOpenAIModel(cfg, key, hc, system, tools, apis), nil
 	}
 	return newClaude(cfg, key, hc, system, tools), nil
 }

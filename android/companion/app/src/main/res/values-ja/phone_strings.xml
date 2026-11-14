@@ -168,6 +168,8 @@
     <string name="phone_check_busy">サービスが混み合っているか、リクエストを制限しました。少し待ってからもう一度お試しください。</string>
     <string name="phone_check_rejected">サービスがリクエストを拒否しました。</string>
     <string name="phone_check_no_tools">モデルは応答しましたが、ツールを使いませんでした。Pinky はツールで操作するので、ツールを使えるモデルを選んでください。</string>
+    <string name="phone_check_tools_unsupported">サービスによると、このモデルはツールを使えません。Pinky はツールで操作するので、ツールを使えるモデルを選んでください。</string>
+    <string name="phone_check_tools_api">このサービスでは、このモデルがツールを使えるのは OpenAI の Responses API 経由か、推論をオフにしたときだけですが、このアドレスには Responses API がありません。別のモデルを選ぶか、Responses API に対応したアドレスを使ってください。</string>
     <string name="phone_check_unreachable">Pinky が API アドレスに接続できませんでした。アドレスと、サービスやサーバーが動いているか確認してください。</string>
     <string name="phone_check_bad_answer">アドレスは応答しましたが、Pinky が扱える API ではありません。API アドレスを確認してください。</string>
     <string name="phone_section_usage">使用量</string>

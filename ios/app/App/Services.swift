@@ -119,7 +119,7 @@ struct ModelService: Decodable, Identifiable, Hashable {
 struct CheckResult: Decodable, Equatable {
     var ok: Bool
     /// One of no_model, no_key, bad_key, no_credit, not_found, busy,
-    /// rejected, no_tools, unreachable, bad_answer; empty when ok.
+    /// rejected, no_tools, tools_api, unreachable, bad_answer; empty when ok.
     var problem: String?
     /// The service's own words, or the network's; never the key.
     var detail: String?
@@ -139,7 +139,13 @@ struct CheckResult: Decodable, Equatable {
         case "no_credit": return String(localized: "The service says the account has no credit left. Top it up on the service's site.")
         case "not_found": return String(localized: "The service doesn't know this model or address. Check the model's name and the API address.")
         case "busy": return String(localized: "The service is busy or limited the request. Try again in a moment.")
-        case "no_tools": return String(localized: "The model answered but didn't use a tool. Pinky works through tools, so choose a model that uses them.")
+        case "no_tools":
+            // An HTTP status: the service refused the request, the model never answered.
+            if (status ?? 0) != 0 {
+                return String(localized: "The service says this model can't use tools. Pinky works through tools, so choose a model that uses them.", comment: "A check of the model: the service refused the request, saying the model does not support tools")
+            }
+            return String(localized: "The model answered but didn't use a tool. Pinky works through tools, so choose a model that uses them.")
+        case "tools_api": return String(localized: "The service lets this model use tools only through OpenAI's Responses API, or with its reasoning turned off, and this address has no Responses API. Choose another model, or an address that offers the Responses API.", comment: "A check of the model: the service takes its tools only through the Responses API, which the address does not have. 'Responses API' is the API's name: keep it in English.")
         case "unreachable": return String(localized: "Pinky couldn't reach the API address. Check it, and that the service or server is running.")
         case "bad_answer": return String(localized: "The address answered, but not as an API Pinky knows. Check the API address.")
         default: return String(localized: "The service refused the request.")

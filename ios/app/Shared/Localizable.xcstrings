@@ -3178,6 +3178,23 @@
         }
       }
     },
+    "The service lets this model use tools only through OpenAI's Responses API, or with its reasoning turned off, and this address has no Responses API. Choose another model, or an address that offers the Responses API." : {
+      "comment" : "A check of the model: the service takes its tools only through the Responses API, which the address does not have. 'Responses API' is the API's name: keep it in English.",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このサービスでは、このモデルがツールを使えるのは OpenAI の Responses API 経由か、推論をオフにしたときだけですが、このアドレスには Responses API がありません。別のモデルを選ぶか、Responses API に対応したアドレスを使ってください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个服务只允许该模型通过 OpenAI 的 Responses API 调用工具，或者关闭推理后调用，但这个地址没有 Responses API。请换一个模型，或者改用提供 Responses API 的地址。"
+          }
+        }
+      }
+    },
     "The service refused the request." : {
       "localizations" : {
         "ja" : {
@@ -3223,6 +3240,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "服务表示账户余额不足。请在服务的网站上充值。"
+          }
+        }
+      }
+    },
+    "The service says this model can't use tools. Pinky works through tools, so choose a model that uses them." : {
+      "comment" : "A check of the model: the service refused the request, saying the model does not support tools",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サービスによると、このモデルはツールを使えません。Pinky はツールで操作するので、ツールを使えるモデルを選んでください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务说这个模型不支持工具调用。Pinky 要靠工具操作手机，请换一个支持工具调用的模型。"
           }
         }
       }

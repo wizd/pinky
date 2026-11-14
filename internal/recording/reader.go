@@ -319,7 +319,7 @@ func (p *player) run(ctx context.Context, start int, from time.Duration) {
 			p.fail(err)
 			return
 		}
-		cfg, pic := p.split(buf)
+		cfg, pic := p.idx.split(buf)
 		turn := p.idx.turnAt(s.t)
 		if len(cfg) > 0 && !send(driver.Packet{Data: annexB(cfg), Config: true, PTS: at, Turn: turn}) {
 			return
@@ -332,8 +332,8 @@ func (p *player) run(ctx context.Context, start int, from time.Duration) {
 
 // split turns a sample back into NAL units: parameter sets, then the
 // picture's.
-func (p *player) split(b []byte) (cfg, pic [][]byte) {
-	n := p.idx.lenSize
+func (idx *index) split(b []byte) (cfg, pic [][]byte) {
+	n := idx.lenSize
 	for len(b) >= n {
 		var size int
 		for i := 0; i < n; i++ {
@@ -345,7 +345,7 @@ func (p *player) split(b []byte) (cfg, pic [][]byte) {
 		}
 		nal := b[:size]
 		b = b[size:]
-		if isParamSet(p.idx.codec, video.NALType(p.idx.codec, nal)) {
+		if isParamSet(idx.codec, video.NALType(idx.codec, nal)) {
 			cfg = append(cfg, nal)
 		} else {
 			pic = append(pic, nal)

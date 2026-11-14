@@ -2,9 +2,11 @@ package pilot
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -139,6 +141,89 @@ func TestAgentHandsATask(t *testing.T) {
 	}
 	if text, _ := other.call(t, "phone_task_list", nil); strings.Contains(text, id) {
 		t.Fatalf("another agent's list:\n%s", text)
+	}
+}
+
+// TestAgentTaskWaitNotifiesEachStep: while phone_task_wait waits, it
+// notifies each step as the step's own line, under the number the
+// answer's Steps list gives it, a message the task read included.
+func TestAgentTaskWaitNotifiesEachStep(t *testing.T) {
+	h := newHarness(t, func(o *gateway.Options) { o.TrustNewAgents = true })
+	var a *agent
+	var id string
+	h.api.turns = []func(string, *http.Request) any{
+		func(string, *http.Request) any {
+			return message("tool_use", 100, use("t1", "phone_launch", map[string]any{"app": "Dinely"}))
+		},
+		func(last string, _ *http.Request) any {
+			if _, isErr := a.call(t, "phone_task_steer", map[string]any{"task_id": id, "message": "Mind the cart"}); isErr {
+				t.Error("steer refused")
+			}
+			return message("tool_use", 100, use("t2", "phone_tap", map[string]any{"ref": refOf(t, last, "Orders")}))
+		},
+		func(last string, _ *http.Request) any {
+			return message("tool_use", 100, use("t3", "phone_tap", map[string]any{"ref": refOf(t, last, "Reorder · Chicken rice bowl")}))
+		},
+		func(string, *http.Request) any {
+			return message("tool_use", 100, use("t4", finishName, map[string]any{"outcome": "done", "summary": "Reordered."}))
+		},
+	}
+	a = h.agent(t, "claude-code", Config{}, true)
+	var mu sync.Mutex
+	notified := map[int]string{}
+	st, ct := sdk.NewInMemoryTransports()
+	go h.r.opt.Server.Serve(context.Background(), st)
+	waiter, err := sdk.NewClient(&sdk.Implementation{Name: "claude-code", Version: "1.0"}, &sdk.ClientOptions{
+		ProgressNotificationHandler: func(_ context.Context, req *sdk.ProgressNotificationClientRequest) {
+			mu.Lock()
+			notified[int(req.Params.Progress)] = req.Params.Message
+			mu.Unlock()
+		},
+	}).Connect(context.Background(), ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { waiter.Close() })
+
+	release := make(chan struct{})
+	first := h.api.turns[0]
+	h.api.turns[0] = func(last string, r *http.Request) any { <-release; return first(last, r) }
+	text, _ := a.call(t, "phone_task_run", map[string]any{"task": "Reorder lunch"})
+	id = taskID(t, text)
+	go func() { time.Sleep(100 * time.Millisecond); close(release) }()
+	for deadline := time.Now().Add(15 * time.Second); firstWord(text) != "done"; {
+		if time.Now().After(deadline) {
+			t.Fatalf("the task did not end:\n%s", text)
+		}
+		p := &sdk.CallToolParams{Name: "phone_task_wait", Arguments: map[string]any{"task_id": id, "timeout_ms": 5000}}
+		p.SetProgressToken("wait-" + id)
+		res, err := waiter.CallTool(context.Background(), p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text = res.Content[0].(*sdk.TextContent).Text
+	}
+	answer := map[int]string{}
+	for _, line := range strings.Split(text, "\n") {
+		var n int
+		if num, rest, ok := strings.Cut(line, ". "); ok {
+			if _, err := fmt.Sscan(num, &n); err == nil && n > 0 {
+				answer[n] = rest
+			}
+		}
+	}
+	if len(answer) != 4 || !strings.Contains(text, "your message: “Mind the cart”") || !strings.HasPrefix(answer[4], "phone_tap settled") {
+		t.Fatalf("the answer's steps:\n%s", text)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(notified) == 0 {
+		t.Fatal("no step was notified")
+	}
+	for n, msg := range notified {
+		if answer[n] != msg {
+			t.Errorf("step %d was notified as %q; the answer has %q", n, msg, answer[n])
+		}
 	}
 }
 

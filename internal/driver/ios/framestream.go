@@ -2,7 +2,6 @@ package ios
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"hash/fnv"
 	"image"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DIYgod/pinky/internal/driver"
+	"github.com/DIYgod/pinky/internal/h264enc"
 )
 
 // The paths below iOS 27 get the phone's picture as separate frames (JPEG
@@ -44,15 +44,6 @@ const (
 	frameRefresh = 10 * time.Second
 )
 
-// packetTimes is what an encoder says about the pictures it just returned:
-// when each of them was taken, oldest first, so that a packet carries the
-// time of its own picture rather than the moment the encoder gave it back.
-// An encoder that hands each picture back as soon as it is encoded need not
-// implement it; the packet is then stamped with the picture just fed.
-type packetTimes interface {
-	packetTimes() []time.Duration
-}
-
 // frameStream is a driver.Stream of H.264 encoded from a frameSource.
 type frameStream struct {
 	src    frameSource
@@ -77,8 +68,8 @@ func startFrameStream(ctx context.Context, open func(context.Context) (frameSour
 // does (nil: none). It returns once the first frame is encoded, so Size is
 // known.
 func startFrameStreamLog(ctx context.Context, log *slog.Logger, open func(context.Context) (frameSource, error), screenW, screenH int) (driver.Stream, error) {
-	if err := h264Available(); err != nil {
-		return nil, err
+	if err := h264enc.Available(); err != nil {
+		return nil, fmt.Errorf("the live picture of iPhones below iOS 27 needs an H.264 encoder: %w", err)
 	}
 	sctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	src, err := open(sctx)
@@ -106,7 +97,7 @@ func (s *frameStream) run(ctx context.Context, first chan<- error) {
 	defer close(s.done)
 	defer close(s.pk)
 	var (
-		enc     *h264Encoder
+		enc     *h264enc.Encoder
 		lastKey uint64
 		lastAt  time.Time
 		start   = time.Now()
@@ -151,13 +142,15 @@ func (s *frameStream) run(ctx context.Context, first chan<- error) {
 		}
 		y, uv, w, h = turnNV12(y, uv, w, h, f.turn)
 		s.turn.Store(int32(f.turn) + 1)
-		if enc != nil && (enc.w != w || enc.h != h) {
-			enc.Close() // the picture changed size (rotation)
-			enc = nil
+		if enc != nil {
+			if ew, eh := enc.Size(); ew != w || eh != h {
+				enc.Close() // the picture changed size (rotation)
+				enc = nil
+			}
 		}
 		forceKey := refresh
 		if enc == nil {
-			if enc, err = newH264Encoder(w, h, frameFPS, frameBitRate); err != nil {
+			if enc, err = h264enc.New(w, h, h264enc.Options{FPS: frameFPS, BitRate: frameBitRate}); err != nil {
 				fail(err)
 				return
 			}
@@ -167,14 +160,14 @@ func (s *frameStream) run(ctx context.Context, first chan<- error) {
 			// encoder opens once per stream (and again when the picture
 			// changes size), so this is one line per stream, not per
 			// picture.
-			s.log.Info("iphone: encoding the live picture", "encoder", enc.encoderName(),
+			s.log.Info("iphone: encoding the live picture", "encoder", enc.Name(),
 				"size", fmt.Sprintf("%dx%d", w, h), "fps", frameFPS, "bitrate", frameBitRate)
 			forceKey = true
 			s.mu.Lock()
 			s.w, s.h = w, h
 			s.mu.Unlock()
 		}
-		out, err := enc.encode(y, uv, now.Sub(start), forceKey)
+		out, err := enc.Encode(y, uv, now.Sub(start), forceKey)
 		if err != nil {
 			fail(err)
 			return
@@ -183,25 +176,22 @@ func (s *frameStream) run(ctx context.Context, first chan<- error) {
 		// just fed: stamp each packet with the time its own picture was
 		// taken, so that a viewer shows the picture as old as it is instead
 		// of treating it as fresh when the encoder finishes with it.
-		var taken []time.Duration
-		if pt, ok := any(enc).(packetTimes); ok {
-			taken = pt.packetTimes()
-		}
+		taken := enc.PacketTimes()
 		lastKey, lastAt = f.key, now
 		for i, e := range out {
 			pts := now.Sub(start)
 			if i < len(taken) {
 				pts = taken[i]
 			}
-			if e.keyFrame && len(e.config) > 0 {
-				if !s.send(ctx, driver.Packet{Data: e.config, PTS: pts, Config: true}) {
+			if e.KeyFrame && len(e.Config) > 0 {
+				if !s.send(ctx, driver.Packet{Data: e.Config, PTS: pts, Config: true}) {
 					return
 				}
 			}
-			if !s.send(ctx, driver.Packet{Data: e.data, PTS: pts, KeyFrame: e.keyFrame}) {
+			if !s.send(ctx, driver.Packet{Data: e.Data, PTS: pts, KeyFrame: e.KeyFrame}) {
 				return
 			}
-			if !started && e.keyFrame {
+			if !started && e.KeyFrame {
 				started = true
 				first <- nil
 			}
@@ -350,42 +340,4 @@ func frameKey(b []byte) uint64 {
 	h := fnv.New64a()
 	h.Write(b)
 	return h.Sum64()
-}
-
-// avccToAnnexB turns NAL units prefixed by their length (lenSize bytes, big
-// endian) into Annex B units with start codes.
-func avccToAnnexB(b []byte, lenSize int) []byte {
-	out := make([]byte, 0, len(b)+16)
-	for len(b) >= lenSize {
-		var n int
-		switch lenSize {
-		case 4:
-			n = int(binary.BigEndian.Uint32(b))
-		case 2:
-			n = int(binary.BigEndian.Uint16(b))
-		default:
-			return out
-		}
-		b = b[lenSize:]
-		if n <= 0 || n > len(b) {
-			break
-		}
-		out = append(out, 0, 0, 0, 1)
-		out = append(out, b[:n]...)
-		b = b[n:]
-	}
-	return out
-}
-
-// hasIDR reports whether Annex B data holds an IDR slice (NAL type 5).
-func hasIDR(b []byte) bool {
-	for i := 0; i+3 < len(b); i++ {
-		if b[i] == 0 && b[i+1] == 0 && b[i+2] == 1 {
-			if b[i+3]&0x1f == 5 {
-				return true
-			}
-			i += 2
-		}
-	}
-	return false
 }

@@ -1,16 +1,14 @@
 package ios
 
 import (
-	"bytes"
 	"context"
 	"image"
 	"image/color"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/DIYgod/pinky/internal/h264enc"
 )
 
 func testPicture(w, h, shift int) image.Image {
@@ -23,56 +21,10 @@ func testPicture(w, h, shift int) image.Image {
 	return img
 }
 
-func TestH264Encoder(t *testing.T) {
-	if err := h264Available(); err != nil {
-		t.Skip(err)
-	}
-	const w, h = 320, 640
-	e, err := newH264Encoder(w, h, 15, 1_000_000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer e.Close()
-	var stream bytes.Buffer
-	for i := 0; i < 6; i++ {
-		y, uv, _, _ := toNV12(testPicture(w, h, i*8))
-		out, err := e.encode(y, uv, time.Duration(i)*66*time.Millisecond, i == 0 || i == 4)
-		if err != nil {
-			t.Fatalf("frame %d: %v", i, err)
-		}
-		if len(out) != 1 {
-			t.Fatalf("frame %d: %d outputs", i, len(out))
-		}
-		f := out[0]
-		wantKey := i == 0 || i == 4
-		if f.keyFrame != wantKey || (wantKey && len(f.config) == 0) || len(f.data) == 0 {
-			t.Fatalf("frame %d: key %v config %d data %d", i, f.keyFrame, len(f.config), len(f.data))
-		}
-		if wantKey {
-			stream.Write(f.config)
-			if f.config[4]&0x1f != 7 { // SPS first
-				t.Fatalf("frame %d: config starts with NAL %d", i, f.config[4]&0x1f)
-			}
-		}
-		stream.Write(f.data)
-	}
-	probe, err := exec.LookPath("ffprobe")
-	if err != nil {
-		t.Skip("no ffprobe to check the stream")
-	}
-	file := filepath.Join(t.TempDir(), "t.h264")
-	os.WriteFile(file, stream.Bytes(), 0o600)
-	out, err := exec.Command(probe, "-v", "error", "-count_frames", "-select_streams", "v:0",
-		"-show_entries", "stream=codec_name,profile,width,height,nb_read_frames", "-of", "csv=p=0", file).CombinedOutput()
-	if err != nil || strings.TrimSpace(string(out)) != "h264,Main,320,640,6" {
-		t.Fatalf("ffprobe: %v %q", err, out)
-	}
-}
-
 // TestFrameStream runs frames through startFrameStream: packets in order,
 // a configuration before the first key frame, unchanged frames skipped.
 func TestFrameStream(t *testing.T) {
-	if err := h264Available(); err != nil {
+	if err := h264enc.Available(); err != nil {
 		t.Skip(err)
 	}
 	src := &fakeFrames{}

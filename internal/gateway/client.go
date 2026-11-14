@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -841,6 +842,56 @@ func (g *Gateway) WipeHistory(ctx context.Context) error {
 			// Running tasks are written again so they keep showing up.
 			g.recordTaskLocked(d.lease.task)
 		}
+	}
+	g.mu.Unlock()
+	g.emit(Event{Kind: EventTasks})
+	return nil
+}
+
+// ErrTaskRunning answers DeleteTasks for a task that is still running, or
+// whose screen recording is still being written.
+var ErrTaskRunning = errors.New("the task is still running")
+
+// DeleteTasks deletes finished tasks from history, with their steps,
+// approvals, screenshots and screen recordings, as the person asks from a
+// task's detail in Activity. It deletes nothing and returns ErrTaskRunning
+// when one of them still runs. A task history no longer has is no error.
+func (g *Gateway) DeleteTasks(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if g.store != nil {
+		g.Flush() // what is being written about them first
+	}
+	g.mu.Lock()
+	keep := g.liveTasksLocked()
+	g.mu.Unlock()
+	for _, id := range ids {
+		if slices.Contains(keep, id) {
+			return ErrTaskRunning
+		}
+	}
+	if g.store != nil {
+		n, err := g.store.DeleteTasks(ctx, ids, keep)
+		if err != nil {
+			return err
+		}
+		g.log.Info("delete tasks", "tasks", n.Tasks, "steps", n.Steps, "screenshots", n.Media,
+			"recordings", n.Recordings, "sessions", n.Sessions)
+	}
+	g.mu.Lock()
+	kept := g.ended[:0]
+	for _, t := range g.ended {
+		if !slices.Contains(ids, t.id) {
+			kept = append(kept, t)
+		}
+	}
+	clear(g.ended[len(kept):])
+	g.ended = kept
+	// A kept screenshot may be one the deleted tasks alone showed, whose
+	// media is gone now; the next step takes a new one.
+	for _, d := range g.devices {
+		d.kept = nil
 	}
 	g.mu.Unlock()
 	g.emit(Event{Kind: EventTasks})

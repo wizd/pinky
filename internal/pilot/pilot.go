@@ -38,7 +38,8 @@ const (
 	// Anthropic is the Messages API: Anthropic's own, or a service that
 	// speaks it at an address of the person's.
 	Anthropic = "anthropic"
-	// OpenAI is an OpenAI-compatible Chat Completions API.
+	// OpenAI is the OpenAI API family: Chat Completions, which
+	// OpenAI-compatible services speak, and the Responses API (apis.go).
 	OpenAI = "openai"
 )
 
@@ -65,7 +66,7 @@ type Config struct {
 	// BaseURL is the API's address; empty is the provider's own. For the
 	// Messages API it is what ANTHROPIC_BASE_URL is to Claude Code (the
 	// path ends before /v1/messages); for an OpenAI-compatible API, the
-	// address that /chat/completions is added to.
+	// address that /chat/completions or /responses is added to.
 	BaseURL string
 	// The limits; the first one reached ends the task. Steps are the
 	// phone tools the model calls. Time leaves out what the task waits
@@ -333,6 +334,10 @@ type Options struct {
 	// Blocked reports whether the person blocked an app (the gateway's
 	// policy.Engine.Blocked): a note about it is refused. nil blocks none.
 	Blocked func(screen.App) bool
+	// APIs remembers the OpenAI-compatible services and models that call
+	// tools only through the Responses API; nil remembers them while the
+	// Runner runs.
+	APIs *APIs
 }
 
 // Runner runs Pinky's own agent, one task a phone at a time.
@@ -355,6 +360,9 @@ func New(o Options) *Runner {
 	}
 	if o.HTTPClient == nil {
 		o.HTTPClient = http.DefaultClient
+	}
+	if o.APIs == nil {
+		o.APIs = OpenAPIs("")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Runner{opt: o, ctx: ctx, cancel: cancel, runs: map[string]*run{}, byID: map[string]*run{}}
@@ -976,7 +984,7 @@ func (ru *run) work(ctx context.Context) (End, string) {
 
 	var text string
 	if m == nil {
-		m, err = newModel(cfg, key, ru.r.opt.HTTPClient, systemPrompt(cfg, memory)+scheduledPrompt(sch), tools)
+		m, err = newModel(cfg, key, ru.r.opt.HTTPClient, systemPrompt(cfg, memory)+scheduledPrompt(sch), tools, ru.r.opt.APIs)
 		if err != nil {
 			return ru.end(cs, Error, err.Error())
 		}

@@ -186,6 +186,35 @@ func (a *API) WipeHistory(ctx context.Context) error {
 	return nil
 }
 
+// DeleteTasks deletes finished tasks, as the gateway's does: nothing, and
+// gateway.ErrTaskRunning, when one of them still runs.
+func (a *API) DeleteTasks(ctx context.Context, ids []string) error {
+	a.mu.Lock()
+	for _, t := range a.tasks {
+		if !t.removed && !isFinished(t.view.State) && slices.Contains(ids, t.view.ID) {
+			a.mu.Unlock()
+			return gateway.ErrTaskRunning
+		}
+	}
+	a.history = slices.DeleteFunc(a.history, func(t gateway.TaskView) bool { return slices.Contains(ids, t.ID) })
+	for _, t := range a.tasks {
+		if slices.Contains(ids, t.view.ID) {
+			t.removed = true
+		}
+	}
+	a.deleted = append(a.deleted, ids...)
+	a.mu.Unlock()
+	a.emit(gateway.Event{Kind: gateway.EventTasks})
+	return nil
+}
+
+// Deleted lists the tasks DeleteTasks deleted, for tests.
+func (a *API) Deleted() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return slices.Clone(a.deleted)
+}
+
 // Exemptions lists the Always allow answers, as the gateway's does.
 func (a *API) Exemptions() []gateway.Exemption {
 	a.mu.Lock()

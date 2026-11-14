@@ -336,6 +336,28 @@ func TestGatewayAgentScope(t *testing.T) {
 		tt.Frame()
 		return ga.agents.loaded && hasText(tt, "Can use Dinely and Chatter")
 	})
+
+	// Save takes no list without an app, as Approve on the card: the
+	// editor stays open and the scope is what it was.
+	ga.agents.editing = "Codex"
+	ga.agents.choice["Codex"], ga.agents.apps["Codex"] = string(gateway.ScopeApps), ""
+	tt.Frame()
+	_ = tt.Click("Save")
+	tt.Frame()
+	if ga.agents.editing != "Codex" {
+		t.Fatal("Save took a list with no app")
+	}
+	ga.agents.apps["Codex"] = "Dinely"
+	tt.Frame()
+	if err := tt.Click("Save"); err != nil {
+		t.Fatal(err)
+	}
+	narrow := gateway.Scope{Mode: gateway.ScopeApps, Apps: []string{"Dinely"}}
+	ga.waitFor(t, "the narrower scope", func() bool {
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		return rec.calls[len(rec.calls)-1] == "scope Codex "+narrow.String()
+	})
 }
 
 // TestGatewayHandoff answers phone_handoff with Done and a note.

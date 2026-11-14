@@ -368,7 +368,53 @@
   },
   "activityDelete": "Delete",
   "@activityDelete": {
-    "description": "An item of the ⋯ menu in a task's detail, which deletes the task. It shows disabled: the gateway cannot delete one task yet."
+    "description": "An item of the ⋯ menu in a task's detail, which asks to confirm, then deletes the task; and the button of that alert which deletes it."
+  },
+  "activityDeleteCancel": "Cancel",
+  "@activityDeleteCancel": {
+    "description": "The button of the alert that confirms deleting a task in Activity, which closes it and deletes nothing."
+  },
+  "activityDeleteFailed": "Couldn't delete the task: {reason}",
+  "@activityDeleteFailed": {
+    "description": "A toast when deleting one task from Activity failed. reason is the error, in English.",
+    "placeholders": {
+      "reason": {
+        "type": "String",
+        "example": "the task is still running"
+      }
+    }
+  },
+  "activityDeleteMessage": "The task, its steps, approvals, screenshots and screen recording are removed from this computer. This can't be undone.",
+  "@activityDeleteMessage": {
+    "description": "The message of the alert that confirms deleting one task from Activity."
+  },
+  "activityDeleteRunning": "A running task can't be deleted",
+  "@activityDeleteRunning": {
+    "description": "The tooltip of the disabled Delete item of a task's ⋯ menu in Activity while the task runs."
+  },
+  "activityDeleteTitle": "Delete “{title}”?",
+  "@activityDeleteTitle": {
+    "description": "The title of the alert that confirms deleting one task from Activity. title is the task's title, in the agent's words.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Reorder last week's lunch"
+      }
+    }
+  },
+  "activityDeleteUnsupported": "This gateway cannot delete tasks",
+  "@activityDeleteUnsupported": {
+    "description": "The tooltip of the disabled Delete item of a task's ⋯ menu in Activity when the gateway cannot delete a task."
+  },
+  "activityDeleted": "Deleted “{title}”",
+  "@activityDeleted": {
+    "description": "A toast once a task is deleted from Activity. title is the task's title, in the agent's words.",
+    "placeholders": {
+      "title": {
+        "type": "String",
+        "example": "Reorder last week's lunch"
+      }
+    }
   },
   "activityDetailLabel": "Task detail",
   "@activityDetailLabel": {
@@ -2368,7 +2414,7 @@
   },
   "checkNoTools": "The model answered but didn't use a tool. Pinky works through tools, so choose a model that uses them.",
   "@checkNoTools": {
-    "description": "A check of the model: it answered without calling the tool, or the service said it does not support tools."
+    "description": "A check of the model: it answered without calling the tool."
   },
   "checkNotFound": "The service doesn't know this model or address. Check the model's name and the API address.",
   "@checkNotFound": {
@@ -2417,6 +2463,14 @@
   "checkSimHelperTitle": "Helper for Simulators",
   "@checkSimHelperTitle": {
     "description": "The checkup of an iOS Simulator: the title of the item for the WebDriverAgent helper Pinky builds with Xcode."
+  },
+  "checkToolsAPI": "The service lets this model use tools only through OpenAI's Responses API, or with its reasoning turned off, and this address has no Responses API. Choose another model, or an address that offers the Responses API.",
+  "@checkToolsAPI": {
+    "description": "A check of the model on an OpenAI-compatible service: Chat Completions refused the model's tools and pointed at the Responses API (or at turning reasoning off), and the address answered no Responses request either. settingsAskCheckDetail follows with the service's words. 'Responses API' is the API's name: keep it in English."
+  },
+  "checkToolsUnsupported": "The service says this model can't use tools. Pinky works through tools, so choose a model that uses them.",
+  "@checkToolsUnsupported": {
+    "description": "A check of the model: the service refused the request, saying the model does not support tools; settingsAskCheckDetail follows with its words."
   },
   "checkTrustedPass": "The iPhone trusts this computer.",
   "@checkTrustedPass": {
@@ -6480,7 +6534,7 @@
   },
   "needsApproveNoApps": "Name at least one app",
   "@needsApproveNoApps": {
-    "description": "The tooltip of the disabled Approve button on a first-connection card, when \"Only the apps I choose\" is chosen and no app is named yet."
+    "description": "The tooltip of the disabled Approve button on a first-connection card, and of the disabled Save button under an agent in Settings › Agents, when \"Only the apps I choose\" is chosen and no app is named yet."
   },
   "needsDecline": "Decline",
   "@needsDecline": {
@@ -8908,7 +8962,7 @@
   },
   "settingsAskServiceOpenAI": "OpenAI-compatible API",
   "@settingsAskServiceOpenAI": {
-    "description": "Settings › Agents › Ask Pinky: a choice of service: OpenAI's Chat Completions API, or a service that speaks it."
+    "description": "Settings › Agents › Ask Pinky: a choice of service: OpenAI's API (Chat Completions, or the Responses API where a model needs it), or a service that speaks it."
   },
   "settingsAskServiceRegion": "{service} ({region})",
   "@settingsAskServiceRegion": {
@@ -9259,6 +9313,22 @@
   "settingsPrivacyRecordDesc": "Used for replays in Activity. Recording pauses while a blocked app is open; its notifications and its card in recent apps are recorded as they show. Recordings stay on this computer: an agent gets one only when you allow it, as it saves a task's report.",
   "@settingsPrivacyRecordDesc": {
     "description": "Settings › Privacy: the line under Record the screen during tasks. Activity is the page of finished tasks."
+  },
+  "settingsPrivacyRecordOriginal": "Original",
+  "@settingsPrivacyRecordOriginal": {
+    "description": "Settings › Privacy › Recording size: the choice that keeps recordings as the phone sent its screen, at full size and quality."
+  },
+  "settingsPrivacyRecordSize": "Recording size",
+  "@settingsPrivacyRecordSize": {
+    "description": "Settings › Privacy: the row that chooses how big task recordings are, shown under Record the screen during tasks while that is on; before a select of Smaller or Original; also the select's accessibility label."
+  },
+  "settingsPrivacyRecordSizeDesc": "Smaller recordings take a fraction of the space, and the text of every step stays readable. Pinky makes them when a task ends. Original keeps the picture as the phone sent it.",
+  "@settingsPrivacyRecordSizeDesc": {
+    "description": "Settings › Privacy: the line under Recording size. Smaller and Original are the choices of its select."
+  },
+  "settingsPrivacyRecordSmaller": "Smaller",
+  "@settingsPrivacyRecordSmaller": {
+    "description": "Settings › Privacy › Recording size: the choice that makes each recording smaller when its task ends (the default)."
   },
   "settingsRules": "Rules",
   "@settingsRules": {
@@ -12115,5 +12185,21 @@
   "wiFiUseAgain": "Use Wi-Fi again",
   "@wiFiUseAgain": {
     "description": "The same, for a phone whose Wi-Fi connection stopped when it restarted, now plugged in again: moves it to Wi-Fi at once."
+  },
+  "phoneOpenWindow": "Open in a window",
+  "@phoneOpenWindow": {
+    "description": "Item of a phone's ⋯ menu under its mirror and of its right-click menu in the sidebar: opens a window that shows only the phone's live screen and its keys, to use the phone from there. Opened again, the window comes to the front."
+  },
+  "phoneWindowOnTop": "Keep on top",
+  "@phoneWindowOnTop": {
+    "description": "Tooltip and label of the pin button in a phone's own window: keeps the window above other apps' windows."
+  },
+  "phoneWindowOnTopOff": "Stop keeping on top",
+  "@phoneWindowOnTopOff": {
+    "description": "The same button while the window stays on top: lets it go behind other apps' windows again."
+  },
+  "phoneWindowShowInPinky": "Show in Pinky",
+  "@phoneWindowShowInPinky": {
+    "description": "Button in a phone's own window while the phone shows no live screen (offline, paused, connecting, waiting for a step): opens the phone's page in Pinky's main window."
   }
 }

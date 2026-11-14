@@ -38,6 +38,11 @@ type (
 	historyWiper interface {
 		WipeHistory(ctx context.Context) error
 	}
+	// taskDeleter deletes finished tasks, for Delete in a task's ⋯ menu in
+	// Activity. It refuses a running one (gateway.ErrTaskRunning).
+	taskDeleter interface {
+		DeleteTasks(ctx context.Context, ids []string) error
+	}
 	// exemptionKeeper lists the person's Always allow answers for Settings ›
 	// Safety, and takes them back.
 	exemptionKeeper interface {
@@ -97,6 +102,9 @@ type (
 	}
 	recordingSetter interface {
 		SetRecording(on bool)
+	}
+	recordingSizeSetter interface {
+		SetSmallerRecordings(on bool)
 	}
 	retentionSetter interface {
 		SetRetention(days int)

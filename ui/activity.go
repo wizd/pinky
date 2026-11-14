@@ -1,9 +1,11 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +28,11 @@ type activityState struct {
 	nextAt  time.Time
 	seq     int
 	lastRun time.Time
+	// The task Delete in its ⋯ menu asks about, while the alert is open
+	// (asking), and the one being deleted.
+	asking   bool
+	ask      gateway.TaskView
+	deleting string
 }
 
 func (s *activityState) init() {}
@@ -138,6 +145,71 @@ func (a *app) activityPage(c *mg.Context) {
 			a.activityDetail(c, *t)
 		})
 	})
+	if s.asking {
+		if mg.AlertDialog(c.Key("act-delete"), &s.asking, locales.ActivityDeleteTitle(s.ask.Title), locales.ActivityDeleteMessage(),
+			locales.ActivityDeleteCancel(), locales.ActivityDelete()) == 1 {
+			a.deleteTask(s.ask)
+		}
+	}
+}
+
+// taskRunning reports whether a task still runs, which Delete waits for.
+func (a *app) taskRunning(id string) bool {
+	for _, x := range a.tasks {
+		if x.ID == id && x.Ended.IsZero() {
+			return true
+		}
+	}
+	return false
+}
+
+// deleteTask deletes one task, from Delete in its ⋯ menu in Activity, once
+// the person confirmed: its replay or recording closes, Activity leaves its
+// detail and reads the history again.
+func (a *app) deleteTask(t gateway.TaskView) {
+	d, ok := a.api.(taskDeleter)
+	if !ok || a.act.deleting != "" {
+		return
+	}
+	s := &a.act
+	if s.sel == t.ID {
+		s.replay, s.playing = false, false
+	}
+	if pl := a.rec.pl; pl != nil && pl.task == t.ID {
+		a.closeRecording() // before its file goes
+	}
+	s.deleting = t.ID
+	go func() {
+		ctx, cancel := context.WithTimeout(a.ctx, 30*time.Second)
+		defer cancel()
+		err := d.DeleteTasks(ctx, []string{t.ID})
+		a.post(func() {
+			s.deleting = ""
+			if err != nil {
+				a.toasts = append(a.toasts, locales.ActivityDeleteFailed(err.Error()))
+				return
+			}
+			delete(a.rec.views, t.ID)
+			for _, st := range t.Steps {
+				delete(a.mediaCache, st.Before)
+				delete(a.mediaCache, st.After)
+				delete(a.previews, fmt.Sprintf("act/%s/%d", t.ID, st.Index))
+			}
+			// The task after it in the list shows instead, or the one
+			// before at the end.
+			if i := slices.IndexFunc(s.tasks, func(x gateway.TaskView) bool { return x.ID == t.ID }); i >= 0 {
+				s.tasks = slices.Delete(s.tasks, i, i+1)
+				if s.sel == t.ID {
+					s.sel = ""
+					if len(s.tasks) > 0 {
+						s.sel = s.tasks[min(i, len(s.tasks)-1)].ID
+					}
+				}
+			}
+			s.load(a)
+			a.toasts = append(a.toasts, locales.ActivityDeleted(t.Title))
+		})
+	}()
 }
 
 // finishedSince reports whether a task ended after t.
@@ -293,7 +365,18 @@ func (a *app) activityDetail(c *mg.Context, t gateway.TaskView) {
 					a.closeRecording()
 				}
 				m.Separator()
-				m.Item(locales.ActivityDelete()).Disabled(true)
+				del := m.Item(locales.ActivityDelete()).Danger()
+				_, can := a.api.(taskDeleter)
+				switch {
+				case !can:
+					del.Disabled(true).Tooltip(locales.ActivityDeleteUnsupported())
+				case a.taskRunning(t.ID):
+					del.Disabled(true).Tooltip(locales.ActivityDeleteRunning())
+				case a.act.deleting != "":
+					del.Disabled(true)
+				case del.Chosen():
+					a.act.ask, a.act.asking = t, true
+				}
 			})
 		})
 	})

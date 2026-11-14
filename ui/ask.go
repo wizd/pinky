@@ -920,7 +920,13 @@ func checkText(r pilot.CheckResult) string {
 	case pilot.CheckBusy:
 		return locales.CheckBusy()
 	case pilot.CheckNoTools:
+		if r.Status != 0 {
+			// The service refused the request: the model never answered.
+			return locales.CheckToolsUnsupported()
+		}
 		return locales.CheckNoTools()
+	case pilot.CheckToolsAPI:
+		return locales.CheckToolsAPI()
 	case pilot.CheckUnreachable:
 		return locales.CheckUnreachable()
 	case pilot.CheckBadAnswer:

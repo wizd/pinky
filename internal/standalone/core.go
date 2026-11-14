@@ -163,6 +163,9 @@ func New(o Options) (*Core, error) {
 		}
 		popt.Usage = pilot.OpenUsage(path)
 	}
+	if popt.APIs == nil && o.DataDir != "" {
+		popt.APIs = pilot.OpenAPIs(filepath.Join(o.DataDir, "model-apis.json"))
+	}
 	if popt.Memories == nil {
 		path := ""
 		if o.DataDir != "" {

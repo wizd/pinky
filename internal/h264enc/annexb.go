@@ -1,9 +1,11 @@
-package ios
+package h264enc
+
+import "encoding/binary"
 
 // Helpers for the H.264 bitstream, Annex B: the start codes that end one
 // NAL unit and begin the next, and the SPS and PPS that an encoder keeps
-// apart from its pictures. h264_darwin.go and h264_windows.go both hand
-// Annex B to the stream, and internal/video takes it as it is.
+// apart from its pictures. encoder_darwin.go and encoder_windows.go both
+// hand Annex B to their callers, and internal/video takes it as it is.
 
 // annexBStart returns the length of the Annex B start code b begins with,
 // 4 for 00 00 00 01, 3 for 00 00 01, and 0 when b does not begin with one.
@@ -93,4 +95,42 @@ func avccConfigToAnnexB(b []byte) []byte {
 		pos = add(pos, n)
 	}
 	return out
+}
+
+// avccToAnnexB turns NAL units prefixed by their length (lenSize bytes, big
+// endian) into Annex B units with start codes.
+func avccToAnnexB(b []byte, lenSize int) []byte {
+	out := make([]byte, 0, len(b)+16)
+	for len(b) >= lenSize {
+		var n int
+		switch lenSize {
+		case 4:
+			n = int(binary.BigEndian.Uint32(b))
+		case 2:
+			n = int(binary.BigEndian.Uint16(b))
+		default:
+			return out
+		}
+		b = b[lenSize:]
+		if n <= 0 || n > len(b) {
+			break
+		}
+		out = append(out, 0, 0, 0, 1)
+		out = append(out, b[:n]...)
+		b = b[n:]
+	}
+	return out
+}
+
+// hasIDR reports whether Annex B data holds an IDR slice (NAL type 5).
+func hasIDR(b []byte) bool {
+	for i := 0; i+3 < len(b); i++ {
+		if b[i] == 0 && b[i+1] == 0 && b[i+2] == 1 {
+			if b[i+3]&0x1f == 5 {
+				return true
+			}
+			i += 2
+		}
+	}
+	return false
 }

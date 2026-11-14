@@ -561,6 +561,7 @@ func (v *taskVideo) stop(read bool) {
 	origin, end := v.origin, v.endAt
 	v.mu.Unlock()
 	if err := v.w.Close(end.Sub(origin)); err != nil {
+		v.failed = true
 		g.log.Warn("screen recording", "task", v.t.id, "err", err)
 	}
 	if v.w.Started() {
@@ -568,6 +569,9 @@ func (v *taskVideo) stop(read bool) {
 		v.length = v.w.Length()
 		v.mu.Unlock()
 		v.save()
+		if !v.failed {
+			g.shrinkLater(v.t.id, v.w.Path())
+		}
 	}
 }
 

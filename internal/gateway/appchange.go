@@ -130,7 +130,7 @@ func (s *Session) App(ctx context.Context, req AppRequest) *Result {
 	in := policy.Input{Op: op, Device: d.id, Launch: t.app, TaskApps: taskApps,
 		ReadOnly: scope.Mode == ScopeReadOnly || readOnly}
 	if scope.Mode == ScopeApps {
-		in.ScopeApps = scope.Apps
+		in.Scoped, in.ScopeApps = true, scope.Apps
 	}
 	v := g.policy.Evaluate(in)
 	switch v.Decision {

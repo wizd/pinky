@@ -996,6 +996,88 @@ func TestWipeHistory(t *testing.T) {
 	}
 }
 
+// TestDeleteTasks deletes one finished task from Activity: it leaves the
+// history and the recent tasks, with the screenshot only it showed; the
+// one the next task's first step shows too stays. A running task is
+// refused and keeps recording.
+func TestDeleteTasks(t *testing.T) {
+	ctx := context.Background()
+	g, _ := newTestGateway(t, func(o *Options) { o.DataDir = t.TempDir(); o.NoScreenshots = false })
+	old, _ := connect(t, g, "Old task")
+	oldID := taskID(t, g, old)
+	mustStatus(t, old.Act(ctx, Call{}, Action{Tool: "launch", App: "Dinely"}), StatusSettled)
+	g.Flush()
+	mustStatus(t, old.Act(ctx, Call{}, Action{Tool: "launch", App: "Chatter"}), StatusSettled)
+	g.Flush()
+	old.Release(ctx, ReleaseRequest{})
+	s, _ := connect(t, g, "Running task")
+	running := taskID(t, g, s)
+	mustStatus(t, s.Act(ctx, Call{}, Action{Tool: "launch", App: "Dinely"}), StatusSettled)
+	g.Flush()
+	shots := map[string]map[string]bool{} // media id: the tasks that show it
+	tasks, _ := g.History(ctx, HistoryQuery{})
+	for _, task := range tasks {
+		for _, st := range task.Steps {
+			for _, m := range []string{st.Before, st.After} {
+				if m == "" {
+					continue
+				}
+				if shots[m] == nil {
+					shots[m] = map[string]bool{}
+				}
+				shots[m][task.ID] = true
+			}
+		}
+	}
+	var only, shared []string
+	for m, by := range shots {
+		switch {
+		case by[oldID] && by[running]:
+			shared = append(shared, m)
+		case by[oldID]:
+			only = append(only, m)
+		}
+	}
+	if len(only) == 0 || len(shared) == 0 {
+		t.Fatalf("screenshots of the old task only %v, shared with the running task %v", only, shared)
+	}
+
+	if err := g.DeleteTasks(ctx, []string{oldID, running}); !errors.Is(err, ErrTaskRunning) {
+		t.Fatalf("deleting a running task: %v", err)
+	}
+	if tasks, _ := g.History(ctx, HistoryQuery{}); len(tasks) != 2 {
+		t.Fatalf("a refused delete deleted: %d tasks left", len(tasks))
+	}
+
+	if err := g.DeleteTasks(ctx, []string{oldID}); err != nil {
+		t.Fatal(err)
+	}
+	tasks, _ = g.History(ctx, HistoryQuery{})
+	if len(tasks) != 1 || tasks[0].ID != running {
+		t.Fatalf("after delete: %+v", tasks)
+	}
+	for _, v := range g.Tasks() {
+		if v.ID == oldID {
+			t.Fatal("the deleted task is still among the recent tasks")
+		}
+	}
+	for _, m := range only {
+		if _, err := g.MediaPath(ctx, m); err == nil {
+			t.Fatalf("screenshot %s only the deleted task showed survived", m)
+		}
+	}
+	for _, m := range shared {
+		if _, err := g.MediaPath(ctx, m); err != nil {
+			t.Fatalf("screenshot %s the running task shows: %v", m, err)
+		}
+	}
+	mustStatus(t, s.Act(ctx, Call{}, Action{Tool: "key", Key: "home"}), StatusSettled)
+	tasks, _ = g.History(ctx, HistoryQuery{Search: "running"})
+	if len(tasks) != 1 || len(tasks[0].Steps) < 2 {
+		t.Fatalf("running task after delete: %+v", tasks)
+	}
+}
+
 func TestPersonInputOnPhoneTakesOver(t *testing.T) {
 	g, dev := newTestGateway(t)
 	s, first := connect(t, g, "Lunch")

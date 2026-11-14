@@ -243,29 +243,7 @@ func (a *app) phoneCenter(c *mg.Context, d gateway.DeviceView) {
 	}
 
 	t := a.taskOf(d.Info.ID)
-	agent := ""
-	if t != nil && running(t.State) {
-		agent = nonEmpty(t.Agent, locales.AgentGenericStart())
-	}
-	inControl := d.Status == gateway.DeviceInControl
-	ho, handoff := a.handoffFor(d.Info.ID)
-	var want controlText
-	switch {
-	case handoff && !a.isLocked(d) && t != nil && t.State == gateway.TaskPaused:
-		// The person took over and the agent waits with phone_handoff.
-		inControl = true
-		want = controlText{locales.PhoneBannerInControl(), locales.PhoneBannerPaused(agentOf(ho))}
-	case handoff && !a.isLocked(d):
-		// The agent asked for the person: the phone is theirs until they
-		// hand it back, here or with Done on the card.
-		inControl = true
-		reason := strings.TrimSuffix(strings.TrimSuffix(needTitle(ho), "."), "\u3002") // the agent's words, without the final period
-		want = controlText{locales.PhoneBannerYourTurn(), locales.PhoneBannerWaits(agentOf(ho), lowerFirst(reason))}
-	case inControl && agent != "":
-		want = controlText{locales.PhoneBannerInControl(), locales.PhoneBannerPaused(agent)}
-	case inControl:
-		want = controlText{locales.PhoneBannerInControl(), locales.PhoneBannerHandBackHint()}
-	}
+	want, inControl := a.controlFor(d, t)
 
 	// While an agent works on its own display in the background, the
 	// mirror shows that display, unless the person chose the phone's own
@@ -318,7 +296,7 @@ func (a *app) phoneCenter(c *mg.Context, d gateway.DeviceView) {
 		fig.Shadow(0, 0, 0, 1, p.rim)
 	}
 	fig.Label(locales.PhoneScreenLabel(d.Info.Name)).Children(func() {
-		a.mirrorView(c, m, d, shown, inner, false)
+		a.mirrorView(c, m, d, shown, inner, onPage)
 	})
 
 	// The keys: Back, Home and Recents on Android, Home on iPhone, after
@@ -343,33 +321,74 @@ func (a *app) phoneCenter(c *mg.Context, d gateway.DeviceView) {
 			}
 			dockSeparator(c)
 		}
-		key := func(ic *mg.SVG, label string, k driver.Key) {
-			b := mg.ButtonBase(c).Size(dockKey, dockKey-4).Radius(rControl).Center().Label(label).Tooltip(label)
-			col := p.ink2
-			if watching {
-				// Keys act on the phone's own screen, not the agent's.
-				b.Disabled(true).Tooltip(locales.PhoneKeysAgentScreen(agentOrTheAgent(t)))
-				col = p.ink3
-			} else if b.Hovered() {
-				b.Background(p.bg3)
-				col = p.ink
-			}
-			if b.Clicked() && !watching {
-				id := d.Info.ID
-				a.call(id, locales.PhonePressKey(label), func() error { return a.api.Key(id, k) })
-			}
-			b.TextColor(col).Children(func() { mg.Icon(c, ic).FontSize(iconLarge) })
+		off := ""
+		if watching {
+			// Keys act on the phone's own screen, not the agent's.
+			off = locales.PhoneKeysAgentScreen(agentOrTheAgent(t))
 		}
-		if d.Info.Platform != driver.IOS {
-			key(icBack, locales.PhoneKeyBack(), driver.KeyBack)
-		}
-		key(icHome, locales.PhoneKeyHome(), driver.KeyHome)
-		if d.Info.Platform != driver.IOS {
-			key(icRecents, locales.PhoneKeyRecents(), driver.KeyRecents)
-		}
+		a.phoneKeys(c, d, dockKey, off)
 		dockSeparator(c)
 		a.moreControls(c, d, m)
 	})
+}
+
+// controlFor is what the "You're in control" banner says about the phone,
+// nothing while the agents have it, and whether the person holds the phone:
+// they took over, or the agent handed it to them.
+func (a *app) controlFor(d gateway.DeviceView, t *gateway.TaskView) (want controlText, inControl bool) {
+	agent := ""
+	if t != nil && running(t.State) {
+		agent = nonEmpty(t.Agent, locales.AgentGenericStart())
+	}
+	inControl = d.Status == gateway.DeviceInControl
+	ho, handoff := a.handoffFor(d.Info.ID)
+	switch {
+	case handoff && !a.isLocked(d) && t != nil && t.State == gateway.TaskPaused:
+		// The person took over and the agent waits with phone_handoff.
+		inControl = true
+		want = controlText{locales.PhoneBannerInControl(), locales.PhoneBannerPaused(agentOf(ho))}
+	case handoff && !a.isLocked(d):
+		// The agent asked for the person: the phone is theirs until they
+		// hand it back, here or with Done on the card.
+		inControl = true
+		reason := strings.TrimSuffix(strings.TrimSuffix(needTitle(ho), "."), "\u3002") // the agent's words, without the final period
+		want = controlText{locales.PhoneBannerYourTurn(), locales.PhoneBannerWaits(agentOf(ho), lowerFirst(reason))}
+	case inControl && agent != "":
+		want = controlText{locales.PhoneBannerInControl(), locales.PhoneBannerPaused(agent)}
+	case inControl:
+		want = controlText{locales.PhoneBannerInControl(), locales.PhoneBannerHandBackHint()}
+	}
+	return want, inControl
+}
+
+// phoneKeys are the phone's keys, size DIPs wide: Back, Home and Recents
+// on Android, Home on an iPhone or iPad. off, when set, turns them off and
+// says why.
+func (a *app) phoneKeys(c *mg.Context, d gateway.DeviceView, size float32, off string) {
+	p := pal(c)
+	key := func(ic *mg.SVG, label string, k driver.Key) {
+		b := mg.ButtonBase(c).Size(size, size-4).Radius(rControl).Center().Label(label).Tooltip(label)
+		col := p.ink2
+		if off != "" {
+			b.Disabled(true).Tooltip(off)
+			col = p.ink3
+		} else if b.Hovered() {
+			b.Background(p.bg3)
+			col = p.ink
+		}
+		if b.Clicked() && off == "" {
+			id := d.Info.ID
+			a.call(id, locales.PhonePressKey(label), func() error { return a.api.Key(id, k) })
+		}
+		b.TextColor(col).Children(func() { mg.Icon(c, ic).FontSize(iconLarge) })
+	}
+	if d.Info.Platform != driver.IOS {
+		key(icBack, locales.PhoneKeyBack(), driver.KeyBack)
+	}
+	key(icHome, locales.PhoneKeyHome(), driver.KeyHome)
+	if d.Info.Platform != driver.IOS {
+		key(icRecents, locales.PhoneKeyRecents(), driver.KeyRecents)
+	}
 }
 
 // The stage: the room around the phone, the gap between the banner, the
@@ -458,6 +477,10 @@ func (a *app) moreControls(c *mg.Context, d gateway.DeviceView, m *mirror) {
 		if menuItem(c, icCamera, locales.PhoneTakeScreenshot(), mg.Color{}).Clicked() {
 			open = false
 			a.saveScreenshot(m, d.Info.Name)
+		}
+		if menuItem(c, icWindow, locales.PhoneOpenWindow(), mg.Color{}).Clicked() {
+			open = false
+			a.openPhoneWindow(id)
 		}
 		if menuItem(c, icCheckup, locales.PhoneCheckup(), mg.Color{}).Clicked() {
 			open = false
@@ -594,9 +617,7 @@ func (a *app) phoneTiles(c *mg.Context, cols []mg.Track, width float32) {
 			if offline {
 				tile.Background(p.group)
 			}
-			if a.hasPhoneMenu() {
-				tile.ContextMenu(func(m *mg.Menu) { a.phoneMenu(m, d) })
-			}
+			tile.ContextMenu(func(m *mg.Menu) { a.phoneMenu(m, d) })
 			tile.Children(func() {
 				sel := mg.ButtonBase(c).Column().AlignItems(mg.Stretch).Justify(mg.Start).FillWidth().Padding(14).Gap(sp3).Radius(rCard).Label(locales.PhoneShow(d.Info.Name))
 				if sel.Clicked() {
@@ -637,7 +658,7 @@ func (a *app) phoneTiles(c *mg.Context, cols []mg.Track, width float32) {
 								if bgTask && !m.agent {
 									shown = nil
 								}
-								a.mirrorView(c, m, d, shown, inner, true)
+								a.mirrorView(c, m, d, shown, inner, onTile)
 							})
 						})
 					}
@@ -692,6 +713,9 @@ func (a *app) phoneTiles(c *mg.Context, cols []mg.Track, width float32) {
 func (a *app) tileStill(d gateway.DeviceView, t *gateway.TaskView) bool {
 	if d.Info.Platform != driver.IOS || d.Status == gateway.DeviceInControl {
 		return false
+	}
+	if pw := a.phoneWins[d.Info.ID]; pw != nil && pw.mirror != nil {
+		return false // the phone's own window shows it live: its stream is open anyway
 	}
 	if t != nil && running(t.State) {
 		return false

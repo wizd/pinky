@@ -196,6 +196,31 @@ func TestTaskAppsAndScope(t *testing.T) {
 	}
 }
 
+// An agent limited to the apps the person chooses, with none chosen, can
+// use no app. The home screen and the home key stay in reach, as with a
+// list that names apps.
+func TestAgentScopeWithNoApps(t *testing.T) {
+	e := Default()
+	for name, in := range map[string]Input{
+		"launch": {Op: OpLaunch, Launch: dinely, Scoped: true},
+		"tap":    {Op: OpTap, App: whatsapp, Scoped: true, Target: button("Chats")},
+		"stop":   {Op: OpStop, Launch: dinely, Device: "pixel", Scoped: true},
+	} {
+		if v := e.Evaluate(in); v.Decision != Deny || !v.Scope || v.Rule != RuleAgentScope {
+			t.Errorf("%s with no app in the scope: %+v", name, v)
+		}
+	}
+	for name, in := range map[string]Input{
+		"home key":    {Op: OpKey, Key: "home", App: whatsapp, Scoped: true},
+		"home screen": {Op: OpTap, App: launcher, Scoped: true, Target: button("Dinely")},
+		"no scope":    {Op: OpLaunch, Launch: dinely},
+	} {
+		if v := e.Evaluate(in); v.Decision != Allow {
+			t.Errorf("%s: %+v", name, v)
+		}
+	}
+}
+
 func TestRulesFile(t *testing.T) {
 	f, err := ParseFile([]byte(`
 rules:

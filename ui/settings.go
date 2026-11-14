@@ -696,7 +696,14 @@ func (a *app) settingsAgents(c *mg.Context) {
 				if st.editing == r.name && canScope {
 					mg.Column(c).Gap(8).Padding(0, 0, 0, 44).Children(func() {
 						scope := a.scopePicker(c, r.name, locales.SettingsAgentsScopeLabel(r.name), r.scope)
-						if button(c, locales.SettingsSave(), btnOpt{kind: btnPrimary}).AlignSelf(mg.Start).Clicked() {
+						// As on the first-connection card: a list of apps
+						// with no app in it is not saved.
+						noApps := scope.Mode == gateway.ScopeApps && len(scope.Apps) == 0
+						save := button(c, locales.SettingsSave(), btnOpt{kind: btnPrimary}).AlignSelf(mg.Start).Disabled(noApps)
+						if noApps {
+							save.Tooltip(locales.NeedsApproveNoApps())
+						}
+						if save.Clicked() {
 							if sc, ok := a.api.(agentScoper); ok {
 								name := r.name
 								go func() {
@@ -782,6 +789,20 @@ func (a *app) settingsPrivacy(c *mg.Context) {
 		})
 		if a.toggleRow(c, "rec", locales.SettingsPrivacyRecord(), locales.SettingsPrivacyRecordDesc(), false, &st.Record) {
 			a.applyRecording(st.Record)
+		}
+		if st.Record {
+			settingRow(c, locales.SettingsPrivacyRecordSize(), locales.SettingsPrivacyRecordSizeDesc(), false, func() {
+				smaller, original := locales.SettingsPrivacyRecordSmaller(), locales.SettingsPrivacyRecordOriginal()
+				cur := original
+				if st.SmallerRecordings {
+					cur = smaller
+				}
+				if mg.Select(c.Key("rec-size"), &cur, []string{smaller, original}).Label(locales.SettingsPrivacyRecordSize()).Changed() {
+					st.SmallerRecordings = cur == smaller
+					a.changed()
+					a.applyRecordingSize(st.SmallerRecordings)
+				}
+			})
 		}
 		settingRow(c, locales.SettingsPrivacyDeleteAll(), locales.SettingsPrivacyDeleteAllDesc(), true, func() {
 			b := button(c, locales.SettingsPrivacyDeleteButton(), btnOpt{})

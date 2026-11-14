@@ -1,6 +1,6 @@
 //go:build windows
 
-package ios
+package h264enc
 
 import (
 	"os"
@@ -33,11 +33,11 @@ func TestEncoderLag(t *testing.T) {
 	if s := os.Getenv("PINKY_H264_BITRATE"); s != "" {
 		bitrate, _ = strconv.Atoi(s)
 	}
-	enc, err := newH264Encoder(w, h, fps, bitrate)
+	enc, err := New(w, h, Options{FPS: fps, BitRate: bitrate})
 	if err != nil {
 		t.Skipf("no encoder: %v", err)
 	}
-	name := enc.encoderName()
+	name := enc.Name()
 	enc.Close()
 	t.Logf("encoder: %s, %d fps, %d bit/s", name, fps, bitrate)
 
@@ -76,7 +76,7 @@ func TestEncoderLag(t *testing.T) {
 	// fast as it can when gap is zero, which is a swipe.
 	run := func(name string, gap time.Duration) {
 		t.Logf("--- %s ---", name)
-		enc, err := newH264Encoder(w, h, fps, bitrate)
+		enc, err := New(w, h, Options{FPS: fps, BitRate: bitrate})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -91,11 +91,11 @@ func TestEncoderLag(t *testing.T) {
 		for i := 0; i < frames; i++ {
 			y, uv := makePicture(i)
 			taken := time.Duration(i) * time.Second / time.Duration(fps)
-			out, err := enc.encode(y, uv, taken, i%15 == 0)
+			out, err := enc.Encode(y, uv, taken, i%15 == 0)
 			if err != nil {
 				t.Fatal(err)
 			}
-			stamps := enc.packetTimes()
+			stamps := enc.PacketTimes()
 			if len(out) > 0 && firstOut < 0 {
 				firstOut = i
 			}
@@ -103,12 +103,12 @@ func TestEncoderLag(t *testing.T) {
 				t.Logf("encoder: input %2d -> %d packets back", i, len(out))
 			}
 			for j, e := range out {
-				if len(e.config) > 0 {
-					if err := dec.Send(driver.Packet{Data: e.config, Config: true}); err != nil {
+				if len(e.Config) > 0 {
+					if err := dec.Send(driver.Packet{Data: e.Config, Config: true}); err != nil {
 						t.Fatal(err)
 					}
 				}
-				if err := dec.Send(driver.Packet{Data: e.data, KeyFrame: e.keyFrame}); err != nil {
+				if err := dec.Send(driver.Packet{Data: e.Data, KeyFrame: e.KeyFrame}); err != nil {
 					t.Fatal(err)
 				}
 				for {

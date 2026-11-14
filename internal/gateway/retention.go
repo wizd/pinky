@@ -50,21 +50,27 @@ func (g *Gateway) retentionLoop() {
 	}
 }
 
+// liveTasksLocked lists the tasks history must keep whatever is asked: the
+// running ones, and those whose screen recording is still being written.
+// The caller holds g.mu.
+func (g *Gateway) liveTasksLocked() []string {
+	var ids []string
+	for _, d := range g.devices {
+		if d.lease != nil {
+			ids = append(ids, d.lease.task.id)
+		}
+		if v := d.video; v != nil {
+			ids = append(ids, v.t.id)
+		}
+	}
+	return ids
+}
+
 // applyRetention deletes what is older than the limit.
 func (g *Gateway) applyRetention(ctx context.Context) {
 	g.mu.Lock()
 	days := g.keepDays
-	var keep []string
-	for _, d := range g.devices {
-		if d.lease != nil {
-			keep = append(keep, d.lease.task.id)
-		}
-	}
-	for _, d := range g.devices {
-		if v := d.video; v != nil {
-			keep = append(keep, v.t.id)
-		}
-	}
+	keep := g.liveTasksLocked()
 	g.mu.Unlock()
 	if days <= 0 || g.store == nil {
 		return

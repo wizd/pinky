@@ -51,6 +51,71 @@ func (s *Store) SaveRecording(ctx context.Context, r Recording) error {
 	return err
 }
 
+// RecordingTemp is where a new file for a recording is written before
+// ReplaceRecording puts it in the recording's place.
+func RecordingTemp(path string) string { return path + recordingTempSuffix }
+
+const recordingTempSuffix = ".part"
+
+// ReplaceRecording puts the file at RecordingTemp(r.Path) in the place of
+// the task's recording at r.Path, and updates its row with r's length,
+// codec, size and bytes, as when the recording was made smaller. When the
+// task's recording is gone or is another file (the task was deleted while
+// the new file was written), it removes the new file and reports false.
+// Deleting and pruning wait for it, so a deleted task never gets its file
+// back.
+func (s *Store) ReplaceRecording(ctx context.Context, r Recording) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tmp := RecordingTemp(r.Path)
+	rel, err := filepath.Rel(s.dir, r.Path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		os.Remove(tmp)
+		return false, errors.New("the recording is outside the history folder")
+	}
+	var cur string
+	err = s.db.QueryRowContext(ctx, `SELECT path FROM recordings WHERE task_id = ?`, r.TaskID).Scan(&cur)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && cur != filepath.ToSlash(rel)) {
+		os.Remove(tmp)
+		return false, nil
+	}
+	if err != nil {
+		os.Remove(tmp)
+		return false, err
+	}
+	if err := os.Rename(tmp, r.Path); err != nil {
+		// On Windows a replay that has the file open keeps it in place.
+		os.Remove(tmp)
+		return false, err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE recordings SET length_ms = ?, codec = ?, width = ?, height = ?, size = ? WHERE task_id = ?`,
+		r.Length.Milliseconds(), r.Codec, r.Width, r.Height, r.Size, r.TaskID)
+	return true, err
+}
+
+// RemoveRecordingTemps removes the new files of recordings that were being
+// replaced when Pinky last quit.
+func (s *Store) RemoveRecordingTemps() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var errs []error
+	err := filepath.WalkDir(s.recDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(path, recordingTempSuffix) {
+			if err := os.Remove(path); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return nil
+	})
+	return errors.Join(append(errs, err)...)
+}
+
 // Recording returns a task's recording, or ErrNoRecording.
 func (s *Store) Recording(ctx context.Context, taskID string) (Recording, error) {
 	s.mu.RLock()

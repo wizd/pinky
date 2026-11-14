@@ -94,6 +94,9 @@ var (
 	icRotate    = mingcute("rotate_to_horizontal_line")
 	icLayer     = mingcute("layer_line")
 	icDelete    = mingcute("delete_2_line")
+	icWindow    = mingcute("external_link_line")
+	icPin       = mingcute("pin_line")
+	icPinOn     = mingcute("pin_fill")
 
 	// Filled, for a selected row or tab.
 	icGridOn     = mingcute("grid_fill")

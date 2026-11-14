@@ -475,7 +475,9 @@ class SettingsActivity : Activity() {
                 "no_credit" -> R.string.phone_check_no_credit
                 "not_found" -> R.string.phone_check_not_found
                 "busy" -> R.string.phone_check_busy
-                "no_tools" -> R.string.phone_check_no_tools
+                // With an HTTP status the service refused the request: the model never answered.
+                "no_tools" -> if (res.optInt("status") != 0) R.string.phone_check_tools_unsupported else R.string.phone_check_no_tools
+                "tools_api" -> R.string.phone_check_tools_api
                 "unreachable" -> R.string.phone_check_unreachable
                 "bad_answer" -> R.string.phone_check_bad_answer
                 else -> R.string.phone_check_rejected

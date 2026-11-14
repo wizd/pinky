@@ -1100,17 +1100,129 @@ func (msgs Messages) ActivityChooseTask() string {
 // ActivityDelete says "Delete"
 // in the language the app shows.
 //
-// An item of the ⋯ menu in a task's detail, which deletes the task. It
-// shows disabled: the gateway cannot delete one task yet.
+// An item of the ⋯ menu in a task's detail, which asks to confirm, then
+// deletes the task; and the button of that alert which deletes it.
 func ActivityDelete() string { return In(i18n.Locale()).ActivityDelete() }
 
 // ActivityDelete says "Delete"
 // in the language of msgs.
 //
-// An item of the ⋯ menu in a task's detail, which deletes the task. It
-// shows disabled: the gateway cannot delete one task yet.
+// An item of the ⋯ menu in a task's detail, which asks to confirm, then
+// deletes the task; and the button of that alert which deletes it.
 func (msgs Messages) ActivityDelete() string {
 	return Catalog.Format(msgs.locale, "activityDelete", nil)
+}
+
+// ActivityDeleteCancel says "Cancel"
+// in the language the app shows.
+//
+// The button of the alert that confirms deleting a task in Activity, which
+// closes it and deletes nothing.
+func ActivityDeleteCancel() string { return In(i18n.Locale()).ActivityDeleteCancel() }
+
+// ActivityDeleteCancel says "Cancel"
+// in the language of msgs.
+//
+// The button of the alert that confirms deleting a task in Activity, which
+// closes it and deletes nothing.
+func (msgs Messages) ActivityDeleteCancel() string {
+	return Catalog.Format(msgs.locale, "activityDeleteCancel", nil)
+}
+
+// ActivityDeleteFailed says "Couldn't delete the task: {reason}"
+// in the language the app shows.
+//
+// A toast when deleting one task from Activity failed. reason is the error,
+// in English.
+func ActivityDeleteFailed(reason string) string {
+	return In(i18n.Locale()).ActivityDeleteFailed(reason)
+}
+
+// ActivityDeleteFailed says "Couldn't delete the task: {reason}"
+// in the language of msgs.
+//
+// A toast when deleting one task from Activity failed. reason is the error,
+// in English.
+func (msgs Messages) ActivityDeleteFailed(reason string) string {
+	return Catalog.Format(msgs.locale, "activityDeleteFailed", map[string]any{"reason": reason})
+}
+
+// ActivityDeleteMessage says "The task, its steps, approvals, screenshots and screen recording are removed from this computer. This can't be undone."
+// in the language the app shows.
+//
+// The message of the alert that confirms deleting one task from Activity.
+func ActivityDeleteMessage() string { return In(i18n.Locale()).ActivityDeleteMessage() }
+
+// ActivityDeleteMessage says "The task, its steps, approvals, screenshots and screen recording are removed from this computer. This can't be undone."
+// in the language of msgs.
+//
+// The message of the alert that confirms deleting one task from Activity.
+func (msgs Messages) ActivityDeleteMessage() string {
+	return Catalog.Format(msgs.locale, "activityDeleteMessage", nil)
+}
+
+// ActivityDeleteRunning says "A running task can't be deleted"
+// in the language the app shows.
+//
+// The tooltip of the disabled Delete item of a task's ⋯ menu in Activity
+// while the task runs.
+func ActivityDeleteRunning() string { return In(i18n.Locale()).ActivityDeleteRunning() }
+
+// ActivityDeleteRunning says "A running task can't be deleted"
+// in the language of msgs.
+//
+// The tooltip of the disabled Delete item of a task's ⋯ menu in Activity
+// while the task runs.
+func (msgs Messages) ActivityDeleteRunning() string {
+	return Catalog.Format(msgs.locale, "activityDeleteRunning", nil)
+}
+
+// ActivityDeleteTitle says "Delete “{title}”?"
+// in the language the app shows.
+//
+// The title of the alert that confirms deleting one task from Activity.
+// title is the task's title, in the agent's words.
+func ActivityDeleteTitle(title string) string { return In(i18n.Locale()).ActivityDeleteTitle(title) }
+
+// ActivityDeleteTitle says "Delete “{title}”?"
+// in the language of msgs.
+//
+// The title of the alert that confirms deleting one task from Activity.
+// title is the task's title, in the agent's words.
+func (msgs Messages) ActivityDeleteTitle(title string) string {
+	return Catalog.Format(msgs.locale, "activityDeleteTitle", map[string]any{"title": title})
+}
+
+// ActivityDeleteUnsupported says "This gateway cannot delete tasks"
+// in the language the app shows.
+//
+// The tooltip of the disabled Delete item of a task's ⋯ menu in Activity
+// when the gateway cannot delete a task.
+func ActivityDeleteUnsupported() string { return In(i18n.Locale()).ActivityDeleteUnsupported() }
+
+// ActivityDeleteUnsupported says "This gateway cannot delete tasks"
+// in the language of msgs.
+//
+// The tooltip of the disabled Delete item of a task's ⋯ menu in Activity
+// when the gateway cannot delete a task.
+func (msgs Messages) ActivityDeleteUnsupported() string {
+	return Catalog.Format(msgs.locale, "activityDeleteUnsupported", nil)
+}
+
+// ActivityDeleted says "Deleted “{title}”"
+// in the language the app shows.
+//
+// A toast once a task is deleted from Activity. title is the task's title,
+// in the agent's words.
+func ActivityDeleted(title string) string { return In(i18n.Locale()).ActivityDeleted(title) }
+
+// ActivityDeleted says "Deleted “{title}”"
+// in the language of msgs.
+//
+// A toast once a task is deleted from Activity. title is the task's title,
+// in the agent's words.
+func (msgs Messages) ActivityDeleted(title string) string {
+	return Catalog.Format(msgs.locale, "activityDeleted", map[string]any{"title": title})
 }
 
 // ActivityDetailLabel says "Task detail"
@@ -7044,15 +7156,13 @@ func (msgs Messages) CheckNoModel() string {
 // CheckNoTools says "The model answered but didn't use a tool. Pinky works through tools, so choose a model that uses them."
 // in the language the app shows.
 //
-// A check of the model: it answered without calling the tool, or the
-// service said it does not support tools.
+// A check of the model: it answered without calling the tool.
 func CheckNoTools() string { return In(i18n.Locale()).CheckNoTools() }
 
 // CheckNoTools says "The model answered but didn't use a tool. Pinky works through tools, so choose a model that uses them."
 // in the language of msgs.
 //
-// A check of the model: it answered without calling the tool, or the
-// service said it does not support tools.
+// A check of the model: it answered without calling the tool.
 func (msgs Messages) CheckNoTools() string {
 	return Catalog.Format(msgs.locale, "checkNoTools", nil)
 }
@@ -7237,6 +7347,44 @@ func CheckSimHelperTitle() string { return In(i18n.Locale()).CheckSimHelperTitle
 // WebDriverAgent helper Pinky builds with Xcode.
 func (msgs Messages) CheckSimHelperTitle() string {
 	return Catalog.Format(msgs.locale, "checkSimHelperTitle", nil)
+}
+
+// CheckToolsAPI says "The service lets this model use tools only through OpenAI's Responses API, or with its reasoning turned off, and this…"
+// in the language the app shows.
+//
+// A check of the model on an OpenAI-compatible service: Chat Completions
+// refused the model's tools and pointed at the Responses API (or at turning
+// reasoning off), and the address answered no Responses request either.
+// settingsAskCheckDetail follows with the service's words. 'Responses API'
+// is the API's name: keep it in English.
+func CheckToolsAPI() string { return In(i18n.Locale()).CheckToolsAPI() }
+
+// CheckToolsAPI says "The service lets this model use tools only through OpenAI's Responses API, or with its reasoning turned off, and this…"
+// in the language of msgs.
+//
+// A check of the model on an OpenAI-compatible service: Chat Completions
+// refused the model's tools and pointed at the Responses API (or at turning
+// reasoning off), and the address answered no Responses request either.
+// settingsAskCheckDetail follows with the service's words. 'Responses API'
+// is the API's name: keep it in English.
+func (msgs Messages) CheckToolsAPI() string {
+	return Catalog.Format(msgs.locale, "checkToolsAPI", nil)
+}
+
+// CheckToolsUnsupported says "The service says this model can't use tools. Pinky works through tools, so choose a model that uses them."
+// in the language the app shows.
+//
+// A check of the model: the service refused the request, saying the model
+// does not support tools; settingsAskCheckDetail follows with its words.
+func CheckToolsUnsupported() string { return In(i18n.Locale()).CheckToolsUnsupported() }
+
+// CheckToolsUnsupported says "The service says this model can't use tools. Pinky works through tools, so choose a model that uses them."
+// in the language of msgs.
+//
+// A check of the model: the service refused the request, saying the model
+// does not support tools; settingsAskCheckDetail follows with its words.
+func (msgs Messages) CheckToolsUnsupported() string {
+	return Catalog.Format(msgs.locale, "checkToolsUnsupported", nil)
 }
 
 // CheckTrustedPass says "The iPhone trusts this computer."
@@ -17143,6 +17291,7 @@ func (msgs Messages) NeedsApprove() string {
 // in the language the app shows.
 //
 // The tooltip of the disabled Approve button on a first-connection card,
+// and of the disabled Save button under an agent in Settings › Agents,
 // when "Only the apps I choose" is chosen and no app is named yet.
 func NeedsApproveNoApps() string { return In(i18n.Locale()).NeedsApproveNoApps() }
 
@@ -17150,6 +17299,7 @@ func NeedsApproveNoApps() string { return In(i18n.Locale()).NeedsApproveNoApps()
 // in the language of msgs.
 //
 // The tooltip of the disabled Approve button on a first-connection card,
+// and of the disabled Save button under an agent in Settings › Agents,
 // when "Only the apps I choose" is chosen and no app is named yet.
 func (msgs Messages) NeedsApproveNoApps() string {
 	return Catalog.Format(msgs.locale, "needsApproveNoApps", nil)
@@ -24066,15 +24216,17 @@ func (msgs Messages) SettingsAskServiceDesc() string {
 // SettingsAskServiceOpenAI says "OpenAI-compatible API"
 // in the language the app shows.
 //
-// Settings › Agents › Ask Pinky: a choice of service: OpenAI's Chat
-// Completions API, or a service that speaks it.
+// Settings › Agents › Ask Pinky: a choice of service: OpenAI's API
+// (Chat Completions, or the Responses API where a model needs it), or a
+// service that speaks it.
 func SettingsAskServiceOpenAI() string { return In(i18n.Locale()).SettingsAskServiceOpenAI() }
 
 // SettingsAskServiceOpenAI says "OpenAI-compatible API"
 // in the language of msgs.
 //
-// Settings › Agents › Ask Pinky: a choice of service: OpenAI's Chat
-// Completions API, or a service that speaks it.
+// Settings › Agents › Ask Pinky: a choice of service: OpenAI's API
+// (Chat Completions, or the Responses API where a model needs it), or a
+// service that speaks it.
 func (msgs Messages) SettingsAskServiceOpenAI() string {
 	return Catalog.Format(msgs.locale, "settingsAskServiceOpenAI", nil)
 }
@@ -25213,6 +25365,72 @@ func SettingsPrivacyRecordDesc() string { return In(i18n.Locale()).SettingsPriva
 // Activity is the page of finished tasks.
 func (msgs Messages) SettingsPrivacyRecordDesc() string {
 	return Catalog.Format(msgs.locale, "settingsPrivacyRecordDesc", nil)
+}
+
+// SettingsPrivacyRecordOriginal says "Original"
+// in the language the app shows.
+//
+// Settings › Privacy › Recording size: the choice that keeps recordings
+// as the phone sent its screen, at full size and quality.
+func SettingsPrivacyRecordOriginal() string { return In(i18n.Locale()).SettingsPrivacyRecordOriginal() }
+
+// SettingsPrivacyRecordOriginal says "Original"
+// in the language of msgs.
+//
+// Settings › Privacy › Recording size: the choice that keeps recordings
+// as the phone sent its screen, at full size and quality.
+func (msgs Messages) SettingsPrivacyRecordOriginal() string {
+	return Catalog.Format(msgs.locale, "settingsPrivacyRecordOriginal", nil)
+}
+
+// SettingsPrivacyRecordSize says "Recording size"
+// in the language the app shows.
+//
+// Settings › Privacy: the row that chooses how big task recordings are,
+// shown under Record the screen during tasks while that is on; before a
+// select of Smaller or Original; also the select's accessibility label.
+func SettingsPrivacyRecordSize() string { return In(i18n.Locale()).SettingsPrivacyRecordSize() }
+
+// SettingsPrivacyRecordSize says "Recording size"
+// in the language of msgs.
+//
+// Settings › Privacy: the row that chooses how big task recordings are,
+// shown under Record the screen during tasks while that is on; before a
+// select of Smaller or Original; also the select's accessibility label.
+func (msgs Messages) SettingsPrivacyRecordSize() string {
+	return Catalog.Format(msgs.locale, "settingsPrivacyRecordSize", nil)
+}
+
+// SettingsPrivacyRecordSizeDesc says "Smaller recordings take a fraction of the space, and the text of every step stays readable. Pinky makes them when a t…"
+// in the language the app shows.
+//
+// Settings › Privacy: the line under Recording size. Smaller and Original
+// are the choices of its select.
+func SettingsPrivacyRecordSizeDesc() string { return In(i18n.Locale()).SettingsPrivacyRecordSizeDesc() }
+
+// SettingsPrivacyRecordSizeDesc says "Smaller recordings take a fraction of the space, and the text of every step stays readable. Pinky makes them when a t…"
+// in the language of msgs.
+//
+// Settings › Privacy: the line under Recording size. Smaller and Original
+// are the choices of its select.
+func (msgs Messages) SettingsPrivacyRecordSizeDesc() string {
+	return Catalog.Format(msgs.locale, "settingsPrivacyRecordSizeDesc", nil)
+}
+
+// SettingsPrivacyRecordSmaller says "Smaller"
+// in the language the app shows.
+//
+// Settings › Privacy › Recording size: the choice that makes each
+// recording smaller when its task ends (the default).
+func SettingsPrivacyRecordSmaller() string { return In(i18n.Locale()).SettingsPrivacyRecordSmaller() }
+
+// SettingsPrivacyRecordSmaller says "Smaller"
+// in the language of msgs.
+//
+// Settings › Privacy › Recording size: the choice that makes each
+// recording smaller when its task ends (the default).
+func (msgs Messages) SettingsPrivacyRecordSmaller() string {
+	return Catalog.Format(msgs.locale, "settingsPrivacyRecordSmaller", nil)
 }
 
 // SettingsRules says "Rules"
@@ -33395,4 +33613,74 @@ func WiFiUseAgain() string { return In(i18n.Locale()).WiFiUseAgain() }
 // now plugged in again: moves it to Wi-Fi at once.
 func (msgs Messages) WiFiUseAgain() string {
 	return Catalog.Format(msgs.locale, "wiFiUseAgain", nil)
+}
+
+// PhoneOpenWindow says "Open in a window"
+// in the language the app shows.
+//
+// Item of a phone's ⋯ menu under its mirror and of its right-click menu
+// in the sidebar: opens a window that shows only the phone's live screen
+// and its keys, to use the phone from there. Opened again, the window comes
+// to the front.
+func PhoneOpenWindow() string { return In(i18n.Locale()).PhoneOpenWindow() }
+
+// PhoneOpenWindow says "Open in a window"
+// in the language of msgs.
+//
+// Item of a phone's ⋯ menu under its mirror and of its right-click menu
+// in the sidebar: opens a window that shows only the phone's live screen
+// and its keys, to use the phone from there. Opened again, the window comes
+// to the front.
+func (msgs Messages) PhoneOpenWindow() string {
+	return Catalog.Format(msgs.locale, "phoneOpenWindow", nil)
+}
+
+// PhoneWindowOnTop says "Keep on top"
+// in the language the app shows.
+//
+// Tooltip and label of the pin button in a phone's own window: keeps the
+// window above other apps' windows.
+func PhoneWindowOnTop() string { return In(i18n.Locale()).PhoneWindowOnTop() }
+
+// PhoneWindowOnTop says "Keep on top"
+// in the language of msgs.
+//
+// Tooltip and label of the pin button in a phone's own window: keeps the
+// window above other apps' windows.
+func (msgs Messages) PhoneWindowOnTop() string {
+	return Catalog.Format(msgs.locale, "phoneWindowOnTop", nil)
+}
+
+// PhoneWindowOnTopOff says "Stop keeping on top"
+// in the language the app shows.
+//
+// The same button while the window stays on top: lets it go behind other
+// apps' windows again.
+func PhoneWindowOnTopOff() string { return In(i18n.Locale()).PhoneWindowOnTopOff() }
+
+// PhoneWindowOnTopOff says "Stop keeping on top"
+// in the language of msgs.
+//
+// The same button while the window stays on top: lets it go behind other
+// apps' windows again.
+func (msgs Messages) PhoneWindowOnTopOff() string {
+	return Catalog.Format(msgs.locale, "phoneWindowOnTopOff", nil)
+}
+
+// PhoneWindowShowInPinky says "Show in Pinky"
+// in the language the app shows.
+//
+// Button in a phone's own window while the phone shows no live screen
+// (offline, paused, connecting, waiting for a step): opens the phone's page
+// in Pinky's main window.
+func PhoneWindowShowInPinky() string { return In(i18n.Locale()).PhoneWindowShowInPinky() }
+
+// PhoneWindowShowInPinky says "Show in Pinky"
+// in the language of msgs.
+//
+// Button in a phone's own window while the phone shows no live screen
+// (offline, paused, connecting, waiting for a step): opens the phone's page
+// in Pinky's main window.
+func (msgs Messages) PhoneWindowShowInPinky() string {
+	return Catalog.Format(msgs.locale, "phoneWindowShowInPinky", nil)
 }

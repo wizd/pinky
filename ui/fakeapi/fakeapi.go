@@ -113,6 +113,7 @@ type API struct {
 	tasks     []*task
 	needs     []*need
 	history   []gateway.TaskView
+	deleted   []string // tasks DeleteTasks deleted
 	subs      map[chan gateway.Event]struct{}
 	inputs    []Input
 	nextID    int

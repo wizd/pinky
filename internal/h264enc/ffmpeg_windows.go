@@ -1,12 +1,9 @@
 //go:build windows
 
-package ios
+package h264enc
 
 // H.264 encoding on Windows through FFmpeg's libavcodec, called through
-// purego so Pinky builds without cgo. The iPhones below iOS 27 send their
-// picture as JPEG frames; internal/driver/ios/framestream.go turns them
-// into NV12 and encodes them here, because the mirror and the recorder take
-// H.264 only.
+// purego so Pinky builds without cgo.
 //
 // The struct offsets below are those of FFmpeg 9 (libavcodec 63, libavutil
 // 61). The loader refuses other major versions, whose layouts differ, and
@@ -344,7 +341,7 @@ func lookupSymbol(h uintptr, name string) (uintptr, error) {
 	return windows.GetProcAddress(windows.Handle(h), name)
 }
 
-// h264Encoder finds an H.264 encoder in FFmpeg. It returns the encoder and
+// Encoder finds an H.264 encoder in FFmpeg. It returns the encoder and
 // its name.
 func (l *ffmpegLib) h264Encoder() (unsafe.Pointer, string, error) {
 	for _, name := range h264EncoderNames {

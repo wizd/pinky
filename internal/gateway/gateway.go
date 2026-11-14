@@ -140,6 +140,8 @@ type Gateway struct {
 	shots      running // history screenshots being taken or confirmed
 	videos     running // task recordings, until their files are closed
 	videoStops running // recordings being finished
+	shrink     shrinker
+	shrinks    running // recordings waiting to be made smaller, or being made (shrink.go)
 	closed     bool
 }
 

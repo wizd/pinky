@@ -27,14 +27,21 @@ type CheckResult struct {
 
 // The problems of CheckResult.
 const (
-	CheckNoModel     = "no_model"    // no model is chosen
-	CheckNoKey       = "no_key"      // no key is saved, and the service needs one
-	CheckBadKey      = "bad_key"     // the service did not accept the key (401, 403)
-	CheckNoCredit    = "no_credit"   // the account has no money left (402)
-	CheckNotFound    = "not_found"   // no such address or model (404)
-	CheckBusy        = "busy"        // a rate limit or the service's own error (429, 5xx): try later
-	CheckRejected    = "rejected"    // the service refused the request; Detail says why
-	CheckNoTools     = "no_tools"    // the model answered without calling the tool
+	CheckNoModel  = "no_model"  // no model is chosen
+	CheckNoKey    = "no_key"    // no key is saved, and the service needs one
+	CheckBadKey   = "bad_key"   // the service did not accept the key (401, 403)
+	CheckNoCredit = "no_credit" // the account has no money left (402)
+	CheckNotFound = "not_found" // no such address or model (404)
+	CheckBusy     = "busy"      // a rate limit or the service's own error (429, 5xx): try later
+	CheckRejected = "rejected"  // the service refused the request; Detail says why
+	// CheckNoTools: the model answered without calling the tool (Status
+	// 0), or the service said the model takes no tools.
+	CheckNoTools = "no_tools"
+	// CheckToolsAPI: the service lets the model call tools only through
+	// OpenAI's Responses API, or only with its reasoning off, and the
+	// address had no Responses API to ask instead. Detail is what the
+	// service said.
+	CheckToolsAPI    = "tools_api"
 	CheckUnreachable = "unreachable" // no answer from the address
 	CheckBadAnswer   = "bad_answer"  // an answer Pinky could not read
 )
@@ -65,12 +72,12 @@ const (
 // costs a few hundred tokens. key may be empty for a service that needs
 // none (Config.KeyOptional).
 func Check(ctx context.Context, cfg Config, key string, hc *http.Client) CheckResult {
-	r, _ := check(ctx, cfg, key, hc)
+	r, _ := check(ctx, cfg, key, hc, nil)
 	return r
 }
 
-// check is Check, with what the request used.
-func check(ctx context.Context, cfg Config, key string, hc *http.Client) (CheckResult, usage) {
+// check is Check, with what the request used. apis is as newModel's.
+func check(ctx context.Context, cfg Config, key string, hc *http.Client, apis *APIs) (CheckResult, usage) {
 	start := time.Now()
 	cfg = cfg.Normalize()
 	key = strings.TrimSpace(key)
@@ -90,7 +97,7 @@ func check(ctx context.Context, cfg Config, key string, hc *http.Client) (CheckR
 	}
 	ctx, cancel := context.WithTimeout(ctx, checkWait)
 	defer cancel()
-	m, err := newModel(cfg, key, hc, checkSystem, []tool{checkTool})
+	m, err := newModel(cfg, key, hc, checkSystem, []tool{checkTool}, apis)
 	if err != nil {
 		return done(CheckResult{Problem: CheckRejected, Detail: err.Error()}), usage{}
 	}
@@ -114,18 +121,23 @@ func checkError(err error) CheckResult {
 		}
 		return CheckResult{Problem: CheckUnreachable, Detail: short(err.Error())}
 	}
+	// A request the service refused is never a model that answered
+	// without a tool: Detail keeps what the service said.
 	r := CheckResult{Status: ae.status, Detail: short(ae.message)}
-	msg := strings.ToLower(ae.message)
 	switch {
 	case ae.status == http.StatusUnauthorized || ae.status == http.StatusForbidden:
 		r.Problem = CheckBadKey
 	case ae.status == http.StatusPaymentRequired:
 		r.Problem = CheckNoCredit
+	case needsResponses(ae):
+		// Chat Completions pointed at the Responses API, which the
+		// address did not have (chatFirst).
+		r.Problem = CheckToolsAPI
 	case ae.status == http.StatusNotFound:
 		r.Problem = CheckNotFound
 	case ae.status == http.StatusTooManyRequests || ae.status >= 500:
 		r.Problem = CheckBusy
-	case strings.Contains(msg, "tool") || strings.Contains(msg, "function"):
+	case toolsUnsupported(ae.message):
 		// "does not support tools", "function calling is not enabled"
 		r.Problem = CheckNoTools
 	default:
@@ -162,7 +174,7 @@ func (r *Runner) Check(ctx context.Context, cfg Config) CheckResult {
 // CheckWith is Check with a key of the caller's, which it does not keep.
 func (r *Runner) CheckWith(ctx context.Context, cfg Config, key string) CheckResult {
 	cfg = cfg.Normalize()
-	res, u := check(ctx, cfg, key, r.opt.HTTPClient)
+	res, u := check(ctx, cfg, key, r.opt.HTTPClient, r.opt.APIs)
 	r.opt.Usage.add(time.Now(), cfg, u)
 	return res
 }

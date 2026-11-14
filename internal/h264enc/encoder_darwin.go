@@ -1,6 +1,6 @@
 //go:build darwin
 
-package ios
+package h264enc
 
 import (
 	"errors"
@@ -15,8 +15,7 @@ import (
 )
 
 // H.264 encoding with macOS's VideoToolbox, called through purego so the
-// build stays free of cgo. The paths below iOS 27 get their picture as
-// JPEG frames or screenshots; the mirror and the recorder take H.264.
+// build stays free of cgo.
 
 // cmTime is CoreMedia's CMTime.
 type cmTime struct {
@@ -67,7 +66,7 @@ var vt struct {
 
 // vtEncoders routes VideoToolbox's callback to its encoder by refcon.
 var (
-	vtEncoders sync.Map // uintptr -> *h264Encoder
+	vtEncoders sync.Map // uintptr -> *Encoder
 	vtNextID   atomic.Uintptr
 )
 
@@ -142,37 +141,44 @@ func loadVT() error {
 	return vt.err
 }
 
-// h264Encoder encodes NV12 pictures of one size to Annex B H.264.
-type h264Encoder struct {
+// Encoder encodes NV12 pictures of one size to Annex B H.264.
+type Encoder struct {
 	id      uintptr
 	session uintptr
 	w, h    int
 
 	mu  sync.Mutex
-	out []encodedFrame // what the callback produced for the frame in flight
+	out []Frame // what the callback produced for the frame in flight
 	err error
 }
 
-// encoderName is the encoder's name for the log: macOS encodes with
-// VideoToolbox.
-func (e *h264Encoder) encoderName() string { return "videotoolbox" }
+// Name is the encoder's name for the log: macOS encodes with VideoToolbox.
+func (e *Encoder) Name() string { return "videotoolbox" }
 
-type encodedFrame struct {
-	data     []byte // Annex B
-	config   []byte // SPS and PPS, Annex B; only with key frames
-	keyFrame bool
-}
+// Size is the size of the pictures the encoder takes.
+func (e *Encoder) Size() (w, h int) { return e.w, e.h }
 
-// newH264Encoder starts a real-time H.264 encoder (Main profile, no
-// B-frames) for pictures of w by h, which must be even.
-func newH264Encoder(w, h, fps, bitRate int) (*h264Encoder, error) {
+// New starts an H.264 encoder (Main profile, no B-frames) for pictures of
+// w by h, which must be even.
+func New(w, h int, o Options) (*Encoder, error) {
 	if err := loadVT(); err != nil {
 		return nil, err
 	}
 	if w <= 0 || h <= 0 || w%2 != 0 || h%2 != 0 {
 		return nil, fmt.Errorf("H.264: bad picture size %dx%d", w, h)
 	}
-	e := &h264Encoder{id: vtNextID.Add(1), w: w, h: h}
+	if o.FPS <= 0 || o.BitRate <= 0 {
+		return nil, fmt.Errorf("H.264: bad frame rate %d or bit rate %d", o.FPS, o.BitRate)
+	}
+	keyEvery := o.KeyEvery
+	if keyEvery <= 0 {
+		keyEvery = o.FPS * 20
+	}
+	realTime := vt.cfTrue
+	if o.Offline {
+		realTime = vt.cfFalse
+	}
+	e := &Encoder{id: vtNextID.Add(1), w: w, h: h}
 	vtEncoders.Store(e.id, e)
 	var s uintptr
 	if st := vt.createSession(0, int32(w), int32(h), codecH264, 0, 0, 0, vt.callback, e.id, &s); st != 0 || s == 0 {
@@ -185,12 +191,12 @@ func newH264Encoder(w, h, fps, bitRate int) (*h264Encoder, error) {
 		key, value uintptr
 		release    bool
 	}{
-		{vt.keyRealTime, vt.cfTrue, false},
+		{vt.keyRealTime, realTime, false},
 		{vt.keyProfile, vt.profileMain, false},
 		{vt.keyReorder, vt.cfFalse, false},
-		{vt.keyBitRate, num(int32(bitRate)), true},
-		{vt.keyMaxKeyInterval, num(int32(fps * 20)), true},
-		{vt.keyFrameRate, num(int32(fps)), true},
+		{vt.keyBitRate, num(int32(o.BitRate)), true},
+		{vt.keyMaxKeyInterval, num(int32(keyEvery)), true},
+		{vt.keyFrameRate, num(int32(o.FPS)), true},
 	}
 	for _, p := range props {
 		vt.setProperty(s, p.key, p.value) // best effort: an encoder may lack one
@@ -209,7 +215,7 @@ func vtOutput(refcon, frameRefcon uintptr, status int32, flags uint32, sample ui
 	if !ok {
 		return
 	}
-	e := v.(*h264Encoder)
+	e := v.(*Encoder)
 	if status != 0 || sample == 0 {
 		e.mu.Lock()
 		if status != 0 {
@@ -227,10 +233,10 @@ func vtOutput(refcon, frameRefcon uintptr, status int32, flags uint32, sample ui
 	if n > 0 && vt.bbCopy(bb, 0, n, unsafe.Pointer(&avcc[0])) != 0 {
 		return
 	}
-	f := encodedFrame{data: avccToAnnexB(avcc, 4)}
-	f.keyFrame = hasIDR(f.data)
-	if f.keyFrame {
-		f.config = parameterSets(vt.sbFormat(sample))
+	f := Frame{Data: avccToAnnexB(avcc, 4)}
+	f.KeyFrame = hasIDR(f.Data)
+	if f.KeyFrame {
+		f.Config = parameterSets(vt.sbFormat(sample))
 	}
 	e.mu.Lock()
 	e.out = append(e.out, f)
@@ -259,11 +265,11 @@ func parameterSets(fd uintptr) []byte {
 	return out
 }
 
-// encode encodes one picture given as NV12 planes: y is w*h bytes, uv
+// Encode encodes one picture given as NV12 planes: y is w*h bytes, uv
 // w*h/2 bytes of interleaved Cb and Cr. A forced key frame starts a
 // self-contained picture, for a viewer that joins. It returns what the
 // encoder produced, which is one frame, or none when it dropped one.
-func (e *h264Encoder) encode(y, uv []byte, pts time.Duration, forceKey bool) ([]encodedFrame, error) {
+func (e *Encoder) Encode(y, uv []byte, pts time.Duration, forceKey bool) ([]Frame, error) {
 	if len(y) < e.w*e.h || len(uv) < e.w*e.h/2 {
 		return nil, errors.New("H.264: short picture")
 	}
@@ -301,6 +307,14 @@ func (e *h264Encoder) encode(y, uv []byte, pts time.Duration, forceKey bool) ([]
 	return out, err
 }
 
+// PacketTimes is nil: VideoToolbox gives each picture back before Encode
+// returns, so a packet belongs to the picture just fed.
+func (e *Encoder) PacketTimes() []time.Duration { return nil }
+
+// Flush returns the pictures the encoder holds back, which VideoToolbox's
+// does not: Encode waits for each.
+func (e *Encoder) Flush() ([]Frame, error) { return nil, nil }
+
 func copyPlane(dst, stride uintptr, src []byte, w, h int) {
 	if dst == 0 {
 		return
@@ -311,7 +325,8 @@ func copyPlane(dst, stride uintptr, src []byte, w, h int) {
 	}
 }
 
-func (e *h264Encoder) Close() {
+// Close stops the encoder.
+func (e *Encoder) Close() {
 	if e.session != 0 {
 		vt.completeFrames(e.session, cmTime{})
 		vt.invalidate(e.session)
@@ -325,5 +340,5 @@ func (e *h264Encoder) Close() {
 // Go's garbage collector never moves it.
 func cPtr(p uintptr) unsafe.Pointer { return *(*unsafe.Pointer)(unsafe.Pointer(&p)) }
 
-// h264Available reports whether this computer can encode H.264.
-func h264Available() error { return loadVT() }
+// Available reports whether this computer can encode H.264.
+func Available() error { return loadVT() }

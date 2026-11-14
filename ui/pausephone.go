@@ -46,12 +46,13 @@ func (a *app) setPaused(d gateway.DeviceView, paused bool) {
 	}()
 }
 
-// hasPhoneMenu reports whether a phone's right-click menu has anything.
-func (a *app) hasPhoneMenu() bool { return a.canPause() || a.canRemove() }
-
 // phoneMenu is a phone's right-click menu, in the sidebar and on its tile
-// in All phones: pause or resume it, and remove it.
+// in All phones: open it in a window of its own, pause or resume it, and
+// remove it.
 func (a *app) phoneMenu(m *mg.Menu, d gateway.DeviceView) {
+	if m.Item(locales.PhoneOpenWindow()).Chosen() {
+		a.openPhoneWindow(d.Info.ID)
+	}
 	if a.canPause() {
 		label := locales.PausePhoneMenu()
 		if d.Paused {

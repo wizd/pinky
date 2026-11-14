@@ -72,7 +72,7 @@ First choose Settings › Safety › **Ask before payments, messages and deletio
 
 - [ ] **Activity** lists tasks with their steps; **Watch recording** plays a task's screen with a mark per step to jump to. Nothing of a blocked app, a lock screen or your own use is recorded.
 - [ ] **⋯ › Export…** and **Export all** write an HTML report and JSON into a folder on the Desktop.
-- [ ] Settings › Privacy: *Keep activity for* (30 days by default) deletes older tasks, screenshots and recordings; *Record the screen* turns recording off.
+- [ ] Settings › Privacy: *Keep activity for* (30 days by default) deletes older tasks, screenshots and recordings; *Record the screen* turns recording off; *Recording size* Smaller (the default) makes each recording several times smaller when its task ends, Original keeps it as the phone sent it.
 
 ## 7. Remote agents *(checked with fake phones)*
 

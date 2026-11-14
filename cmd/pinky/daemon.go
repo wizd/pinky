@@ -65,6 +65,7 @@ func runDaemon(args []string) error {
 	// the app's settings, when there are any.
 	s := loadSettings(filepath.Join(rg.Dirs.Config, "settings.json"), c.Log)
 	rg.G.SetRecording(s.Record)
+	rg.G.SetSmallerRecordings(s.SmallerRecordings)
 	rg.G.SetRetention(s.KeepDays)
 	rg.G.SetWiFi(s.IOSWiFi)
 	tctx, tstop := context.WithCancel(context.Background())

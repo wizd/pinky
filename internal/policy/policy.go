@@ -111,9 +111,13 @@ type Input struct {
 	Move screen.Point // OpSwipe
 	// TaskApps is the task's app allow-list (ids or names); empty means none.
 	TaskApps []string
-	// ScopeApps limits the agent to these apps (ids or names); empty means
-	// every app.
+	// ScopeApps limits the agent to these apps (ids or names). An empty
+	// list limits nothing unless Scoped is set.
 	ScopeApps []string
+	// Scoped says the agent may use only the apps in ScopeApps, also when
+	// the list is empty: an agent limited to the apps the person chooses,
+	// with none chosen, can use no app.
+	Scoped bool
 	// ReadOnly forces read-only mode, for agents whose scope is read-only.
 	ReadOnly bool
 	// Virtual is set for a virtual phone, an emulator or a Simulator on this

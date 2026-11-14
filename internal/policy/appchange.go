@@ -135,7 +135,7 @@ func (e *Engine) appChangeLocked(in Input) Verdict {
 		return deny(RuleFinance, "it is a finance app.")
 	case contains(cats, CatBlocked):
 		return deny(RuleBlocked, "you blocked it for agents.")
-	case len(in.ScopeApps) > 0 && !appIn(app, in.ScopeApps):
+	case scoped(in) && !appIn(app, in.ScopeApps):
 		return Verdict{Decision: Deny, Rule: RuleAgentScope, Scope: true,
 			Reason: fmt.Sprintf("%s is outside this agent's scope.", appName(app))}
 	case len(in.TaskApps) > 0 && !appIn(app, in.TaskApps):

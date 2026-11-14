@@ -790,7 +790,7 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 	p.input = policy.Input{Device: d.id, App: fg, Screen: cur, TaskApps: apps, LongPress: a.LongPress,
 		ReadOnly: scope.Mode == ScopeReadOnly || readOnly, AllowBlocked: fgAllowed, Virtual: virtual}
 	if scope.Mode == ScopeApps {
-		p.input.ScopeApps = scope.Apps
+		p.input.Scoped, p.input.ScopeApps = true, scope.Apps
 	}
 
 	if rule, blocked := g.policy.Blocked(fg); blocked && !fgAllowed && a.Tool != "launch" && !(a.Tool == "key" && a.Key == "home") {

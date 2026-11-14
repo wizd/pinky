@@ -167,6 +167,8 @@
     <string name="phone_check_busy">服务繁忙或限制了请求。请稍后再试。</string>
     <string name="phone_check_rejected">服务拒绝了这个请求。</string>
     <string name="phone_check_no_tools">模型回应了，但没有调用工具。Pinky 要靠工具操作手机，请换一个支持工具调用的模型。</string>
+    <string name="phone_check_tools_unsupported">服务说这个模型不支持工具调用。Pinky 要靠工具操作手机，请换一个支持工具调用的模型。</string>
+    <string name="phone_check_tools_api">这个服务只允许该模型通过 OpenAI 的 Responses API 调用工具，或者关闭推理后调用，但这个地址没有 Responses API。请换一个模型，或者改用提供 Responses API 的地址。</string>
     <string name="phone_check_unreachable">Pinky 连不上这个 API 地址。请检查地址，并确认服务或服务器正在运行。</string>
     <string name="phone_check_bad_answer">这个地址有回应，但不是 Pinky 认识的 API。请检查 API 地址。</string>
     <string name="phone_section_usage">用量</string>

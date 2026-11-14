@@ -302,11 +302,26 @@ var wdaSettings = map[string]any{
 	"shouldUseCompactResponses":    true,
 	"keyboardAutocorrection":       false,
 	"keyboardPrediction":           false,
+	// XCTest types at most this many keys a second; its default, 60, had
+	// people watch text appear one character at a time (GitHub issue
+	// #101). See wdaTypingFrequency.
+	"maxTypingFrequency": wdaTypingFrequency,
 	// Wait less for the app to idle before reading the tree: Pinky settles
 	// by itself, and some apps never idle (animations).
 	"waitForIdleTimeout":      1,
 	"animationCoolOffTimeout": 0,
 }
+
+// wdaTypingFrequency is the keys a second WDA types at. On the iPhone 13
+// mini (iOS 27.0.1, WDA 16.15.3, Settings' search field) 600 typed 318
+// characters of English, Chinese and emoji in 0.83 s, every one right in
+// each run, where the default of 60 took 1.97 s for 105; 1000 was right
+// too and little faster, so 600 leaves room for slower apps. Pasting, as
+// the CoreDevice path does, is no way here: Command-V through XCTest's
+// typeKey pasted nothing into the field, and /wda/getPasteboard reads only
+// plain text and waits at least 2 s when there is any (docs/notes/ios.md,
+// "Typing through the helper").
+const wdaTypingFrequency = 600
 
 // session returns the WebDriver session, creating it once.
 func (c *wdaClient) session(ctx context.Context) (string, error) {

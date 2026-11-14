@@ -383,7 +383,12 @@ func (s *Server) taskWait(ctx context.Context, req *sdk.CallToolRequest, remote 
 	wctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	report := progress(ctx, req)
-	steps := t.Steps
+	// The number of the first step not yet notified. A step's line is in
+	// the log once the step is done, while Steps counts a phone tool as it
+	// starts, and messages the task read are steps of the log too: each
+	// new line of the log is notified under its own number, the one the
+	// answer's Steps list gives it.
+	unsent := t.First + len(t.Log)
 	// It waits through the steps, and returns at the end or once the
 	// person is asked: what the agent may want to tell them about.
 	for t.Running() && t.Waiting == "" && wctx.Err() == nil {
@@ -392,10 +397,13 @@ func (s *Server) taskWait(ctx context.Context, req *sdk.CallToolRequest, remote 
 			break
 		}
 		t = next
-		if report != nil && t.Steps != steps && len(t.Log) > 0 {
-			steps = t.Steps
-			report(float64(t.Steps), float64(t.MaxSteps), stepLine(t.Log[len(t.Log)-1]))
+		if report == nil {
+			continue
 		}
+		for i := max(unsent-t.First, 0); i < len(t.Log); i++ {
+			report(float64(t.First+i), float64(t.MaxSteps), stepLine(t.Log[i]))
+		}
+		unsent = max(unsent, t.First+len(t.Log))
 	}
 	if ctx.Err() != nil {
 		return render(&gateway.Result{Error: gateway.ErrInternal, Message: "The call was cancelled; the task goes on."})

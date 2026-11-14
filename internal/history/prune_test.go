@@ -77,6 +77,105 @@ func TestPrune(t *testing.T) {
 	}
 }
 
+// TestDeleteTasks checks deleting one task from Activity: the task goes
+// with its steps, approvals, the screenshot only it showed, its recording
+// and its session; a screenshot another task's step shows stays, and so
+// does a running task the caller keeps, even when asked for.
+func TestDeleteTasks(t *testing.T) {
+	ctx := context.Background()
+	s := openStore(t)
+	at := time.Now().Add(-time.Hour).Truncate(time.Millisecond)
+	shared := saveShot(t, s)
+	onlyGone := saveShot(t, s)
+	runningShot := saveShot(t, s)
+	onlyGoneFile, err := s.MediaPath(ctx, onlyGone)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.SaveSession(ctx, Session{ID: "sess", Agent: "a", Started: at.Add(-time.Minute), Ended: at}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveTask(ctx, Task{ID: "gone", SessionID: "sess", Title: "gone", State: "done",
+		Started: at.Add(-time.Minute), Ended: at}); err != nil {
+		t.Fatal(err)
+	}
+	saveEnded(t, s, "other", at)
+	if err := s.SaveTask(ctx, Task{ID: "running", Title: "running", State: "working", Started: at}); err != nil {
+		t.Fatal(err)
+	}
+	saveStepShot(t, s, "gone", 0, onlyGone)
+	saveStepShot(t, s, "gone", 1, shared)
+	saveStepShot(t, s, "other", 0, shared)
+	saveStepShot(t, s, "running", 0, runningShot)
+	if err := s.SaveApproval(ctx, Approval{ID: "ap", TaskID: "gone", StepIndex: 1, Kind: "approval", Title: "Pay?",
+		Decision: "allow_once", Created: at, Decided: at}); err != nil {
+		t.Fatal(err)
+	}
+	recPath := saveRecFile(t, s, "gone", at)
+	runningRec := saveRecFile(t, s, "running", at)
+
+	out, err := s.DeleteTasks(ctx, []string{"gone", "running", "missing"}, []string{"running"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Tasks != 1 || out.Steps != 2 || out.Approvals != 1 || out.Media != 1 || out.Recordings != 1 || out.Sessions != 1 {
+		t.Fatalf("deleted %+v, want 1 task, 2 steps, 1 approval, 1 screenshot, 1 recording, 1 session", out)
+	}
+	if _, ok, err := s.Task(ctx, "gone"); err != nil || ok {
+		t.Fatalf("deleted task still there: ok=%v err=%v", ok, err)
+	}
+	if steps, err := s.Steps(ctx, "gone"); err != nil || len(steps) != 0 {
+		t.Fatalf("deleted task's steps: %v %v", steps, err)
+	}
+	if aps, err := s.Approvals(ctx, "gone"); err != nil || len(aps) != 0 {
+		t.Fatalf("deleted task's approvals: %v %v", aps, err)
+	}
+	if _, err := s.Recording(ctx, "gone"); !errors.Is(err, ErrNoRecording) {
+		t.Fatalf("deleted task's recording: %v", err)
+	}
+	if _, err := os.Stat(recPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("deleted task's recording file: %v", err)
+	}
+	if _, err := s.MediaPath(ctx, onlyGone); !errors.Is(err, ErrNoMedia) {
+		t.Fatalf("screenshot only the deleted task showed: %v", err)
+	}
+	if _, err := os.Stat(onlyGoneFile); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("screenshot file only the deleted task showed: %v", err)
+	}
+	if _, err := s.MediaPath(ctx, shared); err != nil {
+		t.Fatalf("screenshot another task still shows: %v", err)
+	}
+	var sessions int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE id = 'sess'`).Scan(&sessions); err != nil || sessions != 0 {
+		t.Fatalf("the deleted task's session: %d %v", sessions, err)
+	}
+
+	// The running task is untouched, with its steps, screenshot and recording.
+	if _, ok, err := s.Task(ctx, "running"); err != nil || !ok {
+		t.Fatalf("running task: ok=%v err=%v", ok, err)
+	}
+	if steps, err := s.Steps(ctx, "running"); err != nil || len(steps) != 1 {
+		t.Fatalf("running task's steps: %v %v", steps, err)
+	}
+	if _, err := s.MediaPath(ctx, runningShot); err != nil {
+		t.Fatalf("running task's screenshot: %v", err)
+	}
+	if _, err := os.Stat(runningRec); err != nil {
+		t.Fatalf("running task's recording: %v", err)
+	}
+	if _, ok, err := s.Task(ctx, "other"); err != nil || !ok {
+		t.Fatalf("other task: ok=%v err=%v", ok, err)
+	}
+
+	// Again, and with nothing to delete: no error, nothing deleted.
+	for _, ids := range [][]string{{"gone"}, nil, {"running"}} {
+		if again, err := s.DeleteTasks(ctx, ids, []string{"running"}); err != nil || again != (Pruned{}) {
+			t.Fatalf("delete %v again: %+v %v", ids, again, err)
+		}
+	}
+}
+
 func openStore(t *testing.T) *Store {
 	t.Helper()
 	s, err := Open(t.TempDir())

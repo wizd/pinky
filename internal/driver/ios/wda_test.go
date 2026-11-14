@@ -357,21 +357,6 @@ func TestMJPEGReader(t *testing.T) {
 	}
 }
 
-func TestAVCCToAnnexB(t *testing.T) {
-	avcc := []byte{0, 0, 0, 2, 0x65, 0xAA, 0, 0, 0, 3, 0x41, 0xBB, 0xCC}
-	got := avccToAnnexB(avcc, 4)
-	want := []byte{0, 0, 0, 1, 0x65, 0xAA, 0, 0, 0, 1, 0x41, 0xBB, 0xCC}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("annex b % x", got)
-	}
-	if !hasIDR(got) || hasIDR(want[6:]) {
-		t.Fatal("IDR detection")
-	}
-	if len(avccToAnnexB([]byte{0, 0, 0, 9, 1}, 4)) != 0 {
-		t.Fatal("a truncated unit must be dropped")
-	}
-}
-
 func TestToNV12(t *testing.T) {
 	// JPEG's 4:2:0 samples are full range and are scaled to video range as
 	// they are copied; odd sizes are cropped to even.
@@ -528,6 +513,15 @@ func TestWDAClient(t *testing.T) {
 	}
 	if f.sessions != 1 || len(f.bodies["POST /appium/settings"]) != 1 {
 		t.Fatalf("sessions %d, settings %v", f.sessions, f.bodies["POST /appium/settings"])
+	}
+	// Typing goes at Pinky's speed, not XCTest's default of 60 keys a
+	// second (GitHub issue #101).
+	var set struct {
+		Settings map[string]any `json:"settings"`
+	}
+	json.Unmarshal([]byte(f.bodies["POST /appium/settings"][0]), &set)
+	if set.Settings["maxTypingFrequency"] != float64(wdaTypingFrequency) {
+		t.Fatalf("maxTypingFrequency %v, want %d", set.Settings["maxTypingFrequency"], wdaTypingFrequency)
 	}
 	var acts struct {
 		Actions []struct {

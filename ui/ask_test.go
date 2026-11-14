@@ -408,6 +408,32 @@ func TestDescribePilot(t *testing.T) {
 	}
 }
 
+// A request the service refused never reads as a model that answered
+// without a tool, and the service's words show under it.
+func TestCheckText(t *testing.T) {
+	const said = "Function tools with reasoning effort are not supported for gpt-6.1-terra in /v1/chat/completions. To use function tools, use /v1/responses or set reasoning_effort to 'none'."
+	for _, c := range []struct {
+		r            pilot.CheckResult
+		text, detail string
+	}{
+		{pilot.CheckResult{Problem: pilot.CheckNoTools, Detail: "Ready!"},
+			"The model answered but didn't use a tool. Pinky works through tools, so choose a model that uses them.", ""},
+		{pilot.CheckResult{Problem: pilot.CheckNoTools, Status: 400, Detail: "this model does not support tools"},
+			"The service says this model can't use tools. Pinky works through tools, so choose a model that uses them.",
+			"HTTP 400 · this model does not support tools"},
+		{pilot.CheckResult{Problem: pilot.CheckToolsAPI, Status: 400, Detail: said},
+			"The service lets this model use tools only through OpenAI's Responses API, or with its reasoning turned off, and this address has no Responses API. Choose another model, or an address that offers the Responses API.",
+			"HTTP 400 · " + said},
+	} {
+		if got := checkText(c.r); got != c.text {
+			t.Errorf("%+v: %q", c.r, got)
+		}
+		if got := checkDetail(c.r); got != c.detail {
+			t.Errorf("%+v: detail %q", c.r, got)
+		}
+	}
+}
+
 // The box's phone on All phones is the one chosen in it.
 func TestAskPinkyAllPhones(t *testing.T) {
 	ta := newTestApp(t, fakeapi.ThreePhones)

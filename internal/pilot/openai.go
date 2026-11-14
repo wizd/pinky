@@ -14,7 +14,8 @@ import (
 )
 
 // openAI is a conversation over an OpenAI-compatible Chat Completions
-// API. Many services speak it; Pinky uses only what they share: tools as
+// API (responses.go has the Responses API, apis.go which one a
+// conversation uses). Many services speak it; Pinky uses only what they share: tools as
 // functions, tool_choice auto, and screenshots as images in a message of
 // the person's after the tool results (a tool message holds only text).
 // A service that takes no images gets the screens' text alone.
@@ -213,7 +214,7 @@ func (o *openAI) send(ctx context.Context, results []result, text string) (*turn
 
 	resp, err := o.post(ctx)
 	var ae *apiError
-	if len(images) > 0 && errors.As(err, &ae) && ae.status == http.StatusBadRequest {
+	if len(images) > 0 && errors.As(err, &ae) && ae.status == http.StatusBadRequest && !toolsRefused(ae.message) {
 		// Likely a model that takes no images: the screens' text will do.
 		o.noImages = true
 		o.dropImages()

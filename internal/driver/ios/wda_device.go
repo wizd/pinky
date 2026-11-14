@@ -679,7 +679,8 @@ func (d *WDADevice) Swipe(ctx context.Context, from, to screen.Point, dur time.D
 }
 
 // Type implements driver.Device. XCTest types any text, CJK and emoji
-// included, into the field with the keyboard focus.
+// included, into the field with the keyboard focus, as keys at
+// wdaTypingFrequency.
 func (d *WDADevice) Type(ctx context.Context, text string, opt driver.TypeOptions) error {
 	d.inputMu.Lock()
 	defer d.inputMu.Unlock()

@@ -77,6 +77,14 @@ func (a *app) openFeedback() {
 	}
 }
 
+// recordingSize names the recording size setting for the diagnostics.
+func recordingSize(smaller bool) string {
+	if smaller {
+		return "smaller"
+	}
+	return "original"
+}
+
 // diagnosticLines are what the client adds to the diagnostics: settings
 // that change how Pinky behaves, and the video decoder.
 func (a *app) diagnosticLines() []string {
@@ -87,8 +95,8 @@ func (a *app) diagnosticLines() []string {
 		}
 		return "off"
 	}
-	lines := []string{fmt.Sprintf("Settings: preset %d · read-only %s · unlock from computer %s · hide codes %s · record %s · keep %s · remote agents %s · developer mode %s",
-		s.Preset, onOff(s.ReadOnly), onOff(s.UnlockFromComputer), onOff(s.HideCodes), onOff(s.Record), keepLabelIn(locales.In("en"), s.KeepDays),
+	lines := []string{fmt.Sprintf("Settings: preset %d · read-only %s · unlock from computer %s · hide codes %s · record %s · recordings %s · keep %s · remote agents %s · developer mode %s",
+		s.Preset, onOff(s.ReadOnly), onOff(s.UnlockFromComputer), onOff(s.HideCodes), onOff(s.Record), recordingSize(s.SmallerRecordings), keepLabelIn(locales.In("en"), s.KeepDays),
 		onOff(s.RemoteAgents), onOff(s.DeveloperMode))}
 	if v := videoLineIn(locales.In("en"), a); v != "" {
 		lines = append(lines, "Video: "+v)
