@@ -118,8 +118,15 @@ type Input struct {
 	// the list is empty: an agent limited to the apps the person chooses,
 	// with none chosen, can use no app.
 	Scoped bool
-	// ReadOnly forces read-only mode, for agents whose scope is read-only.
+	// ReadOnly forces read-only mode for the agent's session: the agent's
+	// access is read-only (ReadOnlyAccess), or it asked to run the task
+	// read-only. Read-only mode in Settings › Safety applies without it.
 	ReadOnly bool
+	// ReadOnlyAccess is set with ReadOnly when the person gave the agent
+	// read-only access (its scope, chosen on its first-connection card
+	// and changed in Settings › Agents), so refusals say where it comes
+	// from. Without it, ReadOnly comes from the agent's own request.
+	ReadOnlyAccess bool
 	// Virtual is set for a virtual phone, an emulator or a Simulator on this
 	// computer (File.VirtualCredentials).
 	Virtual bool

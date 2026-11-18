@@ -15,6 +15,10 @@ const (
 	usageHome    = 0x40 // "Menu", the home button
 )
 
+// keyboardPage is the HID page the keyboard's usages come from: the ones
+// below, and every key a person types.
+const keyboardPage = 0x07
+
 // HID keyboard usages (page 7).
 const (
 	keyA         = 0x04
@@ -111,7 +115,7 @@ func (d *Device) key(ctx context.Context, k driver.Key) error {
 	case driver.KeyBack:
 		s := d.freshDisplay(ctx).upright()
 		y := s.Height / 2
-		return d.Swipe(ctx, screen.Point{X: 0, Y: y}, screen.Point{X: s.Width * 7 / 10, Y: y}, 250*time.Millisecond)
+		return d.fling(ctx, screen.Point{X: 0, Y: y}, screen.Point{X: s.Width * 7 / 10, Y: y}, 250*time.Millisecond)
 	case driver.KeyRecents:
 		return fmt.Errorf("recents on iPhone: %w", driver.ErrUnsupported)
 	}

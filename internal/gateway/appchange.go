@@ -128,7 +128,7 @@ func (s *Session) App(ctx context.Context, req AppRequest) *Result {
 	g.mu.Unlock()
 	scope := g.scopeOf(s)
 	in := policy.Input{Op: op, Device: d.id, Launch: t.app, TaskApps: taskApps,
-		ReadOnly: scope.Mode == ScopeReadOnly || readOnly}
+		ReadOnly: scope.Mode == ScopeReadOnly || readOnly, ReadOnlyAccess: scope.Mode == ScopeReadOnly}
 	if scope.Mode == ScopeApps {
 		in.Scoped, in.ScopeApps = true, scope.Apps
 	}

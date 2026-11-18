@@ -326,6 +326,23 @@ func TestAgentTaskUnavailable(t *testing.T) {
 	if text, isErr := a.call(t, "phone_task_run", map[string]any{"task": "Look", "device": "iPhone"}); !isErr || !strings.Contains(text, "No phone matches") {
 		t.Fatalf("no such phone:\n%s", text)
 	}
+	// A service's key is saved under its own name, not under its API's:
+	// with DeepSeek's key and no OpenAI one, the task gets past the key.
+	delete(h.keys, Anthropic)
+	h.keys["deepseek"] = testKey
+	h.agent(t, "x", Config{Service: "deepseek"}, true)
+	if text, isErr := a.call(t, "phone_task_run", map[string]any{"task": "Look", "device": "iPhone"}); !isErr || !strings.Contains(text, "No phone matches") {
+		t.Fatalf("DeepSeek with its key:\n%s", text)
+	}
+	delete(h.keys, "deepseek")
+	if text, isErr := a.call(t, "phone_task_run", map[string]any{"task": "Look"}); !isErr || !strings.Contains(text, "no API key") {
+		t.Fatalf("DeepSeek without its key:\n%s", text)
+	}
+	// A server on the person's own computer needs no key.
+	h.agent(t, "x", Config{Service: "ollama", Model: "qwen4"}, true)
+	if text, isErr := a.call(t, "phone_task_run", map[string]any{"task": "Look", "device": "iPhone"}); !isErr || !strings.Contains(text, "No phone matches") {
+		t.Fatalf("Ollama without a key:\n%s", text)
+	}
 }
 
 func TestAgentTaskSteerAndContinue(t *testing.T) {

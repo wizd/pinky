@@ -72,7 +72,15 @@ func (g *Gateway) applyRetention(ctx context.Context) {
 	days := g.keepDays
 	keep := g.liveTasksLocked()
 	g.mu.Unlock()
-	if days <= 0 || g.store == nil {
+	if g.store == nil {
+		return
+	}
+	// Whatever the limit, the recordings of deleted tasks whose folder is
+	// back go now.
+	if err := g.store.RemovePendingRecordings(ctx); err != nil {
+		g.log.Warn("history retention: recordings of deleted tasks", "err", err)
+	}
+	if days <= 0 {
 		return
 	}
 	g.Flush()

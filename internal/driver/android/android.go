@@ -306,9 +306,63 @@ func (p *Provider) List(ctx context.Context) ([]driver.Info, error) {
 	if p.ids != nil {
 		p.ids.apply(ctx, entries, infos, props)
 	}
-	infos = mergeTransports(p.netInfos(infos))
+	infos = mergeTransports(p.unread(entries, p.netInfos(infos), props))
 	p.kickOthers(entries, infos)
 	return append(infos, p.driverlessPhones(infos)...), nil
+}
+
+// unreadDetail is what List says of a connection over the network whose
+// phone did not answer when asked what it is.
+const unreadDetail = "The phone has not answered over the network yet; Pinky asks it again in a moment."
+
+// unread settles the connections over the network that did not tell which
+// phone they are: adb does not list them as online, or the phone did not
+// answer deviceProps in time, as one whose Wi-Fi sleeps while it charges
+// on its cable. Such a connection still has its adb serial for an id,
+// an address or a name, and would be a second phone next to the one it
+// belongs to: listed online, the gateway opened it under that serial and
+// kept it, one more for each port Wireless debugging took. So it is listed
+// under the phone's id when the driver knows whose it is without asking
+// (connPhone), and never as online, since nothing checked that it is that
+// phone (identity.go); one that adb lists as online and the driver cannot
+// place is left out until its phone answers. infos starts with the
+// entries' own, in their order.
+func (p *Provider) unread(entries []adb.DeviceEntry, infos []driver.Info, props []*deviceProps) []driver.Info {
+	out := infos[:0]
+	for i, info := range infos {
+		if i >= len(entries) || props[i] != nil || !entries[i].Wireless() {
+			out = append(out, info)
+			continue
+		}
+		e := entries[i]
+		id := p.connPhone(e)
+		if e.State == adb.StateDevice {
+			if id == "" {
+				continue
+			}
+			if info.State == driver.StateOnline {
+				info.State, info.Detail = driver.StateOffline, unreadDetail
+			}
+		}
+		if id != "" {
+			info.ID = id
+		}
+		out = append(out, info)
+	}
+	return out
+}
+
+// connPhone is the id of the phone at a connection over the network as far
+// as the driver knows it without asking the phone: knownID, else the
+// paired phone that was last connected at that address
+// (netStore.pairedAddr), where a Pinky that ran before, or the adb server
+// it left running, connected it. Another device may have the address by
+// now, so this only places a connection that is not in use.
+func (p *Provider) connPhone(e adb.DeviceEntry) string {
+	if id := p.knownID(e); id != "" {
+		return id
+	}
+	return guidSerial(p.net.pairedGUID(e.Serial))
 }
 
 // CheckHost implements driver.HostChecker, from what the last List found:

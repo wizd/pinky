@@ -242,7 +242,7 @@ func TestConnectingPage(t *testing.T) {
 	ta.api.SetConnecting(id, "Switching to Pinky on the iPhone")
 	ta.waitFor(t, "the iPad switching", func() bool { d := ta.device(id); return d != nil && d.StatusLine == "Switching to Pinky on the iPhone" })
 	tt.Frame()
-	mustHave(t, tt, "Moving Sam's iPad to Pinky on the iPhone…")
+	mustHave(t, tt, "Connecting to Sam's iPad through Pinky on the iPhone…")
 	ta.api.SetConnecting(id, "Switching to CoreDevice")
 	ta.waitFor(t, "the iPad switching back", func() bool { d := ta.device(id); return d != nil && d.StatusLine == "Switching to CoreDevice" })
 	tt.Frame()

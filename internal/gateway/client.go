@@ -52,6 +52,7 @@ func (g *Gateway) Devices() []DeviceView {
 		}
 		st, line := g.statusLocked(d, open)
 		v := DeviceView{Info: info, Status: st, StatusLine: line, Paused: paused, Streaming: g.capturingLocked(d)}
+		v.ScreenOff = st == DeviceIdle && d.screenOff
 		if d.online && d.dev != nil {
 			v.Features = featuresOf(d.dev)
 			// Over CoreDevice, the person's Rotate and pinch move to the
@@ -174,6 +175,9 @@ func (g *Gateway) statusLocked(d *device, open []approval.Info) (DeviceStatus, s
 		}
 		return DeviceWorking, line
 	}
+	if d.screenOff {
+		return DeviceIdle, "Screen off"
+	}
 	return DeviceIdle, "Idle"
 }
 
@@ -191,21 +195,31 @@ func (g *Gateway) Tasks() []TaskView {
 	var out []TaskView
 	for _, d := range g.sortedDevicesLocked() {
 		if d.lease != nil {
-			out = append(out, taskView(d.lease.task))
+			out = append(out, g.taskViewLocked(d.lease.task))
 		}
 	}
 	cutoff := time.Now().Add(-10 * time.Minute)
 	for i := len(g.ended) - 1; i >= 0; i-- {
 		if t := g.ended[i]; t.ended.After(cutoff) {
-			out = append(out, taskView(t))
+			out = append(out, g.taskViewLocked(t))
 		}
 	}
 	return out
 }
 
-func taskView(t *task) TaskView {
-	return TaskView{ID: t.id, DeviceID: t.deviceID, DeviceName: t.deviceName, Agent: t.agent, Title: t.title,
+// taskViewLocked is t as a card, with the access its agent has now while
+// it runs. The caller holds g.mu.
+func (g *Gateway) taskViewLocked(t *task) TaskView {
+	v := TaskView{ID: t.id, DeviceID: t.deviceID, DeviceName: t.deviceName, Agent: t.agent, Title: t.title,
 		State: t.state, Started: t.started, Ended: t.ended, Steps: append([]StepView(nil), t.steps...), ReadOnly: t.readOnly}
+	if t.ended.IsZero() && t.agent != "" {
+		scope := g.opt.DefaultScope
+		if st, ok := g.agents[t.agent]; ok {
+			scope = st.scope
+		}
+		v.AgentReadOnly = scope.Mode == ScopeReadOnly
+	}
+	return v
 }
 
 // Needs implements API.
@@ -220,7 +234,7 @@ func (g *Gateway) Needs() []NeedView {
 			App: info.App, Agent: info.Agent, TaskID: info.TaskID, Title: info.Title, Detail: info.Detail, Rule: info.Rule,
 			Created: info.Created, Deadline: info.Deadline, Screenshot: info.Screenshot, Target: info.Target,
 			Point: info.Point, To: info.To, Point2: info.Point2, To2: info.To2, Path: info.Path, AlwaysAllow: g.canAlwaysAllow(info), AllowTask: canAllowTask(info),
-			Unblock: isUnblock(info), ReadOnly: askedReadOnly(info)})
+			Unblock: isUnblock(info), ReadOnly: askedReadOnly(info), Apps: askedApps(info)})
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -316,7 +330,7 @@ func (g *Gateway) memoryHistory(q HistoryQuery) []TaskView {
 		if search != "" && !strings.Contains(strings.ToLower(t.title+" "+t.agent+" "+t.deviceName), search) {
 			continue
 		}
-		out = append(out, taskView(t))
+		out = append(out, g.taskViewLocked(t))
 	}
 	return out
 }
@@ -411,7 +425,7 @@ func canAllowTask(info approval.Info) bool {
 	if _, ok := info.Data.(*appAsk); ok {
 		return true
 	}
-	return info.Rule == filesRule || info.Rule == policy.RuleAppLogs || info.Rule == settingsRule
+	return info.Rule == filesRule || info.Rule == policy.RuleAppLogs || info.Rule == settingsRule || info.Rule == RuleTraffic
 }
 
 func (g *Gateway) decide(id string, d approval.Decision, note string) error {
@@ -448,9 +462,12 @@ func (g *Gateway) TakeOver(deviceID string) error {
 // HandBack, across leases.
 func (g *Gateway) takeOver(d *device, byInput bool) {
 	g.mu.Lock()
-	if l := d.lease; byInput && l != nil && l.bg != nil {
+	if l := d.lease; byInput && l != nil && l.background() {
 		// The person uses the phone's own screen; the agent works on its
-		// background display and goes on.
+		// background display and goes on, also while that display is still
+		// opening or opens again after the phone dropped. Should it not
+		// open, the task waits for a person who used the screen lately
+		// (readyScreen).
 		d.personAt = time.Now()
 		g.mu.Unlock()
 		return
@@ -466,6 +483,7 @@ func (g *Gateway) takeOver(d *device, byInput bool) {
 	changed := !d.person
 	if changed {
 		d.person = true
+		g.quietLocked(d, quietPerson, true)
 		g.noteWorkLocked(d)
 		if l != nil {
 			l.tookOverSeen = false
@@ -506,6 +524,7 @@ func (g *Gateway) HandBack(deviceID, note string) error {
 	}
 	g.mu.Lock()
 	d.person, d.personInput = false, false
+	g.quietLocked(d, quietPerson|quietHandoff, false)
 	g.noteWorkLocked(d)
 	l := d.lease
 	if l == nil {

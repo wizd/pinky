@@ -409,6 +409,17 @@ func (p *Provider) connectPaired(ctx context.Context, guid, host string, own Bro
 // serial, with its properties. Over Wi-Fi a phone is listed by its
 // hardware serial, not by the connection's.
 func (p *Provider) infoFor(ctx context.Context, serial string) (driver.Info, error) {
+	// The phone is asked what it is before the listing, with the caller's
+	// time: List gives it three seconds, and lists a connection that did
+	// not answer under the phone it knows it for, offline, or not at all
+	// (unread).
+	if entries, err := p.devices(ctx); err == nil {
+		for _, e := range entries {
+			if e.Serial == serial && e.State == adb.StateDevice {
+				p.deviceProps(ctx, e)
+			}
+		}
+	}
 	infos, err := p.List(ctx)
 	if err != nil {
 		return driver.Info{}, err
@@ -420,7 +431,9 @@ func (p *Provider) infoFor(ctx context.Context, serial string) (driver.Info, err
 				continue
 			}
 			if pr, err := p.deviceProps(ctx, e); err == nil {
-				id = p.phoneID(e, pr) // read once per connection: List did
+				id = p.phoneID(e, pr) // read once per connection, above
+			} else if s := p.connPhone(e); e.Wireless() && s != "" {
+				id = s // as List has it (unread)
 			}
 		}
 	}

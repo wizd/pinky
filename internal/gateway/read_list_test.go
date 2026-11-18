@@ -31,7 +31,11 @@ type readListDevice struct {
 	reverse      bool
 	ocrOnly      []screen.Element
 	sawOCR       bool
-	afterSwipe   func()
+	// lineRole is the role of the list's lines, text by default; froms
+	// are where the swipes started.
+	lineRole   string
+	froms      []screen.Point
+	afterSwipe func()
 	// failAfter makes reads fail once that many swipes went out; waits
 	// counts WaitSettled calls.
 	failAfter, swipes, waits int
@@ -86,8 +90,12 @@ func (d *readListDevice) Observe(ctx context.Context, opt driver.ObserveOptions)
 		if d.reverse {
 			shift = d.page * 5
 		}
+		role := d.lineRole
+		if role == "" {
+			role = screen.RoleText
+		}
 		s.Elements = append(s.Elements, screen.Element{
-			Role: screen.RoleText, Label: text,
+			Role: role, Label: text,
 			Bounds: screen.Rect{X: 120, Y: 300 + i*step + shift, W: 700, H: 80},
 		})
 	}
@@ -108,6 +116,7 @@ func (d *readListDevice) Swipe(ctx context.Context, from, to screen.Point, _ tim
 		}
 	}
 	d.swipes++
+	d.froms = append(d.froms, from)
 	if (d.reverse && from.Y < to.Y) || (!d.reverse && from.Y > to.Y) {
 		if d.page+1 < len(d.pages) {
 			d.page++
@@ -805,6 +814,113 @@ func TestReadListUsesExplicitScrollAreaWithoutListElement(t *testing.T) {
 	}
 	if got := scanText(res.Scan); !strings.Contains(got, "fourth long title") {
 		t.Fatalf("scroll area content:\n%s", got)
+	}
+}
+
+// GitHub issue #148: iOS 27 lists Settings' rows but no list or scrollable
+// element around them. With no ref or scroll_area, the read takes the
+// column of rows as the area to scroll, swipes inside it and reads on.
+func TestReadListFallsBackToAColumnOfRows(t *testing.T) {
+	base := demo.NewDevice("iphone", "iPhone", driver.IOS)
+	rows := []string{
+		"Apple Account, iCloud", "Airplane Mode", "Wi-Fi, Home", "Bluetooth, On", "Cellular", "Personal Hotspot",
+		"Battery", "VPN", "General", "Accessibility", "Action Button", "Camera",
+		"Control Center", "Display & Brightness", "Home Screen & App Library", "Search", "Siri", "StandBy",
+	}
+	dev := &readListDevice{
+		Device:   base,
+		app:      screen.App{ID: "com.apple.Preferences", Name: "Ajustes"},
+		noList:   true,
+		lineRole: screen.RoleButton,
+		lineStep: 140,
+		pages:    [][]string{rows[0:8], rows[5:13], rows[10:18]},
+	}
+	g := newDevGateway(t, base, dev)
+	s, _ := connect(t, g, "Read Settings")
+	res := s.ReadList(context.Background(), ReadListRequest{MaxScreens: 3, MaxMS: 5000, OCR: "off"})
+	if res.Error != "" || res.Scan == nil || res.Scan.Pages != 3 || res.Scan.Swipes != 2 {
+		t.Fatalf("read: %+v", res)
+	}
+	var got []string
+	for _, page := range res.Scan.Sections {
+		got = append(got, page.Lines...)
+	}
+	if !reflect.DeepEqual(got, rows) {
+		t.Fatalf("lines = %#v, want %#v", got, rows)
+	}
+	// The swipes run inside the rows' column, upwards.
+	for _, p := range dev.froms {
+		if p.X < 120 || p.X >= 820 || p.Y < 300 || p.Y > 300+8*140 {
+			t.Errorf("a swipe started at %v, outside the rows", p)
+		}
+	}
+	// A continuation reads on in the same column.
+	if res.Scan.Continuation == "" {
+		t.Fatalf("no continuation: %+v", res.Scan)
+	}
+}
+
+// The fallback takes only a column of like rows: a screen without a list
+// whose elements are few, narrow (a grid of icons) or of differing widths
+// (chat bubbles) still has no list to read.
+func TestReadListFindsNoColumnWithoutRows(t *testing.T) {
+	grid := make([]screen.Element, 0, 24)
+	for i := range 24 {
+		grid = append(grid, screen.Element{Role: screen.RoleButton, Label: fmt.Sprintf("App %d", i),
+			Bounds: screen.Rect{X: 60 + (i%4)*250, Y: 300 + (i/4)*300, W: 200, H: 220}})
+	}
+	bubbles := make([]screen.Element, 0, 10)
+	for i := range 10 {
+		w := 560 + (i%3)*150
+		x := 40
+		if i%2 == 1 {
+			x = 1040 - w
+		}
+		bubbles = append(bubbles, screen.Element{Role: screen.RoleText, Label: fmt.Sprintf("message number %d", i),
+			Bounds: screen.Rect{X: x, Y: 300 + i*180, W: w, H: 140}})
+	}
+	for name, c := range map[string]struct {
+		lines   []string
+		overlay []screen.Element
+	}{
+		"few rows":       {lines: []string{"first long title", "second long title", "third long title"}},
+		"a grid":         {overlay: grid},
+		"chat bubbles":   {overlay: bubbles},
+		"nothing at all": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			base := demo.NewDevice("iphone", "iPhone", driver.IOS)
+			dev := &readListDevice{Device: base, noList: true, overlay: c.overlay, pages: [][]string{c.lines}}
+			g := newDevGateway(t, base, dev)
+			s, _ := connect(t, g, "Read")
+			res := s.ReadList(context.Background(), ReadListRequest{MaxScreens: 2, MaxMS: 5000, OCR: "off"})
+			if res.Error != ErrNotFound || dev.swipes != 0 {
+				t.Fatalf("read without a list: %+v, %d swipes", res, dev.swipes)
+			}
+		})
+	}
+}
+
+// rowColumn takes the box around the rows, a cell and the label of the
+// same size inside it counting once.
+func TestRowColumn(t *testing.T) {
+	s := &screen.Screen{Width: 1320, Height: 2868}
+	for i := range 10 {
+		b := screen.Rect{X: 48, Y: 600 + i*150, W: 1224, H: 130}
+		s.Elements = append(s.Elements,
+			screen.Element{Role: screen.RoleButton, Label: fmt.Sprintf("Row %d", i), Bounds: b},
+			screen.Element{Role: screen.RoleText, Label: fmt.Sprintf("Row %d", i), Bounds: screen.Rect{X: 50, Y: b.Y + 2, W: 1220, H: 126}},
+			screen.Element{Role: screen.RoleImage, Bounds: screen.Rect{X: 60, Y: b.Y + 20, W: 90, H: 90}})
+	}
+	// The navigation bar's title and the search field are not rows.
+	s.Elements = append(s.Elements,
+		screen.Element{Role: screen.RoleText, Label: "Ajustes", Bounds: screen.Rect{X: 48, Y: 250, W: 400, H: 120}},
+		screen.Element{Role: screen.RoleInput, Label: "Buscar", Bounds: screen.Rect{X: 48, Y: 420, W: 1224, H: 110}},
+		screen.Element{Role: screen.RoleText, Label: "row read by OCR", Source: screen.SourceOCR, Bounds: screen.Rect{X: 48, Y: 2200, W: 1224, H: 130}})
+	got, ok := rowColumn(s)
+	want := screen.Rect{X: 48, Y: 600, W: 1224, H: 9*150 + 130}
+	if !ok || got != want {
+		t.Fatalf("rowColumn = %v, %v; want %v", got, ok, want)
 	}
 }
 

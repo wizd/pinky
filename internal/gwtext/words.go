@@ -34,6 +34,7 @@ var ruleNames = map[string]func() string{
 	"Files":              locales.RuleFiles,
 	"Recordings":         locales.RuleRecordings,
 	"App logs":           locales.RuleAppLogs,
+	"Network traffic":    locales.RuleNetworkTraffic,
 	"Agent request":      locales.RuleAgentRequest,
 
 	"Installing from the computer": locales.RuleInstallFromComputer,

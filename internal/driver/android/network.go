@@ -225,6 +225,23 @@ func (s *netStore) pairedAddr(guid string) string {
 	return ""
 }
 
+// pairedGUID returns the guid of the paired phone that was last connected
+// at an address, "" when none was.
+func (s *netStore) pairedGUID(addr string) string {
+	if addr == "" {
+		return ""
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.loadLocked()
+	for _, a := range s.paired {
+		if a.Addr == addr {
+			return a.GUID
+		}
+	}
+	return ""
+}
+
 // setPairedAddr keeps the address the paired phone guid was connected at
 // just now in place of the one before (Wireless debugging takes a new
 // port each time it comes on), and saves it; "" forgets it.

@@ -167,3 +167,69 @@ func TestShimWaitsForPinkyToOpenAgain(t *testing.T) {
 		t.Fatalf("tools after opening Pinky again: %v", err)
 	}
 }
+
+// TestNothingStartsPinkyAfterAQuit: once the person quit Pinky (here with
+// `pinky quit`), a new `pinky task` and a new `pinky mcp` do not start it
+// (issue #142). The shim starts the agent's session anyway, answers its
+// calls that Pinky is not running, and picks Pinky up once it is opened.
+func TestNothingStartsPinkyAfterAQuit(t *testing.T) {
+	bin := buildPinky(t)
+	home := pinkyHome(t)
+	d := dirsFor(t, home)
+	startFakeDaemon(t, bin, home)
+
+	quit := exec.Command(bin, "quit")
+	quit.Env = env(home)
+	if out, err := quit.CombinedOutput(); err != nil {
+		t.Fatalf("pinky quit: %v\n%s", err, out)
+	}
+	if !quitByPerson(d) {
+		t.Fatal("pinky quit left no marker")
+	}
+	notRunningNow := func(when string) {
+		t.Helper()
+		if c, err := api.Dial(d); err == nil {
+			c.Close()
+			t.Fatalf("%s: Pinky was started again", when)
+		}
+	}
+
+	task := exec.Command(bin, "task", "list")
+	task.Env = env(home)
+	out, err := task.CombinedOutput()
+	if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != exitTaskError || !strings.Contains(string(out), "the person quit it") {
+		t.Fatalf("pinky task after the quit: %v\n%s", err, out)
+	}
+	notRunningNow("pinky task")
+
+	agent := startMCP(t, bin, home, "claude-code")
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	tools, err := agent.cs.ListTools(ctx, nil)
+	if err != nil || len(tools.Tools) == 0 {
+		t.Fatalf("tools after the quit: %v", err)
+	}
+	text, isErr := agent.call(t, "phone_connect", map[string]any{"device": "Pixel 9 (fake)", "task": "After the quit"})
+	if !isErr || !strings.Contains(text, "Pinky is not running") {
+		t.Fatalf("a call after the quit: %v %s", isErr, text)
+	}
+	time.Sleep(1500 * time.Millisecond) // the shim looks for Pinky meanwhile
+	notRunningNow("pinky mcp")
+
+	// The person opens Pinky: the session goes on with it.
+	startFakeDaemon(t, bin, home)
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		text, isErr = agent.call(t, "phone_connect", map[string]any{"device": "Pixel 9 (fake)", "task": "After opening Pinky"})
+		if !isErr {
+			break
+		}
+		if !strings.Contains(text, "Pinky is not running") || time.Now().After(deadline) {
+			t.Fatalf("connect after opening Pinky: %s", text)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if !strings.Contains(text, "Pixel 9 (fake)") {
+		t.Fatalf("connect after opening Pinky: %s", text)
+	}
+}

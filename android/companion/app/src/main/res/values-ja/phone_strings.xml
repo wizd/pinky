@@ -104,6 +104,8 @@
     <string name="phone_pill_starting">開始しています</string>
     <string name="phone_pill_waiting">あなたの対応待ち</string>
     <string name="phone_pill_computer">パソコンから操作中</string>
+    <string name="phone_pill_dot">Pinky：%1$s</string>
+    <string name="phone_pill_expand">表示</string>
     <string name="phone_close">閉じる</string>
     <string name="phone_asks">Pinky からの確認</string>
     <string name="phone_rule">ルール：%1$s</string>

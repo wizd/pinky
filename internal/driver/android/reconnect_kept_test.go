@@ -173,7 +173,7 @@ func TestReconnectKeptAddressUnsure(t *testing.T) {
 	f, p := newReconnectFake(t)
 	keptVerify = 300 * time.Millisecond
 	p.keepPairedAddr(guidPixel, keptAddr)
-	f.set(func(f *fakeADB) { f.known = []string{guidPixel} }) // no props: the shell fails
+	f.set(func(f *fakeADB) { f.known, f.mute = []string{guidPixel}, true }) // the shell fails
 	if _, connected := p.wifi.reconnect(context.Background(), nil); connected {
 		t.Error("connected without knowing the phone")
 	}

@@ -306,8 +306,14 @@ func (a *axSession) foreground() (name, id string) {
 		if app.state != appForeground || axBackgroundUI[app.id] || app.id == "com.apple.springboard" {
 			continue
 		}
+		// WebContent has only three dots in its id, so the helper
+		// heuristic below does not exclude it. A web view must not
+		// replace its host app when it reports a newer foreground event.
+		if isWebContent(app.id) {
+			continue
+		}
 		if strings.Contains(app.id, ".") && strings.Count(app.id, ".") > 3 {
-			continue // extensions and helpers, e.g. com.apple.WebKit.WebContent
+			continue // extensions and helpers
 		}
 		if best == nil || app.seq > best.seq {
 			best = app

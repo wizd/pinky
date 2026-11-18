@@ -243,7 +243,7 @@ The result is who holds the phone afterwards, as `ping`'s `claim` gives it, or `
 
 ### Commands that act
 
-`gesture` and `global` are in every build since GitHub issue #48; `ping` lists them in `features`, with `own_ui`. Pinky on a computer uses them only where adb's input does not reach a display: Xiaomi's MIUI and HyperOS drop what adb injects into a background display, so Pinky taps, swipes, drags, pinches and presses back and enter there through the service ([background displays](android-driver.md), `internal/driver/android/displayinput.go`). `display_input` (Android 11+) says the app can do that on displays other than 0.
+`gesture` and `global` are in every build since GitHub issue #48; `ping` lists them in `features`, with `own_ui`. Pinky on a computer uses them only where adb's input does not reach a display: Xiaomi's MIUI and HyperOS drop what adb injects into a background display, so Pinky taps, swipes, drags, pinches and presses back and enter there through the service ([background displays](android.md), `internal/driver/android/displayinput.go`). `display_input` (Android 11+) says the app can do that on displays other than 0.
 
 - `gesture` plays one gesture through `dispatchGesture`; `display` as elsewhere (Android 11+ for displays other than 0). Replies once Android says the gesture is done: `took_ms`. `cancelled` when something interrupted it, such as a touch on that display.
   - `strokes`, 1 to Android's limit (20 on current versions), each `{"points": [[x, y], …], "start_ms": 0, "duration_ms": 50}`, all one gesture: a tap is one point for 50 ms, a long press one point for 800 ms, a swipe two points or more. Each finger moves along its points at an even speed.

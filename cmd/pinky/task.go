@@ -227,7 +227,9 @@ type taskOptions struct {
 
 // dialTask connects to the gateway's MCP server as the agent named name,
 // starting Pinky when it does not run, as `pinky mcp` does (launchGateway).
-// Step notifications go to steps.
+// After the person quit Pinky it starts nothing and fails with
+// errPersonQuit, which says to open Pinky (quitmark.go). Step
+// notifications go to steps.
 func dialTask(ctx context.Context, name string, steps *stepLog) (*sdk.ClientSession, error) {
 	dirs, err := api.DefaultDirs()
 	if err != nil {

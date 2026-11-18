@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -482,8 +484,22 @@ func (v *taskVideo) write(vp vpacket, codec driver.Codec) {
 	g := v.g
 	if v.w == nil {
 		path, err := g.store.RecordingPath(v.t.id, v.t.started)
+		hist, herr := g.store.HistoryRecordingPath(v.t.id, v.t.started)
+		chosen := err == nil && herr == nil && hist != path
 		if err == nil {
 			v.w, err = recording.Create(path, codec)
+		}
+		// Create makes the folder, and the file comes only with the first
+		// key frame: a chosen folder Pinky may not write in (no permission,
+		// a read-only disk) shows now, and the history folder takes the
+		// recording instead.
+		if chosen && err == nil {
+			err = canCreateIn(filepath.Dir(path))
+		}
+		var perr *fs.PathError
+		if chosen && errors.As(err, &perr) {
+			g.log.Warn("screen recording: the recordings folder cannot be written; recording in Pinky's folder", "task", v.t.id, "err", err)
+			v.w, err = recording.Create(hist, codec)
 		}
 		if err != nil {
 			v.failed = true
@@ -674,6 +690,31 @@ func (g *Gateway) SetRecording(on bool) {
 	}
 }
 
+// SetRecordingsDir sets the folder that recordings of tasks starting from
+// now go to, an absolute path; "" is the history folder's own. Recordings
+// made before stay where they are. While the folder is not there (a disk
+// that is not plugged in), recordings go to the history folder.
+func (g *Gateway) SetRecordingsDir(dir string) error {
+	if g.store == nil {
+		return nil
+	}
+	return g.store.SetRecordingsDir(dir)
+}
+
+// ErrRecordingsDirInside means a folder chosen for recordings is Pinky's
+// own recordings folder or in it, also through a symbolic link.
+var ErrRecordingsDirInside = history.ErrRecordingsDirInside
+
+// CheckRecordingsDir reports why SetRecordingsDir would refuse dir, such as
+// ErrRecordingsDirInside, and nil when it would take it, so Settings can
+// refuse a folder before keeping it.
+func (g *Gateway) CheckRecordingsDir(dir string) error {
+	if g.store == nil {
+		return nil
+	}
+	return g.store.CheckRecordingsDir(dir)
+}
+
 // Recording returns a task's screen recording, or driver.ErrNotFound when
 // it has none (recording was off, the phone never showed a recordable
 // screen, or the retention limit removed it). A running task's recording
@@ -748,4 +789,15 @@ func marksFor(view RecordingView, steps []StepView) []RecordingMark {
 		out = append(out, RecordingMark{At: at, Step: st.Index, Text: text})
 	}
 	return out
+}
+
+// canCreateIn reports whether a file can be created in dir.
+func canCreateIn(dir string) error {
+	f, err := os.CreateTemp(dir, ".pinky-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	f.Close()
+	return os.Remove(name)
 }

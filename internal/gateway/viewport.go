@@ -73,7 +73,40 @@ func collectViewportIn(s *screen.Screen, area screen.Rect, excludeRef int) []vie
 		}
 		return lines[i].Text < lines[j].Text
 	})
+	return byRows(lines)
+}
+
+// byRows orders lines that sit on one row from left to right. lines comes
+// sorted by centre y. A row's cell, its value and a badge share a centre
+// give or take a pixel, and which of them comes first by y alone changes
+// with how the scroll offset rounds to pixels: the same row would read
+// differently on the next screen and break the run that matches the two.
+// A line joins the row of the first line above it when their centres are
+// within a quarter of the shorter one's height.
+func byRows(lines []viewportLine) []viewportLine {
+	for start := 0; start < len(lines); {
+		anchor := lines[start]
+		end := start + 1
+		for end < len(lines) && sameRow(anchor, lines[end]) {
+			end++
+		}
+		row := lines[start:end]
+		sort.SliceStable(row, func(i, j int) bool {
+			a, b := row[i].Bounds.Center(), row[j].Bounds.Center()
+			if a.X != b.X {
+				return a.X < b.X
+			}
+			return row[i].Text < row[j].Text
+		})
+		start = end
+	}
 	return lines
+}
+
+func sameRow(a, b viewportLine) bool {
+	tol := max(min(a.Bounds.H, b.Bounds.H)/4, 2)
+	d := b.Bounds.Center().Y - a.Bounds.Center().Y
+	return max(d, -d) <= tol
 }
 
 // filterPinned removes lines that stayed at the same place between two
@@ -157,8 +190,38 @@ func appendViewport(previous, current []viewportLine) (fresh []viewportLine, ove
 // be newly prepended content, so silently appending only what follows the
 // overlap could lose them.
 func unseenPrefix(previous, current []viewportLine) bool {
+	return len(unseenAbove(previous, current, gapContext{})) > 0
+}
+
+// strongOverlap is how many lines in a row two screens must share for the
+// lines above them that gapContext explains not to count as skipped
+// content.
+const strongOverlap = 3
+
+// gapContext is what a read knows beyond the two lists' lines when it
+// judges lines above the shared run.
+type gapContext struct {
+	// area is the list's place on the screen.
+	area screen.Rect
+	// seen holds the last screen's lines outside the list and its fixed
+	// controls: a navigation bar's title, a header.
+	seen []viewportLine
+}
+
+// unseenAbove returns the lines above the run current shares with
+// previous that previous did not have, as unseenPrefix judges them. When
+// the run is strong (strongOverlap lines or more), lines that are not
+// content the read could have skipped do not count:
+//   - lines read by OCR, which reads a row's icon, badge or text cut by an
+//     edge differently from one screen to the next;
+//   - fragments of a line already seen, as an accessibility tree or OCR
+//     gives a row cut off by the bar above it;
+//   - lines the last screen showed outside the list (gapContext.seen);
+//   - lines in the list's top band, within one row of its top edge, where
+//     a row slides under the fixed bar above the list.
+func unseenAbove(previous, current []viewportLine, gc gapContext) []viewportLine {
 	if len(previous) == 0 || len(current) == 0 {
-		return false
+		return nil
 	}
 	prevKeys, curKeys := viewportKeys(previous), viewportKeys(current)
 	bestLen, bestAt := 0, 0
@@ -178,23 +241,64 @@ func unseenPrefix(previous, current []viewportLine) bool {
 		}
 	}
 	if bestLen == 0 || bestAt == 0 {
-		return false
+		return nil
 	}
 	counts := map[string]int{}
 	for _, key := range prevKeys {
 		counts[key]++
 	}
+	seen := map[string]bool{}
+	for _, line := range gc.seen {
+		seen[viewportKey(line)] = true
+	}
+	// The top band is one row high: the tallest line of the shared run,
+	// at most a quarter of the list.
+	band := 0
+	for _, line := range current[bestAt : bestAt+bestLen] {
+		band = max(band, line.Bounds.H)
+	}
+	band = min(band, gc.area.H/4)
+	var unseen []viewportLine
 	for i, key := range curKeys[:bestAt] {
-		if counts[key] == 0 {
-			// Accessibility trees often shorten a row's label when part of it
-			// scrolls near an edge. A long fragment already contained in a
-			// previous line is not newly prepended content.
-			if !longFragmentOfPrevious(current[i], previous) {
-				return true
-			}
+		if counts[key] > 0 {
+			counts[key]--
 			continue
 		}
-		counts[key]--
+		line := current[i]
+		// Accessibility trees often shorten a row's label when part of it
+		// scrolls near an edge. A long fragment already contained in a
+		// previous line is not newly prepended content.
+		if longFragmentOfPrevious(line, previous) {
+			continue
+		}
+		if bestLen >= strongOverlap {
+			switch {
+			case line.Source == screen.SourceOCR,
+				seen[key],
+				fragmentOf(line, previous) || fragmentOf(line, gc.seen),
+				band > 0 && !line.Bounds.Empty() && line.Bounds.Center().Y < gc.area.Y+band:
+				continue
+			}
+		}
+		unseen = append(unseen, line)
+	}
+	return unseen
+}
+
+// fragmentOf reports whether line is a piece of a longer line in lines, an
+// ellipsis at its end left out: "Accessibil" or "Accessibility…" cut from
+// "Accessibility".
+func fragmentOf(line viewportLine, lines []viewportLine) bool {
+	text := viewportKeyText(line)
+	text = strings.TrimSpace(strings.TrimRight(text, "…."))
+	if utf8.RuneCountInString(text) < 2 {
+		return false
+	}
+	for _, old := range lines {
+		oldText := viewportKeyText(old)
+		if len(text) < len(oldText) && strings.Contains(oldText, text) {
+			return true
+		}
 	}
 	return false
 }

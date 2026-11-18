@@ -103,6 +103,8 @@
     <string name="phone_pill_starting">正在开始</string>
     <string name="phone_pill_waiting">等你处理</string>
     <string name="phone_pill_computer">电脑正在使用这台手机</string>
+    <string name="phone_pill_dot">Pinky：%1$s</string>
+    <string name="phone_pill_expand">展开</string>
     <string name="phone_close">关闭</string>
     <string name="phone_asks">Pinky 想确认</string>
     <string name="phone_rule">规则：%1$s</string>

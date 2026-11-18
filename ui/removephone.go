@@ -222,6 +222,7 @@ func (a *app) forgetPhone(id string, history bool) {
 	delete(a.bg.on, id)
 	delete(a.bg.busy, id)
 	delete(a.bg.phone, id)
+	a.forgetTraffic(id)
 	comp := &a.comp
 	delete(comp.state, id)
 	delete(comp.checked, id)

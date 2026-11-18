@@ -26,7 +26,6 @@ func (p *Provider) SetPaused(id string, paused bool) {
 		stop = p.wdaWaits[id]
 		delete(p.wdaWaits, id)
 		delete(p.wdaHolds, id)
-		p.stopMediaWaitLocked(id)
 	} else if p.paused[id] {
 		delete(p.paused, id)
 		delete(p.known, id) // inspected again at the next List

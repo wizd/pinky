@@ -183,7 +183,13 @@ if [ -f "$work/src/.VolumeIcon.icns" ]; then
 	# offset 8).
 	xattr -wx com.apple.FinderInfo "0000000000000000040000000000000000000000000000000000000000000000" "$work/mnt"
 fi
-rm -rf "$work/mnt/.fseventsd" "$work/mnt/.Trashes"
+# fseventsd may still be writing into the new volume's .fseventsd, and rm
+# then fails with "Directory not empty": try again. A copy left behind
+# only costs a hidden folder in the image.
+for _ in 1 2 3 4 5; do
+	rm -rf "$work/mnt/.fseventsd" "$work/mnt/.Trashes" 2>/dev/null && break
+	sleep 1
+done
 hdiutil_retry detach "$work/mnt"
 
 rm -f "$dmg"

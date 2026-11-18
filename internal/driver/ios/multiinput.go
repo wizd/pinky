@@ -251,7 +251,7 @@ func (d *Device) homeMulti(ctx context.Context) error {
 	from := screen.Point{X: s.Width / 2, Y: s.Height - 1}
 	to := screen.Point{X: s.Width / 2, Y: s.Height * 45 / 100}
 	t = time.Now()
-	serr := d.Swipe(ctx, from, to, 250*time.Millisecond)
+	serr := d.fling(ctx, from, to, 250*time.Millisecond)
 	if ue := (*unseenError)(nil); errors.As(serr, &ue) {
 		// The swipe was sent; what the touches before it did is not
 		// Home's answer, the picture after it is.

@@ -152,7 +152,7 @@ func (a *app) addChoose(c *mg.Context) {
 			})
 		}
 		choice(icAndroid, "Android", locales.AddPhoneChooseAndroid(), "android")
-		choice(icIphone, "iPhone", locales.AddPhoneChooseIPhone(), "iphone")
+		choice(icIphone, "iPhone / iPad", locales.AddPhoneChooseIPhone(), "iphone")
 	})
 	if a.launcher() == nil {
 		return

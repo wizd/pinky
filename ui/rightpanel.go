@@ -273,7 +273,12 @@ func (a *app) agentRequestControls(c *mg.Context, n gateway.NeedView) {
 			mg.Text(c, locales.NeedsAgentAskedReadOnly(agentOf(n))).FontSize(fsSmall).TextColor(p.ink2).Margin(8, 0, 0, 0)
 		}
 		mg.Text(c, locales.NeedsLetAgent(agentOf(n))).FontSize(fsSmall).FontWeight(fwSemibold).Margin(12, 0, 6, 0)
-		scope = a.scopePicker(c, n.ID, locales.NeedsLetAgent(agentOf(n)), scope)
+		// Whichever choice the card opens with, the apps the agent named
+		// for its task are ticked already under "Only the apps I choose".
+		opens := scope
+		opens.Apps = n.Apps
+		a.agents.askedFor(n.ID, n.Apps)
+		scope = a.scopePicker(c, n.ID, locales.NeedsLetAgent(agentOf(n)), opens)
 	}
 	noApps := scope.Mode == gateway.ScopeApps && len(scope.Apps) == 0
 	mg.Grid(c).Columns(2).Gap(8).Margin(12, 0, 0, 0).Children(func() {
@@ -364,6 +369,30 @@ func agentOf(n gateway.NeedView) string {
 	return locales.AgentGeneric()
 }
 
+// readOnlyNotes say, under a running task's card line, why the agent types
+// only into search fields and where that changes: the access the person
+// gave the agent (Settings › Agents), the agent's own request for a
+// read-only task, or Read-only mode (Settings › Safety), which mode says
+// is on. Approving a request from the agent changes none of them (GitHub
+// issue #156).
+func readOnlyNotes(t gateway.TaskView, mode bool) []string {
+	agent := t.Agent
+	if agent == "" {
+		agent = locales.AgentGeneric()
+	}
+	var out []string
+	switch {
+	case t.AgentReadOnly:
+		out = append(out, locales.TasksReadOnlyAgent(agent))
+	case t.ReadOnly:
+		out = append(out, locales.TasksReadOnlyTask(agent))
+	}
+	if mode {
+		out = append(out, locales.TasksReadOnlyMode())
+	}
+	return out
+}
+
 // taskStatus words a task's state for its card.
 func (a *app) taskStatus(c *mg.Context, t gateway.TaskView) (string, mg.Color, bool) {
 	p := pal(c)
@@ -449,11 +478,16 @@ func (a *app) taskCard(c *mg.Context, t gateway.TaskView) {
 		if t.Agent != "" {
 			meta = append(meta, t.Agent)
 		}
-		if t.ReadOnly {
+		if t.ReadOnly || t.AgentReadOnly {
 			meta = append(meta, locales.TasksReadOnly())
 		}
 		meta = append(meta, t.DeviceName, elapsed(taskDuration(t, c.Now())))
 		mg.Text(c, strings.Join(meta, " · ")).FontSize(fsCaption).TextColor(p.ink2).FontFeatures("tnum")
+		if run {
+			for _, note := range readOnlyNotes(t, a.settings.ReadOnly) {
+				mg.Text(c, note).FontSize(fsCaption).LineHeight(1.4).TextColor(p.ink2).Margin(4, 0, 0, 0)
+			}
+		}
 		if run {
 			c.After(time.Second) // the elapsed time ticks
 		}

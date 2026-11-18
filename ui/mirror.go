@@ -600,6 +600,30 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 				}
 				mg.Text(c, label).FontSize(fsBody).FontWeight(fwSemibold).NoWrap()
 			})
+		case d.ScreenOff && !m.agent:
+			// The phone's own screen is off without a lock screen (an
+			// Android TV in standby): it sends no picture until it wakes,
+			// so the mirror says so instead of seeming to connect. A click
+			// or a key on the mirror wakes it (mirrorInput).
+			mg.Box(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Background(mg.RGBA(10, 12, 18, 0.62)).PassThrough()
+			mg.Column(c).Attach(mg.AnchorCenter, mg.AnchorCenter).Top(box[1] * 0.04).Gap(8).AlignItems(mg.Center).PassThrough().Children(func() {
+				pill := mg.Row(c).Gap(8).AlignItems(mg.Center).Padding(9, 14).Radius(999).
+					Background(mg.RGBA(255, 255, 255, 0.14)).Border(1, mg.RGBA(255, 255, 255, 0.22)).TextColor(hex("#ffffff")).PassThrough()
+				if tile {
+					pill.Padding(6, 10).Gap(6)
+				}
+				pill.Children(func() {
+					mg.Icon(c, icMoon).FontSize(iconBody)
+					label := locales.MirrorScreenOff(d.Info.Name)
+					if tile {
+						label = locales.MirrorScreenOffTile()
+					}
+					mg.Text(c, label).FontSize(fsBody).FontWeight(fwSemibold).NoWrap()
+				})
+				if _, canWake := a.api.(screenWaker); canWake && !tile {
+					mg.Text(c, locales.MirrorScreenOffWake()).FontSize(fsSmall).TextColor(hex("#d0d0d8")).PassThrough()
+				}
+			})
 		case (m.state == "connecting" || m.state == "playing") && m.bitmap == nil:
 			mg.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(10).PassThrough().Children(func() {
 				spinner(c)
@@ -625,6 +649,11 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 func mirrorError(err error) string {
 	if err == nil {
 		return locales.MirrorStreamEnded()
+	}
+	if se := (*driver.SetupError)(nil); errors.As(err, &se) && se.Setup == driver.SetupMediaInUse {
+		// An app on the iPhone uses the camera or microphone; the mirror
+		// tries again by itself.
+		return locales.MirrorNoPicture(locales.MediaInUseTitle())
 	}
 	msg := err.Error()
 	if errors.Is(err, video.ErrNotFound) {
@@ -720,6 +749,15 @@ func drawOverlay(pt *mg.Painter, r mg.Rect, p *palette, s gateway.StepView, kind
 // mirror into touches, keys and text in device pixels. The gateway pauses
 // the agent on any of them.
 func (a *app) mirrorInput(m *mirror, d gateway.DeviceView, ev mg.InputEvent) bool {
+	if d.ScreenOff && !m.agent && (ev.Kind == mg.InputPointerDown || ev.Kind == mg.InputKeyDown) {
+		// A phone whose screen is off sends no picture and takes no
+		// touches: the click or key turns its screen on instead.
+		if w, ok := a.api.(screenWaker); ok {
+			id := d.Info.ID
+			a.call(id, locales.MirrorCallWake(), func() error { return w.Wake(id) })
+		}
+		return true
+	}
 	if m.picW == 0 || m.boxW == 0 || d.Status == gateway.DeviceOffline {
 		return false
 	}

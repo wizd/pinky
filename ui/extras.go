@@ -23,6 +23,11 @@ import (
 // on the API value and leaves out what they back when they are missing,
 // so gateway.API stays as it is. The signatures are internal/gateway's.
 type (
+	// screenWaker turns on the screen of a phone whose screen is off
+	// without a lock screen (DeviceView.ScreenOff). It never unlocks.
+	screenWaker interface {
+		Wake(deviceID string) error
+	}
 	mediaPather interface {
 		MediaPath(ctx context.Context, id string) (string, error)
 	}
@@ -108,6 +113,12 @@ type (
 	}
 	retentionSetter interface {
 		SetRetention(days int)
+	}
+	// recordingsDirChecker says why a folder cannot be Settings › Privacy ›
+	// Recordings folder (gateway.ErrRecordingsDirInside), before the client
+	// keeps it.
+	recordingsDirChecker interface {
+		CheckRecordingsDir(dir string) error
 	}
 	historyExporter interface {
 		ExportHistory(ctx context.Context, taskIDs []string, dir string) (string, error)

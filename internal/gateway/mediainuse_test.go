@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -15,8 +16,10 @@ import (
 const mediaDetail = "An app on the iPhone is using the camera or microphone, and iOS does not allow mirroring the screen then. " +
 	"Pinky connects by itself once the camera and microphone are free."
 
-// mediaProvider lists an iPhone as the iOS driver does while an app on it
-// uses the camera or microphone: online until an open finds the stream
+// mediaProvider lists an iPhone as the iOS driver did until 2026-11-18
+// (it now opens the phone and fails a view or input with the step
+// instead) while an app on it uses the camera or microphone, for any
+// provider that still does: online until an open finds the stream
 // refused, then needing the media_in_use step at every listing while its
 // session tries the stream again, and online once the camera and
 // microphone are free, when the next open takes that session over.
@@ -129,5 +132,19 @@ func TestMediaInUseStep(t *testing.T) {
 	}
 	if r := s.Observe(ctx, ObserveRequest{}); r.IsError() || r.Screen == nil {
 		t.Errorf("phone_observe once free: %+v", r)
+	}
+}
+
+// TestActionNeedsSetup: input that the phone refused for a step (an
+// iPhone's stream refused while an app uses the camera or microphone)
+// tells the agent that step, and that nothing was done.
+func TestActionNeedsSetup(t *testing.T) {
+	g := &Gateway{}
+	err := fmt.Errorf("video stream: %w", &driver.SetupError{Setup: driver.SetupMediaInUse, Detail: mediaDetail,
+		Err: errors.New("start display stream (display 1): the device microphone or camera is currently in use")})
+	res := g.actionError(nil, err)
+	if res.Status != StatusNeedsSetup || res.Setup != driver.SetupMediaInUse || !strings.Contains(res.Message, mediaDetail) ||
+		!strings.Contains(res.Message, "Nothing was done") {
+		t.Fatalf("actionError = %+v; want device_needs_setup with media_in_use", res)
 	}
 }

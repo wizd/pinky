@@ -46,6 +46,8 @@ type Device struct {
 	dumpMu   sync.Mutex // uiautomator allows one dump at a time
 	dumpFile bool       // this phone cannot dump to /dev/tty
 
+	capDisp capDisplay // the physical display screencap captures (capture.go)
+
 	stateMu   sync.Mutex
 	natW      int // display size in the natural orientation, from `wm size`
 	natH      int

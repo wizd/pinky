@@ -227,7 +227,7 @@ func (a *app) flyoutView(c *mg.Context) {
 		}
 		stop.Children(func() {
 			mg.Text(c, locales.FlyoutStopAll()).TextColor(p.red).Grow(1)
-			mg.Text(c, shortcutLabel()).FontSize(fsSmall).TextColor(p.ink3)
+			mg.Text(c, a.shortcutLabel()).FontSize(fsSmall).TextColor(p.ink3)
 		})
 	})
 }

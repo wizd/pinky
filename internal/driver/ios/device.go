@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,6 +93,9 @@ type Device struct {
 	restartFailedAt time.Time
 	restartErr      error
 
+	// startFn starts a stream of display id (tests); nil: startMedia.
+	startFn func(ctx context.Context, l *link, id int) (*media, error)
+
 	raxDialMu   sync.Mutex // one remoteAXService dial at a time (raxReady)
 	svcMu       sync.Mutex
 	info2       *cdService // deviceinfo
@@ -127,9 +131,12 @@ type Device struct {
 	imageDir string // Pinky's folder for developer disk images (checkup.go)
 }
 
-// Open connects to a device and starts its video stream and HID session.
-// It goes over USB when it can, and over Wi-Fi when info.Connection is
-// "wifi".
+// Open connects to a device: its tunnel and the services on it. It goes
+// over USB when it can, and over Wi-Fi when info.Connection is "wifi". It
+// does not start the video stream and its HID session: the first view or
+// input does (live). While the stream runs, iOS takes the camera and
+// microphone from the phone's apps (idle.go), and the gateway opens a
+// phone whenever it shows up, with nobody using Pinky.
 func Open(ctx context.Context, info driver.Info) (*Device, error) {
 	return open(ctx, info, nil)
 }
@@ -140,7 +147,7 @@ func open(ctx context.Context, info driver.Info, log *slog.Logger) (*Device, err
 	if err != nil {
 		return nil, err
 	}
-	if err := d.start(ctx); err != nil {
+	if err := d.prepare(ctx); err != nil {
 		d.l.Close()
 		return nil, err
 	}
@@ -148,8 +155,8 @@ func open(ctx context.Context, info driver.Info, log *slog.Logger) (*Device, err
 	return d, nil
 }
 
-// dialDevice opens the tunnel to the phone, for start to start the stream
-// on.
+// dialDevice opens the tunnel to the phone, for prepare to read its
+// displays through.
 func dialDevice(ctx context.Context, info driver.Info, log *slog.Logger) (*Device, error) {
 	l, err := dialLink(ctx, info.ID, info.Connection == "wifi")
 	if err != nil {
@@ -166,6 +173,11 @@ func (d *Device) run() {
 	d.reconnect = d.reconnectCore
 	go d.idleLoop()
 	go d.orientLoop()
+	// An agent's reads come with OCR, and a program's first recognition
+	// waits while macOS compiles the recognizer's models: 28 s of a first
+	// phone_connect's 29 on a Mac mini (2026-11-15). Load them now, in the
+	// background, so that the agent's first read finds them ready.
+	ocrWarm()
 	// Connect the accessibility service now (the phone answers its first
 	// requests slowly while it builds the first tree it pushes), and the
 	// pasteboard service, whose handshake would otherwise slow the first
@@ -185,12 +197,10 @@ func (d *Device) run() {
 	}()
 }
 
-// start reads the phone's displays and starts the stream.
-func (d *Device) start(ctx context.Context) error {
-	if err := d.readDisplays(ctx); err != nil {
-		return err
-	}
-	return d.restartMedia(ctx)
+// prepare reads the phone's displays, which the stream starts on once a
+// view or input needs it (live); it starts no stream (coreSession).
+func (d *Device) prepare(ctx context.Context) error {
+	return d.readDisplays(ctx)
 }
 
 // readDisplays connects the display info service and reads the phone's
@@ -212,21 +222,8 @@ func (d *Device) readDisplays(ctx context.Context) error {
 	return nil
 }
 
-// retryMedia starts the stream again on a device whose start the phone
-// refused while an app used the camera or microphone (mediaWait).
-func (d *Device) retryMedia(ctx context.Context) error {
-	d.restartMu.Lock()
-	defer d.restartMu.Unlock()
-	d.mu.Lock()
-	closed := d.closed
-	d.mu.Unlock()
-	if closed {
-		return fmt.Errorf("device closed: %w", driver.ErrOffline)
-	}
-	return d.restartMedia(ctx)
-}
-
-// opened runs the device once its stream started (coreSession).
+// opened runs the device once its tunnel is up and its displays read
+// (coreSession).
 func (d *Device) opened() driver.Device {
 	d.run()
 	return d
@@ -256,7 +253,9 @@ const nextDisplayWait = 12 * time.Second
 func (d *Device) restartMedia(ctx context.Context) error {
 	err := d.startStream(ctx)
 	var nv *noVideoError
-	if err != nil && !errors.As(err, &nv) {
+	if err != nil && (!errors.As(err, &nv) || mediaInUse(err)) {
+		// An app holding the camera or microphone is no phone that sends
+		// no picture: the checkup keeps what it knew.
 		return err
 	}
 	d.mu.Lock()
@@ -290,7 +289,12 @@ func (d *Device) startStream(ctx context.Context) error {
 		stop(old)
 	}
 	sd := streamDisplay{
-		start:  func(ctx context.Context, id int) (*media, error) { return startMedia(ctx, d.link(), id) },
+		start: func(ctx context.Context, id int) (*media, error) {
+			if d.startFn != nil {
+				return d.startFn(ctx, d.link(), id)
+			}
+			return startMedia(ctx, d.link(), id)
+		},
 		stop:   stop,
 		gone:   d.linkGone,
 		wait:   readyWait,
@@ -511,8 +515,12 @@ func (d *Device) displayMoved() bool {
 	return d.displayMovedLocked()
 }
 
-// live returns the running stream and HID session. It restarts the stream
-// if the phone stopped it and reconnects HID if that connection dropped.
+// live returns the running stream and HID session. It starts the stream
+// when none runs (the first view or input since the device opened or the
+// stream went idle, or the phone stopped it) and reconnects HID if that
+// connection dropped. A start fails for restartBackoff after one failed;
+// one the phone refused because an app uses the camera or microphone fails
+// with the driver.SetupMediaInUse step (mediainuse.go).
 func (d *Device) live(ctx context.Context) (*media, *hidSession, error) {
 	d.mu.Lock()
 	closed, m, h, moved := d.closed, d.m, d.hid, d.displayMovedLocked()
@@ -566,6 +574,7 @@ func (d *Device) live(ctx context.Context) (*media, *hidSession, error) {
 		return nil, nil, fmt.Errorf("video stream: %w", d.restartErr)
 	}
 	if err := d.restartMedia(ctx); err != nil {
+		err = mediaInUseStep(err)
 		d.restartFailedAt, d.restartErr = time.Now(), err
 		return nil, nil, err
 	}
@@ -767,13 +776,22 @@ func (d *Device) panel(p screen.Point) (uint16, uint16) {
 // panelPoint maps a point of the upright screen si describes to the touch
 // panel.
 func panelPoint(p screen.Point, si screenInfo) (uint16, uint16) {
+	// PINKY_IOS_TOUCH_RAW=1 (debugging only) takes the point as panel units, 0..65535 on each axis, with no turn
+	// or scaling: for measuring how a touchscreen's axes map to a display.
+	if os.Getenv("PINKY_IOS_TOUCH_RAW") == "1" {
+		return uint16(max(0, min(p.X, 65535))), uint16(max(0, min(p.Y, 65535)))
+	}
 	u := si.upright()
 	if u.Width <= 0 || u.Height <= 0 {
 		return 0, 0
 	}
 	p.X = max(0, min(p.X, u.Width-1))
 	p.Y = max(0, min(p.Y, u.Height-1))
-	back := si.touchTurn().inverse()
+	turn := si.touchTurn()
+	if q, ok := touchTurnOverride(); ok {
+		turn = q
+	}
+	back := turn.inverse()
 	t := turnPoint(p, u.Width, u.Height, back)
 	tw, th := turnSize(u.Width, u.Height, back)
 	return scaleAxis(t.X, tw), scaleAxis(t.Y, th)
@@ -811,6 +829,7 @@ func (d *Device) waitInput(ctx context.Context) (*hidSession, error) {
 		}
 	}
 	d.markInput()
+	h.useSurface(touchSurface(d.display()))
 	return h, nil
 }
 
@@ -845,9 +864,62 @@ func (d *Device) Tap(ctx context.Context, p screen.Point, opt driver.TapOptions)
 	return d.gesture(ctx, []screen.Point{p}, hold)
 }
 
-// Swipe implements driver.Device.
+// swipeRest is how long a swipe's finger rests at its end before it lifts.
+// iOS takes the finger's speed when it lifts for a fling: a swipe lifted
+// while still moving carried the Settings list past a whole screen (GitHub
+// issue #148), while one that stops first moves the content only as far as
+// the finger went. The mirror's wheel rests 120 ms for the same reason
+// (ui/mirrorwheel.go).
+const swipeRest = 150 * time.Millisecond
+
+// Swipe implements driver.Device. The finger eases in and out along the
+// line and rests at to before it lifts, so the content moves by about the
+// swipe's length and nothing flings on: an agent that swipes and reads
+// sees every row. A swipe from the edge of the screen toward its middle
+// is a system gesture (Home from the bottom, back from the left, the
+// Notification Center from the top), which iOS takes only at speed, so
+// it is lifted still moving, as fling does.
 func (d *Device) Swipe(ctx context.Context, from, to screen.Point, dur time.Duration) error {
+	s := d.freshDisplay(ctx).upright()
+	return d.gestureSteps(ctx, swipeSteps(from, to, dur, s.Width, s.Height), nil)
+}
+
+// fling swipes along a straight line at a steady speed and lifts the
+// finger still moving, so the content flings on: the system gestures
+// (Home, back, the passcode pad) that need speed.
+func (d *Device) fling(ctx context.Context, from, to screen.Point, dur time.Duration) error {
 	return d.gesture(ctx, swipePath(from, to, dur), 10*time.Millisecond)
+}
+
+// swipeSteps is the finger's path for Swipe on a screen of w by h pixels
+// (0 when unknown): eased in and out and resting swipeRest at to, or a
+// fling's steady line for a swipe from the screen's edge.
+func swipeSteps(from, to screen.Point, dur time.Duration, w, h int) []driver.DragStep {
+	if dur <= 0 {
+		dur = 300 * time.Millisecond
+	}
+	if edgeSwipe(from, to, w, h) {
+		path := swipePath(from, to, dur)
+		steps := make([]driver.DragStep, 0, len(path))
+		steps = append(steps, driver.DragStep{P: path[0]})
+		for _, p := range path[1:] {
+			steps = append(steps, driver.DragStep{Wait: 10 * time.Millisecond, P: p})
+		}
+		return steps
+	}
+	g := driver.Drag{From: from, Stops: []driver.DragStop{{Point: to, Move: dur, Pause: swipeRest}}}
+	return g.Steps(10 * time.Millisecond)
+}
+
+// edgeSwipe reports whether a swipe starts within a fiftieth of the
+// screen of one of its edges and moves away from it: a system gesture.
+func edgeSwipe(from, to screen.Point, w, h int) bool {
+	if w <= 0 || h <= 0 {
+		return false
+	}
+	mx, my := max(w/50, 1), max(h/50, 1)
+	return (from.Y >= h-my && to.Y < from.Y) || (from.Y < my && to.Y > from.Y) ||
+		(from.X < mx && to.X > from.X) || (from.X >= w-mx && to.X < from.X)
 }
 
 // swipePath is a straight line from from to to, one point per 10 ms.
@@ -919,6 +991,8 @@ func (d *Device) gestureSteps(ctx context.Context, steps []driver.DragStep, onDo
 	// one showed on the display in use (multiinput.go).
 	unseen := d.inputUnseen()
 	si := d.freshDisplay(ctx)
+	// Read again: a fold since waitInput moves the gesture to the other screen.
+	h.useSurface(touchSurface(si))
 	x, y := panelPoint(steps[0].P, si)
 	sent := time.Now()
 	if err := h.touchAt(true, x, y); err != nil {

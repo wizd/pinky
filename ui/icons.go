@@ -55,6 +55,7 @@ var (
 	icBack     = icon(`<path d="M17 5 7 12l10 7z"/>`)
 	icHome     = icon(`<circle cx="12" cy="12" r="7"/>`)
 	icRecents  = icon(`<rect x="6" y="6" width="12" height="12" rx="2"/>`)
+	icMoon     = icon(`<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>`)
 	icMore     = mingcute("more_1_line")
 	icCheck    = mingcute("check_line")
 	icPerson   = mingcute("user_3_line")

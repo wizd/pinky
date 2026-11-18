@@ -116,6 +116,7 @@ func openWDA(ctx context.Context, info driver.Info, c *wdaClient, entry goios.De
 	c.gone = d.gone
 	c.enter = d.idle.enter
 	d.idle.init()
+	ocrWarm() // as Device.run does
 	return d, nil
 }
 
@@ -714,6 +715,24 @@ var wdaKeys = map[driver.Key]string{
 	driver.KeyEscape:        "\u001b",
 }
 
+// wdaHIDKeys are the keys WDA presses as HID usages on the keyboard page.
+// A character cannot name them, so they go through /wda/performIoHidEvent
+// with the usage the iOS 27 path presses on its virtual keyboard; both
+// paths then take the same keys.
+var wdaHIDKeys = map[driver.Key]int{
+	driver.KeyDpadUp:    keyUp,
+	driver.KeyDpadDown:  keyDown,
+	driver.KeyDpadLeft:  keyLeft,
+	driver.KeyDpadRight: keyRight,
+	driver.KeyPageUp:    keyPageUp,
+	driver.KeyPageDown:  keyPageDown,
+}
+
+// wdaKeyHold is how long a key pressed by /wda/performIoHidEvent stays
+// down. iOS takes shorter ones too, but a key that goes down and up inside
+// one frame is now and then read as no press at all.
+const wdaKeyHold = 15 * time.Millisecond
+
 // Key implements driver.Device. Home is XCTest's Home button; Back is a
 // swipe from the left edge, as on the other path.
 func (d *WDADevice) Key(ctx context.Context, k driver.Key) error {
@@ -727,13 +746,17 @@ func (d *WDADevice) Key(ctx context.Context, k driver.Key) error {
 	case driver.KeyRecents:
 		return fmt.Errorf("recents on iPhone: %w", driver.ErrUnsupported)
 	}
-	s, ok := wdaKeys[k]
-	if !ok {
-		return fmt.Errorf("key %q: %w", k, driver.ErrUnsupported)
+	if s, ok := wdaKeys[k]; ok {
+		d.inputMu.Lock()
+		defer d.inputMu.Unlock()
+		return d.c.keys(ctx, s)
 	}
-	d.inputMu.Lock()
-	defer d.inputMu.Unlock()
-	return d.c.keys(ctx, s)
+	if u, ok := wdaHIDKeys[k]; ok {
+		d.inputMu.Lock()
+		defer d.inputMu.Unlock()
+		return d.c.hidEvent(ctx, keyboardPage, u, wdaKeyHold)
+	}
+	return fmt.Errorf("key %q: %w", k, driver.ErrUnsupported)
 }
 
 // back taps the navigation bar's back button when the screen has one, and

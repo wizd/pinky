@@ -2,8 +2,10 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -34,6 +36,20 @@ type settingsState struct {
 	adding  bool
 	newApp  string
 	confirm bool
+	// recDir is whether the chosen recordings folder is there, as last
+	// seen; picking is while its folder picker is open.
+	recDir  folderCheck
+	picking bool
+}
+
+// folderCheck is whether a folder was there when last looked at. The look
+// happens off the main thread: a folder on a network disk may take long to
+// answer.
+type folderCheck struct {
+	dir      string
+	at       time.Time
+	there    bool
+	checking bool
 }
 
 // changed reports a change in Settings, with the settings as they were
@@ -417,6 +433,7 @@ func (a *app) settingsPhones(c *mg.Context) {
 				if d.Features.Background {
 					a.backgroundRow(c, d, false)
 				}
+				a.trafficRow(c, d, false)
 				a.connectionRows(c, d)
 				a.awayRow(c, d)
 				a.phoneWiFiRow(c, d)
@@ -479,7 +496,17 @@ type agentsState struct {
 	asks     int               // open first-connection requests, when last read
 	editing  string            // the agent whose scope is being changed
 	choice   map[string]string // scope mode being chosen, by agent or need id
-	apps     map[string]string // apps typed for "Use only the apps I choose"
+	apps     map[string]string // apps chosen for "Use only the apps I choose", as names with commas between
+	// The list of apps to tick (agentapps.go), by agent or need id as
+	// choice and apps are.
+	find    map[string]string   // what narrows the list down
+	first   map[string]string   // the apps the list opened with, which it shows first
+	missing map[string]string   // the apps an agent named that no phone has: shown, never chosen
+	only    map[string]bool     // the list shows the apps chosen alone
+	asked   map[string]string   // the apps an agent's first connection named, by need id
+	done    map[string]bool     // the first-connection needs the person answered
+	left    map[string]leftCard // by agent, its card that went unanswered, for its next one
+	sorted  appsSorted          // the phones' apps in the order the list shows them
 }
 
 func (s *agentsState) load(a *app) {
@@ -516,19 +543,22 @@ func splitApps(s string) []string {
 	return out
 }
 
-// scopePicker is the select of what an agent may do, with the apps field
-// for "Use only the apps I choose". It returns the scope chosen.
+// scopePicker is the select of what an agent may do, with the list of apps
+// to tick for "Use only the apps I choose" (appsPicker). It returns the
+// scope chosen.
 func (a *app) scopePicker(c *mg.Context, key, label string, initial gateway.Scope) gateway.Scope {
 	st := &a.agents
-	if st.choice == nil {
-		st.choice, st.apps = map[string]string{}, map[string]string{}
-	}
+	st.makeMaps()
 	// The choice is kept as a mode, so it survives a change of language.
 	mode, ok := st.choice[key]
 	if !ok {
 		mode = string(initial.Mode)
 		st.apps[key] = strings.Join(initial.Apps, ", ")
+		st.reopen(key)
 	}
+	// The phones' apps are read while the person reads the choices, so the
+	// list is there when "Only the apps I choose" is picked.
+	a.readApps()
 	choice := scopeLabel(gateway.ScopeMode(mode))
 	labels := make([]string, len(scopeChoices))
 	for i, sc := range scopeChoices {
@@ -539,10 +569,7 @@ func (a *app) scopePicker(c *mg.Context, key, label string, initial gateway.Scop
 	st.choice[key] = string(scope.Mode)
 	mg.Text(c, scopeHint(scope.Mode)).FontSize(fsSmall).TextColor(pal(c).ink2).MaxWidth(360).Margin(4, 0, 0, 0)
 	if scope.Mode == gateway.ScopeApps {
-		apps := st.apps[key]
-		mg.TextInput(c.Key("apps-"+key), &apps).Placeholder(locales.SettingsAgentsAppsPlaceholder()).Label(locales.SettingsAgentsApps()).MaxWidth(360)
-		st.apps[key] = apps
-		scope.Apps = splitApps(apps)
+		scope.Apps = a.appsPicker(c, key)
 	}
 	return scope
 }
@@ -551,6 +578,7 @@ func (a *app) scopePicker(c *mg.Context, key, label string, initial gateway.Scop
 // SetAgentScope, which also approves the agent, then Decide, so the
 // gateway keeps the person's choice when the agent picks up the answer.
 func (a *app) approveAgent(n gateway.NeedView, scope gateway.Scope) {
+	a.agents.answered(n)
 	a.remember(n, gateway.AllowOnce, "")
 	scoper, ok := a.api.(agentScoper)
 	name := n.Agent
@@ -765,6 +793,76 @@ func keepLabelIn(m locales.Messages, days int) string {
 	return m.SettingsPrivacyKeepDays(days)
 }
 
+// recordingsFolderDesc is the line under Recordings folder: where new
+// recordings go, and why not to the chosen folder while it is missing. It
+// looks at the folder again every few seconds, in the background.
+func (a *app) recordingsFolderDesc(dir string) string {
+	if dir == "" {
+		return locales.SettingsPrivacyRecordFolderDefault()
+	}
+	ck := &a.set.recDir
+	if ck.dir != dir {
+		*ck = folderCheck{dir: dir, there: true} // until seen otherwise
+	}
+	if !ck.checking && time.Since(ck.at) > 3*time.Second {
+		ck.checking = true
+		go func() {
+			fi, err := os.Stat(dir)
+			there := err == nil && fi.IsDir()
+			a.post(func() {
+				if ck.dir == dir {
+					ck.there, ck.at, ck.checking = there, time.Now(), false
+				}
+			})
+		}()
+	}
+	if !ck.there {
+		return locales.SettingsPrivacyRecordFolderMissing(dir)
+	}
+	return locales.SettingsPrivacyRecordFolderDesc(dir)
+}
+
+// chooseRecordingsFolder asks for the folder new recordings go to, off the
+// main thread, as the system's picker blocks until it closes.
+func (a *app) chooseRecordingsFolder(cur string) {
+	if a.set.picking {
+		return
+	}
+	a.set.picking = true
+	open := a.openDialog
+	if open == nil {
+		open = mygo.Dialog.Open
+	}
+	checker, _ := a.api.(recordingsDirChecker)
+	go func() {
+		paths, err := open(mygo.OpenDialogOptions{
+			Title: locales.SettingsPrivacyRecordFolder(), DefaultPath: cur, Directory: true, CreateDirectories: true,
+		})
+		// The gateway refuses some folders; one it would refuse is not kept,
+		// or Settings would show a folder recordings do not go to. The check
+		// follows symbolic links, which may take long on a network disk.
+		var bad error
+		if err == nil && len(paths) > 0 && checker != nil {
+			bad = checker.CheckRecordingsDir(paths[0])
+		}
+		a.post(func() {
+			a.set.picking = false
+			switch {
+			case err != nil:
+				a.toasts = append(a.toasts, locales.SettingsPrivacyRecordFolderFailed(err.Error()))
+			case len(paths) == 0:
+			case errors.Is(bad, gateway.ErrRecordingsDirInside):
+				a.toasts = append(a.toasts, locales.SettingsPrivacyRecordFolderInside())
+			case bad != nil:
+				a.toasts = append(a.toasts, locales.SettingsPrivacyRecordFolderFailed(bad.Error()))
+			case paths[0] != a.settings.RecordingsDir:
+				a.settings.RecordingsDir = paths[0]
+				a.changed()
+			}
+		})
+	}()
+}
+
 func (a *app) settingsPrivacy(c *mg.Context) {
 	p := pal(c)
 	st := &a.settings
@@ -802,6 +900,17 @@ func (a *app) settingsPrivacy(c *mg.Context) {
 					a.changed()
 					a.applyRecordingSize(st.SmallerRecordings)
 				}
+			})
+			settingRow(c, locales.SettingsPrivacyRecordFolder(), a.recordingsFolderDesc(st.RecordingsDir), false, func() {
+				mg.Row(c).Gap(sp2).AlignItems(mg.Center).Children(func() {
+					if st.RecordingsDir != "" && button(c.Key("rec-dir-reset"), locales.SettingsPrivacyRecordFolderReset(), btnOpt{}).Clicked() {
+						st.RecordingsDir = ""
+						a.changed()
+					}
+					if button(c.Key("rec-dir"), locales.SettingsPrivacyRecordFolderChoose(), btnOpt{}).Clicked() {
+						a.chooseRecordingsFolder(st.RecordingsDir)
+					}
+				})
 			})
 		}
 		settingRow(c, locales.SettingsPrivacyDeleteAll(), locales.SettingsPrivacyDeleteAllDesc(), true, func() {

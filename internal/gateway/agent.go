@@ -284,6 +284,8 @@ type ScanView struct {
 	OutputBytes  int
 	Sections     []ScanPage
 	Continuation string
+	// gap says why a read stopped at a gap (gapNote), for the message.
+	gap string
 }
 
 // Limits from DESIGN.md's tool table.
@@ -560,7 +562,7 @@ func (s *Session) Connect(ctx context.Context, req ConnectRequest) *Result {
 	if !ok {
 		return errResult(ErrInvalidArgument, "connection must be auto, helper or coredevice, not %q.", req.Connection)
 	}
-	if res := s.approveAgent(ctx, req.Call, title, req.ReadOnly); res != nil {
+	if res := s.approveAgent(ctx, req.Call, title, req.ReadOnly, req.Apps); res != nil {
 		return res
 	}
 
@@ -810,6 +812,9 @@ func (g *Gateway) newLeaseLocked(s *Session, d *device, title string, apps []str
 	s.leases[d.id] = l
 	s.used = appendUniq(s.used, d.id)
 	g.recordTaskLocked(t)
+	if g.trafficOn[d.id] {
+		g.captureSoon()
+	}
 	return l
 }
 
@@ -1018,7 +1023,7 @@ func (g *Gateway) firstScreen(ctx context.Context, l *lease) *Result {
 
 // approveAgent holds an agent's first connection until the person allows
 // it. It returns nil once the agent may connect.
-func (s *Session) approveAgent(ctx context.Context, c Call, title string, readOnly bool) *Result {
+func (s *Session) approveAgent(ctx context.Context, c Call, title string, readOnly bool, apps []string) *Result {
 	g := s.g
 	if g.agentApproved(ctx, s.agent) {
 		return nil
@@ -1057,7 +1062,7 @@ func (s *Session) approveAgent(ctx context.Context, c Call, title string, readOn
 			Kind: approval.KindAgent, Binding: b, Rule: "New agent", Agent: s.agent.Name,
 			Title:  fmt.Sprintf("Let %s use your phones?", s.agent.Name),
 			Detail: fmt.Sprintf("%s wants to connect for “%s”. Allowing gives it %s access.", s.agent.Name, title, mode),
-			Data:   agentRequest{readOnly: readOnly},
+			Data:   agentRequest{readOnly: readOnly, apps: cleanApps(apps)},
 		})
 		id = info.ID
 	}
@@ -1904,6 +1909,7 @@ func (s *Session) Handoff(ctx context.Context, req HandoffRequest) *Result {
 			Title: reason, Detail: fmt.Sprintf("%s · %s", s.agent.Name, l.task.title), Agent: s.agent.Name,
 			TaskID: l.task.id, DeviceName: l.dev.name(), App: g.appName(l.dev), Timeout: g.opt.HandoffTimeout})
 		g.mu.Lock()
+		g.quietLocked(l.dev, quietHandoff, true)
 		if endsOnUnlock {
 			l.unlockHandoffs = append(l.unlockHandoffs, info.ID)
 		}
@@ -1936,6 +1942,12 @@ func (s *Session) Handoff(ctx context.Context, req HandoffRequest) *Result {
 	}
 	if err != nil {
 		return g.finish(l, g.cancelled(l, info.ID))
+	}
+	if out.State != approval.Open {
+		// The handoff ended; a takeover during it keeps the phone quiet.
+		g.mu.Lock()
+		g.quietLocked(l.dev, quietHandoff, false)
+		g.mu.Unlock()
 	}
 	switch {
 	case out.State == approval.Open:

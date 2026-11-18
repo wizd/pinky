@@ -302,10 +302,8 @@ func (d *Device) observeRAX(ctx context.Context, opt driver.ObserveOptions, st *
 		}
 		st.OCRError = ocrErr
 	}
-	scale := si.Scale
-	if app.HasFrame && app.Frame.W > 0 {
-		scale = float64(si.Width) / app.Frame.W
-	}
+	scale := raxScale(app, si)
+	els = turnRaxFrames(els, si, scale)
 	frontApp, _ := d.appForPID(ctx, uint64(app.Object.PID))
 	frontSB := frontApp.ID == springBoard
 	d.noteFront(app.Object, frontSB)

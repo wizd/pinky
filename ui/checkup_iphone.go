@@ -209,7 +209,8 @@ func setupWords(d gateway.DeviceView, step string, here bool) (title, text, note
 		return locales.AddPhoneIPhoneTooOldTitle(d.Info.Name), locales.AddPhoneIPhoneTooOld(d.Info.OSVersion), ""
 	case driver.SetupMediaInUse:
 		// iOS does not mirror the screen while an app uses the camera or
-		// microphone; Pinky tries again by itself (ios/mediawait.go).
+		// microphone. The iOS provider no longer lists a phone so (it says
+		// it per view or input, ios/mediainuse.go); kept for one that does.
 		return locales.MediaInUseTitle(), locales.MediaInUseDetail(d.Info.Name), locales.MediaInUseNote()
 	case driver.SetupPasscode:
 		// iOS asks now and then before the helper may control the phone.

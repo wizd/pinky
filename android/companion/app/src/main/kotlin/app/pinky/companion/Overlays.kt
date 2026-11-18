@@ -1,8 +1,15 @@
 package app.pinky.companion
 
+import android.annotation.SuppressLint
+import android.animation.ObjectAnimator
+import android.animation.PropertyValuesHolder
+import android.animation.ValueAnimator
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Point
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -14,14 +21,18 @@ import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
 import java.io.Closeable
+import kotlin.math.abs
 
 /**
  * Pinky's controls over other apps, drawn by the accessibility service so
@@ -29,6 +40,14 @@ import java.io.Closeable
  * or while Pinky on a computer drives the phone, and the card for an
  * approval or a handoff. They follow the core's state
  * (CoreClient.subscribe) and answer it on the control socket.
+ *
+ * A few seconds after it shows, the pill of a task or of a computer
+ * shrinks to a pulsing dot at the edge of the screen, so that it no longer
+ * covers the app's title or search bar; a tap on the dot shows the whole
+ * pill again, and news the person should see (the task starts waiting for
+ * them, a computer's use turns into a task) shows it for a while too. The
+ * person drags the pill or the dot wherever it suits them, and it keeps
+ * that place (PillPlace).
  *
  * The agent can never press them: their rects go to OwnUI, which refuses
  * gestures on them; the local driver hides these windows from the agent's
@@ -52,6 +71,18 @@ class Overlays(
     private var cardNeed: String? = null
     private var ended: String? = null // the task that ended and whose pill was closed
     private var endTimer: Runnable? = null
+    private val collapseLater = Runnable { pill?.let { if (collapsible(it)) setCollapsed(it, true) } }
+    // The pill's window was just moved and may not be drawn there yet.
+    private var moving = false
+    private val reportLater = Runnable {
+        moving = false
+        reportRects()
+    }
+
+    // Where the person put the pill (PillPlace): x is its centre's share of
+    // the screen's width, y its top's share of the height; no y yet is the
+    // first place, under the status bar.
+    private val place = service.getSharedPreferences(PILL_PREFS, Context.MODE_PRIVATE)
 
     // Pinky's own screen is in front. It says what the pill says, with its
     // own Stop, and the pill would cover its title: the pill hides there.
@@ -81,6 +112,14 @@ class Overlays(
         var extra: TextView? = null
         var deadline: TextView? = null
         var mode: Pill? = null // what the pill's buttons are for
+        var lp: WindowManager.LayoutParams? = null
+
+        // The pill's own.
+        var dot: View? = null
+        var pulse: ValueAnimator? = null
+        var collapsed = false // only the dot shows
+        var waiting = false // the task waits for the person
+        var dragging = false
     }
 
     fun start() {
@@ -102,6 +141,8 @@ class Overlays(
         if (own == ownScreen) return
         ownScreen = own
         pill?.root?.visibility = if (own) View.GONE else View.VISIBLE
+        // The few seconds before the pill shrinks count while it shows.
+        collapseSoon()
         reportRects()
     }
 
@@ -131,6 +172,10 @@ class Overlays(
         main.post {
             stopLooking()
             agentWindow.close()
+            main.removeCallbacks(collapseLater)
+            main.removeCallbacks(reportLater)
+            moving = false
+            pill?.pulse?.cancel()
             remove(pill)
             remove(card)
             pill = null
@@ -154,7 +199,7 @@ class Overlays(
                     step != null -> service.getString(R.string.phone_pill_working, step)
                     else -> service.getString(R.string.phone_pill_starting)
                 }
-                showPill(line, Pill.TASK)
+                showPill(line, Pill.TASK, waiting = need != null)
             }
             // Pinky on a computer drives the phone (its claim): say so, and
             // offer Stop when it can be stopped from here. A task that ended
@@ -164,6 +209,7 @@ class Overlays(
                 showPill(
                     service.getString(R.string.phone_pill_computer),
                     if (computer.optBoolean("stoppable")) Pill.COMPUTER else Pill.COMPUTER_UNSTOPPABLE,
+                    waiting = need != null,
                 )
             }
             agent == null -> {
@@ -239,28 +285,151 @@ class Overlays(
 
     // The pill: the task runs, or it just ended.
 
-    private fun showPill(text: String, mode: Pill) {
+    private fun showPill(text: String, mode: Pill, waiting: Boolean = false) {
         endTimer?.let { main.removeCallbacks(it) }
         endTimer = null
         val w = pill ?: newPill().also {
             pill = it
             ownScreen = ownScreenInFront()
             if (ownScreen) it.root.visibility = View.GONE
-            add(it, Gravity.TOP or Gravity.CENTER_HORIZONTAL, ViewGroup.LayoutParams.WRAP_CONTENT, topInset() + px(8))
+            val s = spot(it)
+            it.lp = add(it, gravity(s.side), ViewGroup.LayoutParams.WRAP_CONTENT, s.y, s.x)
         }
         w.text.text = text
-        if (w.mode == mode) return
-        w.mode = mode
-        // A locked phone stops the task, and a person waiting on a card
-        // is not touching the screen: keep it on while the task runs.
-        w.root.keepScreenOn = mode == Pill.TASK
-        w.buttons.removeAllViews()
-        when (mode) {
-            Pill.TASK -> w.buttons.addView(stopButton(CoreClient.cmd("stop")))
-            Pill.COMPUTER -> w.buttons.addView(stopButton(CoreClient.cmd("stop", "computer" to true)))
-            Pill.COMPUTER_UNSTOPPABLE -> {}
-            Pill.ENDED -> w.buttons.addView(button(service.getString(R.string.phone_close)) { hidePill() })
+        if (w.collapsed) describeDot(w)
+        val newlyWaiting = waiting && !w.waiting
+        w.waiting = waiting
+        if (w.mode == mode && !newlyWaiting) return
+        if (w.mode != mode) {
+            w.mode = mode
+            // A locked phone stops the task, and a person waiting on a card
+            // is not touching the screen: keep it on while the task runs.
+            w.root.keepScreenOn = mode == Pill.TASK
+            w.buttons.removeAllViews()
+            when (mode) {
+                Pill.TASK -> w.buttons.addView(stopButton(CoreClient.cmd("stop")))
+                Pill.COMPUTER -> w.buttons.addView(stopButton(CoreClient.cmd("stop", "computer" to true)))
+                Pill.COMPUTER_UNSTOPPABLE -> {}
+                Pill.ENDED -> w.buttons.addView(button(service.getString(R.string.phone_close)) { hidePill() })
+            }
         }
+        // New, or news the person should see: the whole pill, for a while
+        // (the end of a task: until it goes).
+        if (w.collapsed) setCollapsed(w, false)
+        collapseSoon()
+    }
+
+    // The dot: the pill shrinks to it a while after it shows or after the
+    // person last touched it, and grows back when tapped.
+
+    private fun collapsible(w: Window) =
+        !w.collapsed && !w.dragging && w.mode != null && w.mode != Pill.ENDED
+
+    private fun collapseSoon() {
+        main.removeCallbacks(collapseLater)
+        val w = pill ?: return
+        if (!ownScreen && collapsible(w)) main.postDelayed(collapseLater, COLLAPSE_MS)
+    }
+
+    private fun setCollapsed(w: Window, on: Boolean) {
+        if (w.collapsed == on) return
+        w.collapsed = on
+        val shown = if (on) View.GONE else View.VISIBLE
+        w.text.visibility = shown
+        w.buttons.visibility = shown
+        if (on) {
+            w.root.setPadding(px(DOT_PAD_DP), px(DOT_PAD_DP), px(DOT_PAD_DP), px(DOT_PAD_DP))
+            describeDot(w)
+        } else {
+            w.root.setPadding(px(14), px(6), px(6), px(6))
+            w.root.contentDescription = null
+        }
+        // Only the dot is pressed as a whole (by TalkBack, too).
+        w.root.isClickable = on
+        pulse(w, on)
+        moveTo(w, spot(w))
+    }
+
+    private fun describeDot(w: Window) {
+        w.root.contentDescription = service.getString(R.string.phone_pill_dot, w.text.text)
+    }
+
+    // The dot breathes, so that the phone still reads as in use. Not when
+    // the person turned animations off.
+    private fun pulse(w: Window, on: Boolean) {
+        w.pulse?.cancel()
+        w.pulse = null
+        val dot = w.dot ?: return
+        dot.alpha = 1f
+        dot.scaleX = 1f
+        dot.scaleY = 1f
+        if (!on || !ValueAnimator.areAnimatorsEnabled()) return
+        w.pulse = ObjectAnimator.ofPropertyValuesHolder(
+            dot,
+            PropertyValuesHolder.ofFloat(View.ALPHA, 1f, 0.35f),
+            PropertyValuesHolder.ofFloat(View.SCALE_X, 1f, 0.7f),
+            PropertyValuesHolder.ofFloat(View.SCALE_Y, 1f, 0.7f),
+        ).apply {
+            duration = PULSE_MS
+            repeatCount = ValueAnimator.INFINITE
+            repeatMode = ValueAnimator.REVERSE
+            start()
+        }
+    }
+
+    // Where the pill goes: the person's place (PillPlace), on the screen as
+    // it is now.
+    private fun spot(w: Window): PillPlace.Spot {
+        val screen = screen()
+        val y = if (place.contains(KEY_Y)) place.getFloat(KEY_Y, 0f) else null
+        val top = PillPlace.top(y, topInset() + px(8), w.root.height, screen.y)
+        return PillPlace.spot(place.getFloat(KEY_X, 0.5f), top, screen.x, w.collapsed, px(DOT_EDGE_DP))
+    }
+
+    // Left and right, not start and end: the place is in screen pixels
+    // whatever the language's direction.
+    @SuppressLint("RtlHardcoded")
+    private fun gravity(side: PillPlace.Side) = Gravity.TOP or when (side) {
+        PillPlace.Side.LEFT -> Gravity.LEFT
+        PillPlace.Side.CENTER -> Gravity.CENTER_HORIZONTAL
+        PillPlace.Side.RIGHT -> Gravity.RIGHT
+    }
+
+    private fun moveTo(w: Window, s: PillPlace.Spot) {
+        val lp = w.lp ?: return
+        lp.gravity = gravity(s.side)
+        lp.x = s.x
+        lp.y = s.y
+        try {
+            wm.updateViewLayout(w.root, lp)
+        } catch (_: Exception) {
+        }
+        // A window that only moves is not laid out again: tell OwnUI where
+        // it goes now, and once more after it got there.
+        moving = true
+        reportRects()
+        main.removeCallbacks(reportLater)
+        main.postDelayed(reportLater, REPORT_AFTER_MOVE_MS)
+    }
+
+    // The frame the pill's window gets from its layout params, which can be
+    // ahead of where it is drawn.
+    @SuppressLint("RtlHardcoded")
+    private fun planned(w: Window): Rect? {
+        val lp = w.lp ?: return null
+        val side = when (lp.gravity and Gravity.HORIZONTAL_GRAVITY_MASK) {
+            Gravity.CENTER_HORIZONTAL -> PillPlace.Side.CENTER
+            Gravity.RIGHT -> PillPlace.Side.RIGHT
+            else -> PillPlace.Side.LEFT
+        }
+        val screen = screen()
+        val f = PillPlace.frame(PillPlace.Spot(side, lp.x, lp.y), w.root.width, w.root.height, screen.x, screen.y)
+        return Rect(f[0], f[1], f[2], f[3])
+    }
+
+    private fun screen(): Point = Point().also {
+        @Suppress("DEPRECATION")
+        wm.defaultDisplay.getRealSize(it)
     }
 
     private fun stopButton(cmd: JSONObject): TextView = button(service.getString(R.string.phone_stop), danger = true) { b ->
@@ -279,41 +448,159 @@ class Overlays(
     private fun hidePill() {
         endTimer?.let { main.removeCallbacks(it) }
         endTimer = null
+        main.removeCallbacks(collapseLater)
+        pill?.pulse?.cancel()
         remove(pill)
         pill = null
         reportRects()
     }
 
     private fun newPill(): Window {
-        val root = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = rounded(SURFACE, 24f)
-            setPadding(px(14), px(6), px(6), px(6))
-        }
-        val dot = TextView(service).apply {
-            text = "●"
-            setTextColor(ACCENT)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        val root = PillView()
+        val dot = View(service).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(ACCENT)
+            }
         }
         val text = TextView(service).apply {
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-            maxWidth = (service.resources.displayMetrics.widthPixels * 0.55).toInt()
+            maxWidth = (screen().x * 0.55).toInt()
             setPadding(px(8), 0, px(10), 0)
             // The person opens Pinky's screen from the pill.
             setOnClickListener { openPinky() }
         }
         val buttons = LinearLayout(service)
-        root.addView(dot)
+        root.addView(dot, LinearLayout.LayoutParams(px(DOT_DP), px(DOT_DP)))
         // The line gives way, not the button. A window as wide as its content
         // is measured first at a dialog's width (ViewRootImpl), and a weighted
         // child that does not fit there asks for a wider try.
         root.addView(text, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(buttons)
-        return Window(root, text, buttons)
+        return Window(root, text, buttons).also {
+            it.dot = dot
+            root.own = it
+        }
+    }
+
+    /**
+     * The pill's window. A drag anywhere on it moves it, also one that
+     * starts on its line or its button, which then are not pressed; a tap
+     * on the dot shows the whole pill. Any touch holds off the shrinking.
+     */
+    private inner class PillView : LinearLayout(service) {
+        var own: Window? = null // the pill this view draws
+        private val slop = ViewConfiguration.get(service).scaledTouchSlop
+        private var downX = 0f
+        private var downY = 0f
+        private var startLeft = 0
+        private var startTop = 0
+
+        init {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(SURFACE, 24f)
+            setPadding(px(14), px(6), px(6), px(6))
+            accessibilityDelegate = object : AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    if (own?.collapsed == true) {
+                        info.addAction(
+                            AccessibilityNodeInfo.AccessibilityAction(
+                                AccessibilityNodeInfo.ACTION_CLICK,
+                                service.getString(R.string.phone_pill_expand),
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+        override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+            val w = own
+            if (w != null && e.actionMasked == MotionEvent.ACTION_DOWN) {
+                main.removeCallbacks(collapseLater)
+                downX = e.rawX
+                downY = e.rawY
+                val loc = IntArray(2)
+                getLocationOnScreen(loc)
+                startLeft = loc[0]
+                startTop = loc[1]
+                w.dragging = false
+            }
+            val handled = super.dispatchTouchEvent(e)
+            if (w != null && (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL)) {
+                if (w.dragging) {
+                    w.dragging = false
+                    dropped(w)
+                }
+                if (pill === w) collapseSoon()
+            }
+            return handled
+        }
+
+        // A move past the slop is a drag, taken from the line or the button.
+        override fun onInterceptTouchEvent(e: MotionEvent): Boolean =
+            e.actionMasked == MotionEvent.ACTION_MOVE && startDrag(e)
+
+        override fun onTouchEvent(e: MotionEvent): Boolean {
+            val w = own ?: return false
+            when (e.actionMasked) {
+                MotionEvent.ACTION_MOVE -> if (startDrag(e)) dragTo(w, e)
+                MotionEvent.ACTION_UP -> if (!w.dragging) performClick()
+            }
+            return true
+        }
+
+        override fun performClick(): Boolean {
+            super.performClick()
+            val w = own ?: return false
+            if (w.collapsed && pill === w) {
+                setCollapsed(w, false)
+                collapseSoon()
+            }
+            return true
+        }
+
+        override fun onConfigurationChanged(newConfig: Configuration?) {
+            super.onConfigurationChanged(newConfig)
+            // The screen turned or changed its size: the same place on it,
+            // kept on it.
+            val w = own ?: return
+            post {
+                if (pill !== w) return@post
+                w.text.maxWidth = (screen().x * 0.55).toInt()
+                if (!w.dragging) moveTo(w, spot(w))
+            }
+        }
+
+        private fun startDrag(e: MotionEvent): Boolean {
+            val w = own ?: return false
+            if (!w.dragging && (abs(e.rawX - downX) > slop || abs(e.rawY - downY) > slop)) w.dragging = true
+            return w.dragging
+        }
+
+        private fun dragTo(w: Window, e: MotionEvent) {
+            val screen = screen()
+            val left = (startLeft + (e.rawX - downX).toInt()).coerceIn(0, (screen.x - width).coerceAtLeast(0))
+            val top = (startTop + (e.rawY - downY).toInt()).coerceIn(0, (screen.y - height).coerceAtLeast(0))
+            moveTo(w, PillPlace.Spot(PillPlace.Side.LEFT, left, top))
+        }
+
+        // Where the person let go is the pill's place from now on; the dot
+        // keeps to the nearer edge.
+        private fun dropped(w: Window) {
+            val at = planned(w) ?: return
+            val screen = screen()
+            place.edit()
+                .putFloat(KEY_X, PillPlace.anchorX(at.left, width, screen.x, w.collapsed))
+                .putFloat(KEY_Y, at.top.toFloat() / screen.y.coerceAtLeast(1))
+                .apply()
+            if (pill === w) moveTo(w, spot(w))
+        }
     }
 
     // The card: an approval, or a handoff.
@@ -453,7 +740,7 @@ class Overlays(
 
     // Windows.
 
-    private fun add(w: Window, gravity: Int, width: Int, y: Int) {
+    private fun add(w: Window, gravity: Int, width: Int, y: Int, x: Int = 0): WindowManager.LayoutParams {
         sensitive(w.root)
         val lp = WindowManager.LayoutParams(
             width,
@@ -463,6 +750,7 @@ class Overlays(
             PixelFormat.TRANSLUCENT,
         )
         lp.gravity = gravity
+        lp.x = x
         lp.y = y
         // The driver knows Pinky's own windows by this title: their content
         // is accessibilityDataSensitive, so not even this service reads
@@ -474,6 +762,7 @@ class Overlays(
         } catch (e: Exception) {
             Log.e(TAG, "could not show an overlay", e)
         }
+        return lp
     }
 
     private fun remove(w: Window?) {
@@ -491,11 +780,18 @@ class Overlays(
             if (!v.isAttachedToWindow || v.width == 0 || v.visibility != View.VISIBLE) continue
             val loc = IntArray(2)
             v.getLocationOnScreen(loc)
-            rects += Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height)
+            val r = Rect(loc[0], loc[1], loc[0] + v.width, loc[1] + v.height)
+            rects += r
+            // The pill on its way somewhere: where it goes as well as where
+            // it was, until it is drawn there (reportLater). Then only where
+            // it is drawn, which the window manager may have shifted, such as
+            // past a camera cutout in landscape.
+            val p = pill
+            if (p != null && moving && v === p.root) planned(p)?.let { if (it != r) rects += it }
         }
         if (rects == service.ownUI.overlayRects()) return
         service.ownUI.setOverlays(rects)
-        Log.i(TAG, "overlays at $rects")
+        if (pill?.dragging != true) Log.i(TAG, "overlays at $rects")
     }
 
     private fun openPinky() {
@@ -582,6 +878,15 @@ class Overlays(
         private const val TAG = "PinkyOverlays"
         private const val ENDED_SHOWN_MS = 8_000L
         private const val NO_PORT_MS = 5_000L
+        private const val COLLAPSE_MS = 4_000L
+        private const val PULSE_MS = 900L
+        private const val REPORT_AFTER_MOVE_MS = 150L
+        private const val DOT_DP = 10
+        private const val DOT_PAD_DP = 13 // a dot of 36 dp, to tap and drag
+        private const val DOT_EDGE_DP = 6
+        private const val PILL_PREFS = "pill"
+        private const val KEY_X = "x"
+        private const val KEY_Y = "y"
         val SURFACE = Color.rgb(28, 28, 30)
         private val BUTTON = Color.argb(255, 58, 58, 62)
         val MUTED = Color.argb(255, 174, 174, 178)

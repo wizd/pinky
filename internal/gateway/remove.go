@@ -135,6 +135,13 @@ func (g *Gateway) RemoveDevice(ctx context.Context, deviceID string, opt RemoveO
 func (g *Gateway) dropSettingsLocked(id string) {
 	delete(g.devices, id)
 	delete(g.background, id)
+	delete(g.trafficOn, id)
+	delete(g.trafficRoute, id)
+	g.dropTraffic(id)
+	g.cap.mu.Lock()
+	delete(g.cap.blocked, id)
+	g.cap.mu.Unlock()
+	g.captureSoon()
 	delete(g.known, id)
 	delete(g.chosen, id)
 }

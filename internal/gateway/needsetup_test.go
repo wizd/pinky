@@ -199,8 +199,15 @@ func needsUntil(t *testing.T, g *Gateway, what string, ok func(NeedView) bool) N
 // a dropped phone for 50 ms.
 func stepGateway(t *testing.T, p driver.Provider) *Gateway {
 	t.Helper()
+	return stepGatewayGrace(t, p, 50*time.Millisecond)
+}
+
+// stepGatewayGrace is stepGateway where a lease survives a dropped phone
+// for grace.
+func stepGatewayGrace(t *testing.T, p driver.Provider, grace time.Duration) *Gateway {
+	t.Helper()
 	g, err := New(Options{Providers: []driver.Provider{p}, Policy: testPolicy(t), TrustNewAgents: true,
-		MaxBlock: 5 * time.Second, ReconnectGrace: 50 * time.Millisecond, SettleMax: 200 * time.Millisecond,
+		MaxBlock: 5 * time.Second, ReconnectGrace: grace, SettleMax: 200 * time.Millisecond,
 		PollInterval: 5 * time.Millisecond, DiscoverEvery: 20 * time.Millisecond, NoScreenshots: true})
 	if err != nil {
 		t.Fatal(err)
@@ -323,7 +330,9 @@ func TestUnopenedPhoneForgotten(t *testing.T) {
 	allow := driver.Info{ID: "px", Platform: driver.Android, Name: "Pixel 8a", Connection: "usb", Backend: "scrcpy",
 		State: driver.StateUnauthorized, Detail: "Unlock the phone and allow USB debugging for this computer."}
 	p.list(&allow)
-	g := stepGateway(t, p)
+	// The lease outlives the unplugged phone long enough to be seen kept
+	// for its task: 50 ms was too short on Windows' coarse timers.
+	g := stepGatewayGrace(t, p, 500*time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	events := g.Subscribe(ctx)
@@ -357,7 +366,7 @@ func TestUnopenedPhoneForgotten(t *testing.T) {
 	}
 
 	// Back, with an agent's task waiting on it: it stays while the task
-	// does (50 ms of grace once unplugged), then goes.
+	// does (500 ms of grace once unplugged), then goes.
 	p.list(&allow)
 	viewUntil(t, g, "px", "back", func(v DeviceView) bool { return v.Status == DeviceNeedsSetup })
 	s := g.OpenSession(AgentInfo{Name: "Claude Code"})

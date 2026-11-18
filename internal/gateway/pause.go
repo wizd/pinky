@@ -50,6 +50,7 @@ func (g *Gateway) PauseDevice(deviceID string) error {
 		g.endLeaseLocked(l, OutcomePaused, "")
 	}
 	d.person, d.personInput = false, false
+	g.quietLocked(d, quietPerson|quietHandoff, false)
 	id, name := d.id, d.name()
 	if g.store != nil {
 		g.rec.do(func(ctx context.Context) error { return g.store.SetDevicePaused(ctx, id, true) })

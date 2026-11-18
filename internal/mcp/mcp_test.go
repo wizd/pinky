@@ -124,7 +124,7 @@ func TestToolList(t *testing.T) {
 	}
 	want := []string{"phone_connect", "phone_release", "phone_observe", "phone_tap", "phone_type", "phone_swipe", "phone_pinch", "phone_drag", "phone_key",
 		"phone_launch", "phone_apps", "phone_batch", "phone_read_list", "phone_wait_for", "phone_files", "phone_app",
-		"phone_logs", "phone_device", "phone_request_approval", "phone_handoff",
+		"phone_logs", "phone_traffic", "phone_device", "phone_request_approval", "phone_handoff",
 		"phone_task_run", "phone_task_status", "phone_task_wait", "phone_task_steer", "phone_task_cancel", "phone_task_list"}
 	got := map[string]*sdk.Tool{}
 	for _, tool := range res.Tools {

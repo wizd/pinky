@@ -27,6 +27,7 @@ var (
 	_ recordingFinder        = (*gateway.Gateway)(nil)
 	_ recordingSetter        = (*gateway.Gateway)(nil)
 	_ retentionSetter        = (*gateway.Gateway)(nil)
+	_ recordingsDirChecker   = (*gateway.Gateway)(nil)
 	_ historyExporter        = (*gateway.Gateway)(nil)
 	_ checkupRunner          = (*gateway.Gateway)(nil)
 	_ phoneRemover           = (*gateway.Gateway)(nil)

@@ -179,7 +179,7 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 		return withScan(res, view)
 	}
 	st.app = first.App
-	list, res := listOn(first, req.Ref, cursorList(cursor), req.Area)
+	list, column, res := startList(first, req, cursor)
 	if res != nil {
 		return withScan(res, view)
 	}
@@ -189,7 +189,12 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 				"The list the continuation belongs to is not on the screen anymore. Read it again without continuation."), view)
 		}
 		return withScan(errResult(ErrNotFound,
-			"No list was found on this screen. Pass ref with the list or scrollable element to read."), view)
+			"No list was found on this screen. Pass ref with the list or scrollable element to read, or scroll_area with the part of the screen that scrolls."), view)
+	}
+	if column != nil {
+		// A column of rows is read as the scroll area it covers.
+		st.req.Area = column
+		req = st.req
 	}
 	if cursor != nil && !sameApp(cursor.app, first.App) {
 		return withScan(errResult(ErrInvalidArgument,
@@ -264,6 +269,20 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 			view.Stop, view.Truncated = "list_changed", true
 			break
 		}
+		// The pipeline read the screen after the swipe with the OCR it adds
+		// where the tree misses text, which on an iPhone is any text OCR
+		// finds and no element shows. The read's own reads take OCR only
+		// where the list's tree says too little: the same here, so every
+		// screen of the read is read alike (GitHub issue #148).
+		retry := ocrOff
+		switch req.OCR {
+		case "all":
+			retry = ocrAll
+		case "auto":
+			if next, ok = autoOCR(next, nextList); ok {
+				retry = ocrAuto
+			}
+		}
 		settled := r.Settle != "timeout"
 		raw := collectListViewport(next, nextList)
 		for try := 0; !settled && try < 2; try++ {
@@ -273,7 +292,7 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 			if !sleepCtx(ctx, g.opt.PollInterval, nil) {
 				break
 			}
-			again, res := g.readListScreen(ctx, l, req.OCR)
+			again, res := g.readListScreenOCR(ctx, l, retry)
 			if res != nil {
 				view.Stop = readListStop(res)
 				return withScan(res, view)
@@ -339,7 +358,7 @@ func (g *Gateway) firstListScreen(ctx context.Context, l *lease, req ReadListReq
 		return nil, res
 	}
 	if req.OCR == "auto" {
-		if list, _ := listOn(s, req.Ref, cursorList(cursor), req.Area); list.Role == "" || viewportNeedsOCR(s, list) {
+		if list, _, _ := startList(s, req, cursor); list.Role == "" || viewportNeedsOCR(s, list) {
 			if s, res = g.readListScreenOCR(ctx, l, ocrAuto); res != nil {
 				return nil, res
 			}
@@ -400,6 +419,26 @@ func (g *Gateway) listScreenAfter(ctx context.Context, l *lease, ocr string, nex
 	return next, nil
 }
 
+// autoOCR is s as ocr "auto" reads it for list: without OCR's lines when
+// the tree says enough about the list (viewportNeedsOCR), as the read's
+// first screen is read. It reports whether the OCR lines stay.
+func autoOCR(s *screen.Screen, list screen.Element) (*screen.Screen, bool) {
+	tree := *s
+	tree.Elements = make([]screen.Element, 0, len(s.Elements))
+	for _, e := range s.Elements {
+		if e.Source != screen.SourceOCR {
+			tree.Elements = append(tree.Elements, e)
+		}
+	}
+	if len(tree.Elements) == len(s.Elements) {
+		return s, false
+	}
+	if viewportNeedsOCR(&tree, list) {
+		return s, true
+	}
+	return &tree, false
+}
+
 // listLane picks where across the list the next swipe runs: the first lane
 // whose start the rules let through on the latest screen. The pipeline
 // judges the swipe again on its own read, with OCR, before it is sent;
@@ -446,13 +485,17 @@ func (st *readState) take(s *screen.Screen, first bool) bool {
 		// Adjacent screens must share text: without it, or with lines
 		// above the shared part that the last screen did not have, the
 		// swipe may have skipped content.
-		gap := len(st.previous) > 0 && len(current) > 0 &&
-			(overlap == 0 || (req.Direction != "down" && unseenPrefix(st.previous, current)))
+		var unseen []viewportLine
+		if len(st.previous) > 0 && len(current) > 0 && overlap > 0 && req.Direction != "down" {
+			unseen = unseenAbove(st.previous, current, gapContext{area: st.list.Bounds, seen: st.outside()})
+		}
+		gap := len(st.previous) > 0 && len(current) > 0 && (overlap == 0 || len(unseen) > 0)
 		switch {
 		case gap && overlap > 0 && req.Direction != "down" && endMarker(current):
 			fresh = newViewportContent(st.previous, current)
 		case gap:
 			view.Stop, view.Truncated = "gap", true
+			view.gap = gapNote(view.StartScreen+view.Pages+1, overlap, unseen)
 			return false
 		}
 	}
@@ -476,6 +519,43 @@ func (st *readState) take(s *screen.Screen, first bool) bool {
 	view.Overlap += overlap
 	st.previous, st.raw, st.full = tail(current, readListKeep), tail(raw, readListKeep), full
 	return true
+}
+
+// outside returns the last screen's lines outside the list, and its fixed
+// controls: what a gap judgment may count as seen though the list did not
+// show it (gapContext.seen).
+func (st *readState) outside() []viewportLine {
+	out := append([]viewportLine(nil), st.pinned...)
+	area := st.list.Bounds
+	for _, line := range st.full {
+		if area.Empty() || !area.Contains(line.Bounds.Center()) {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// gapNote says why screen page did not follow on from the one before, for
+// the result's message: a read stopped at a gap is otherwise hard to tell
+// from a list whose screens share nothing.
+func gapNote(page, overlap int, unseen []viewportLine) string {
+	if overlap == 0 || len(unseen) == 0 {
+		return fmt.Sprintf("Screen %d shared no run of lines with the one before, so the swipe may have skipped content.", page)
+	}
+	quoted := make([]string, 0, 3)
+	for _, line := range unseen[:min(len(unseen), 3)] {
+		text, _ := truncateRunesMarked(line.Text, 40)
+		quoted = append(quoted, fmt.Sprintf("%q", text))
+	}
+	if len(unseen) > 3 {
+		quoted = append(quoted, "…")
+	}
+	verb := "were"
+	if len(unseen) == 1 {
+		verb = "was"
+	}
+	return fmt.Sprintf("Screen %d shared %d line%s with the one before, but %d line%s above them (%s) %s not on it, so content may have been added or skipped there.",
+		page, overlap, plural(overlap), len(unseen), plural(len(unseen)), strings.Join(quoted, ", "), verb)
 }
 
 // endsHere reports whether the list's last row, at the end being read
@@ -589,6 +669,89 @@ func largestList(s *screen.Screen) screen.Element {
 	return largest
 }
 
+// startList finds the list a read starts on (listOn). With no ref, scroll
+// area or continuation, on a screen with no list or scrollable element
+// big enough, it falls back to a column of rows (rowColumn), returned
+// with its bounds as the area to read as a scroll_area: iOS 27 lists
+// Settings' rows but no element for the list that holds them (GitHub
+// issue #148).
+func startList(s *screen.Screen, req ReadListRequest, cursor *readCursor) (screen.Element, *screen.Rect, *Result) {
+	list, res := listOn(s, req.Ref, cursorList(cursor), req.Area)
+	if res != nil || list.Role != "" || req.Ref > 0 || req.Area != nil || cursor != nil {
+		return list, nil, res
+	}
+	if r, ok := rowColumn(s); ok {
+		return screen.Element{Role: screen.RoleList, Bounds: r}, &r, nil
+	}
+	return list, nil, nil
+}
+
+// readListMinRows is how many rows a column needs to be read as a list.
+const readListMinRows = 6
+
+// rowColumn finds a column of rows on a screen that marks no list: at
+// least readListMinRows elements from the tree, each at least half the
+// screen wide and at most an eighth of it high, that share their left
+// edge and width and lie one below another, together covering at least a
+// quarter of the screen, as a settings page's or a table's rows do. It
+// returns the box around them. Text read by OCR, fields, images and tabs
+// do not count, so a home screen, a form or a tab bar is never a column.
+func rowColumn(s *screen.Screen) (screen.Rect, bool) {
+	if s == nil || s.Width <= 0 || s.Height <= 0 {
+		return screen.Rect{}, false
+	}
+	var rows []screen.Rect
+	for _, e := range s.Elements {
+		b := e.Bounds
+		if e.Source == screen.SourceOCR || e.Hidden || b.Empty() || b.W*2 < s.Width || b.H*8 > s.Height {
+			continue
+		}
+		switch e.Role {
+		case screen.RoleButton, screen.RoleText, screen.RoleLink, screen.RoleSwitch, screen.RoleCheckbox, screen.RoleOther:
+			rows = append(rows, b)
+		}
+	}
+	tol := max(s.Width/40, 4)
+	near := func(a, b int) bool { return max(a-b, b-a) <= tol }
+	var best []screen.Rect
+	for _, r := range rows {
+		var col []screen.Rect
+		for _, o := range rows {
+			if near(o.X, r.X) && near(o.W, r.W) {
+				col = append(col, o)
+			}
+		}
+		// One row each: a cell and an element of the same size inside it
+		// count once.
+		sort.SliceStable(col, func(i, j int) bool { return col[i].Y < col[j].Y })
+		var distinct []screen.Rect
+		for _, o := range col {
+			if n := len(distinct); n > 0 && o.Y < distinct[n-1].Y+distinct[n-1].H/2 {
+				continue
+			}
+			distinct = append(distinct, o)
+		}
+		if len(distinct) > len(best) {
+			best = distinct
+		}
+	}
+	if len(best) < readListMinRows {
+		return screen.Rect{}, false
+	}
+	box := best[0]
+	for _, o := range best[1:] {
+		x0, y0 := min(box.X, o.X), min(box.Y, o.Y)
+		x1, y1 := max(box.X+box.W, o.X+o.W), max(box.Y+box.H, o.Y+o.H)
+		box = screen.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
+	}
+	box.X, box.Y = max(box.X, 0), max(box.Y, 0)
+	box.W, box.H = min(box.W, s.Width-box.X), min(box.H, s.Height-box.Y)
+	if box.W*box.H*readListMinArea < s.Width*s.Height {
+		return screen.Rect{}, false
+	}
+	return box, true
+}
+
 func readableList(e screen.Element) bool {
 	if e.Bounds.Empty() {
 		return false
@@ -691,6 +854,9 @@ func readListResult(l *lease, view *ScanView) *Result {
 	res.Message = fmt.Sprintf("%s the list: %d screen%s, %d new line%s, %d overlapping line%s; stopped at %s.",
 		state, view.Pages, plural(view.Pages), view.Lines, plural(view.Lines),
 		view.Overlap, plural(view.Overlap), strings.ReplaceAll(view.Stop, "_", " "))
+	if view.gap != "" {
+		res.Message += " " + view.gap
+	}
 	if view.Continuation != "" {
 		res.Message += " Pass continuation to read on from here."
 	}

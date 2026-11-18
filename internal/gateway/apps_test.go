@@ -37,6 +37,41 @@ func TestMatchAppByID(t *testing.T) {
 	}
 }
 
+// GitHub issue #148: an iPhone in Portuguese names Settings "Ajustes" and
+// Photos "Fotos", and their bundle ids hold no English name. The English
+// names of iPhone system apps still find them; on Android, Settings is
+// still found through its package.
+func TestMatchIPhoneSystemAppsInEnglish(t *testing.T) {
+	apps := []driver.App{
+		{ID: "com.apple.Preferences", Name: "Ajustes", Aliases: []string{"Preferences"}, System: true},
+		{ID: "com.apple.mobileslideshow", Name: "Fotos", System: true},
+		{ID: "com.apple.mobiletimer", Name: "Relógio", System: true},
+		{ID: "com.apple.mobilecal", Name: "Calendário", System: true},
+		{ID: "com.apple.MobileSMS", Name: "Mensagens", System: true},
+		{ID: "com.apple.DocumentsApp", Name: "Arquivos", System: true},
+		{ID: "com.apple.shortcuts", Name: "Atalhos", System: true},
+	}
+	for q, want := range map[string]string{
+		"Settings":  "com.apple.Preferences",
+		"Photos":    "com.apple.mobileslideshow",
+		"Clock":     "com.apple.mobiletimer",
+		"Calendar":  "com.apple.mobilecal",
+		"Messages":  "com.apple.MobileSMS",
+		"Files":     "com.apple.DocumentsApp",
+		"Shortcuts": "com.apple.shortcuts",
+		"Ajustes":   "com.apple.Preferences",
+	} {
+		got, ok := matchApp(apps, q)
+		if !ok || got.ID != want {
+			t.Errorf("matchApp(%q) = %q, %v; want %q", q, got.ID, ok, want)
+		}
+	}
+	android := []driver.App{{ID: "com.android.settings", Name: "Configurações", System: true}}
+	if got, ok := matchApp(android, "Settings"); !ok || got.ID != "com.android.settings" {
+		t.Errorf("matchApp(Settings) on Android = %q, %v", got.ID, ok)
+	}
+}
+
 // A task app list with a name no installed app has (天气 for an English
 // Weather app) is pointed out on connect, and connecting again with the
 // same task takes the corrected list.

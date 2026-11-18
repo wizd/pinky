@@ -113,7 +113,7 @@ Commands:
   (none)    start the desktop app (gateway and window); same as "app"
   daemon    run the gateway without UI
   mcp       run the MCP server on stdio (agents launch this); starts the
-            gateway when none is running
+            gateway when none is running, unless you quit Pinky
   devices   list connected phones
   task run|status|steer|cancel|list
             hand Ask Pinky a task from a shell and follow it, as an agent
@@ -127,7 +127,8 @@ Commands:
             (--helper-only: the older Pinky Helper); run it again when its
             signature runs out (macOS)
   token     print the agent token, which agents connecting over HTTP send
-  quit      quit the running Pinky (the app or the daemon)
+  quit      quit the running Pinky (the app or the daemon); agents do not
+            start it again until you open it
   update [--check]
             say whether a newer Pinky is out and install it (while Pinky
             is not running; the app updates itself)
@@ -164,6 +165,11 @@ func runQuit(args []string) error {
 	ctl.Close()
 	if err != nil {
 		return err
+	}
+	// Quit on purpose: agents do not start it again until it is opened
+	// (quitmark.go). The app notes it too; a daemon does not.
+	if err := markQuit(dirs); err != nil {
+		fmt.Fprintf(os.Stderr, "pinky quit: %v\n", err)
 	}
 	for deadline := time.Now().Add(15 * time.Second); time.Now().Before(deadline); time.Sleep(200 * time.Millisecond) {
 		c, err := api.DialControl(dirs)

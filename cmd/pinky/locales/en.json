@@ -674,21 +674,21 @@
   "@addPhoneChooseAndroid": {
     "description": "Add phone, first step: under \"Android\" on its card, examples of Android phones."
   },
-  "addPhoneChooseDetail": "Pinky works with Android phones and iPhones.",
+  "addPhoneChooseDetail": "Pinky works with Android phones, iPhones and iPads.",
   "@addPhoneChooseDetail": {
     "description": "Add phone, first step: the line under the heading."
   },
   "addPhoneChooseIPhone": "Best on iOS 27; older versions work too",
   "@addPhoneChooseIPhone": {
-    "description": "Add phone, first step: under \"iPhone\" on its card, which iOS versions work."
+    "description": "Add phone, first step: under \"iPhone / iPad\" on its card, which iOS versions work."
   },
   "addPhoneChooseTitle": "Which phone?",
   "@addPhoneChooseTitle": {
-    "description": "Add phone, first step: the heading above two cards to pick from, Android and iPhone."
+    "description": "Add phone, first step: the heading above two cards to pick from, Android and iPhone / iPad."
   },
   "addPhoneChooseVirtual": "Virtual phone",
   "@addPhoneChooseVirtual": {
-    "description": "Add phone, first step: the title of the card below Android and iPhone, for iOS Simulators and Android emulators that run on this computer."
+    "description": "Add phone, first step: the title of the card below Android and iPhone / iPad, for iOS Simulators and Android emulators that run on this computer."
   },
   "addPhoneChooseVirtualMac": "An iOS Simulator or an Android emulator on this Mac",
   "@addPhoneChooseVirtualMac": {
@@ -1839,6 +1839,248 @@
   "backgroundUnsupported": "{phone} can't work in the background yet.",
   "@backgroundUnsupported": {
     "description": "A toast when the phone cannot work in the background. phone is the phone's name.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "trafficTitle": "Read network traffic",
+  "@trafficTitle": {
+    "description": "Settings › Phones: a phone's switch that lets agents read the web requests the phone makes during their tasks (phone_traffic), through Pinky's own proxy. Off by default."
+  },
+  "trafficDesc": "Agents may see the web requests this phone makes during their tasks, once its proxy is set to Pinky. Pinky asks you first in each task, hides passwords and tokens, and never decrypts banking, payment or password apps.",
+  "@trafficDesc": {
+    "description": "Settings › Phones: the line under Read network traffic."
+  },
+  "trafficChangeFailed": "Couldn't change Read network traffic for {phone}: {error}",
+  "@trafficChangeFailed": {
+    "description": "A toast when Pinky could not turn Read network traffic on or off. phone is the phone's name, error what went wrong.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "error": {
+        "type": "String",
+        "example": "unknown device"
+      }
+    }
+  },
+  "trafficSetupTitle": "Send traffic through Pinky",
+  "@trafficSetupTitle": {
+    "description": "Settings › Phones, under Read network traffic once it is on: the row that opens the phone's setup for Pinky's proxy."
+  },
+  "trafficSetupDesc": "The proxy setup link for this phone, Pinky's certificate, and what to set on the phone.",
+  "@trafficSetupDesc": {
+    "description": "The line under Send traffic through Pinky."
+  },
+  "trafficSetupShow": "Show Setup",
+  "@trafficSetupShow": {
+    "description": "The button that opens the setup."
+  },
+  "trafficSetupHide": "Hide Setup",
+  "@trafficSetupHide": {
+    "description": "The button that closes the setup."
+  },
+  "trafficSetupReading": "Reading…",
+  "@trafficSetupReading": {
+    "description": "While the setup is first read."
+  },
+  "trafficSetupWaiting": "Pinky is looking for this phone on this computer's networks…",
+  "@trafficSetupWaiting": {
+    "description": "While Pinky has not found where the phone reaches its proxy yet."
+  },
+  "trafficCertificate": "Certificate",
+  "@trafficCertificate": {
+    "description": "A row with the link where the phone's browser downloads Pinky's certificate."
+  },
+  "trafficCopyCertURL": "Copy the certificate link",
+  "@trafficCopyCertURL": {
+    "description": "The Copy button of the certificate link."
+  },
+  "trafficCopiedCertURL": "Copied the certificate link",
+  "@trafficCopiedCertURL": {
+    "description": "A toast after copying the certificate link."
+  },
+  "trafficPACURL": "Proxy setup link",
+  "@trafficPACURL": {
+    "description": "A row with the link (a proxy auto-config file) the phone's Wi-Fi proxy is set to, as Automatic."
+  },
+  "trafficCopyPACURL": "Copy the proxy setup link",
+  "@trafficCopyPACURL": {
+    "description": "The Copy button of the proxy setup link."
+  },
+  "trafficCopiedPACURL": "Copied the proxy setup link",
+  "@trafficCopiedPACURL": {
+    "description": "A toast after copying the proxy setup link."
+  },
+  "trafficCAExpires": "It's valid until {date}. A month before then, Pinky makes a new one, and this phone needs the new one installed.",
+  "@trafficCAExpires": {
+    "description": "When Pinky's certificate ends. date is the day.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "2027-11-17"
+      }
+    }
+  },
+  "trafficCARenewed": "Pinky made a new certificate because the old one was about to expire. Install the new one on this phone (steps 2 to 4), then remove the old one.",
+  "@trafficCARenewed": {
+    "description": "A warning in the setup after Pinky replaced its certificate authority: the phone has to install the new certificate."
+  },
+  "trafficRemoveIOS": "To remove Pinky's certificate from the iPhone: Settings › General › VPN & Device Management, tap Pinky's profile, then Remove Profile. Set the Wi-Fi proxy back to Off too.",
+  "@trafficRemoveIOS": {
+    "description": "How to take Pinky's certificate off an iPhone. Use the names iOS gives these settings in the language."
+  },
+  "trafficRemoveAndroid": "To remove Pinky's certificate from the phone: Settings › Security & privacy › More security settings › Encryption & credentials › User credentials, tap Pinky's certificate, then Remove. Set the Wi-Fi proxy back to None too.",
+  "@trafficRemoveAndroid": {
+    "description": "How to take Pinky's certificate off an Android phone. Use the names stock Android gives these settings in the language."
+  },
+  "trafficBlockTitle": "Never decrypt",
+  "@trafficBlockTitle": {
+    "description": "Settings › Phones, in a phone's traffic setup: the hosts Pinky never decrypts or records for this phone."
+  },
+  "trafficBlockDesc": "Pinky never decrypts banking, payment, brokerage or password-manager apps. Add other hosts here, subdomains included: agents see only that the phone reached them.",
+  "@trafficBlockDesc": {
+    "description": "The line under Never decrypt."
+  },
+  "trafficBlockLabel": "Host to never decrypt",
+  "@trafficBlockLabel": {
+    "description": "The field's accessible label, where the person types a host to add to Never decrypt."
+  },
+  "trafficBlockAdd": "Add",
+  "@trafficBlockAdd": {
+    "description": "The button that adds the typed host to Never decrypt."
+  },
+  "trafficBlockRemove": "Remove {host}",
+  "@trafficBlockRemove": {
+    "description": "The accessible label of the button that takes a host off Never decrypt.",
+    "placeholders": {
+      "host": {
+        "type": "String",
+        "example": "bank.example.com"
+      }
+    }
+  },
+  "trafficBlockInvalid": "“{text}” isn't a host name, like bank.example.com.",
+  "@trafficBlockInvalid": {
+    "description": "When what the person typed into Never decrypt is no host name.",
+    "placeholders": {
+      "text": {
+        "type": "String",
+        "example": "my bank"
+      }
+    }
+  },
+  "trafficBlockFailed": "Couldn't change the hosts Pinky never decrypts for {phone}: {error}",
+  "@trafficBlockFailed": {
+    "description": "A toast when saving Never decrypt failed. phone is the phone's name, error what went wrong.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "error": {
+        "type": "String",
+        "example": "at most 200 hosts"
+      }
+    }
+  },
+  "trafficCAInfo": "Certificate “{name}”, SHA-256 {fingerprint}. Pinky made it on this computer and keeps its key only here.",
+  "@trafficCAInfo": {
+    "description": "Pinky's certificate authority: name is its name, fingerprint its SHA-256 fingerprint, for the person to compare on the phone.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pinky Traffic CA 1a2b3c"
+      },
+      "fingerprint": {
+        "type": "String",
+        "example": "3F:9A:…:C2"
+      }
+    }
+  },
+  "trafficStepsIOS": "On the iPhone:\n1. Settings › Wi-Fi, tap ⓘ next to the network, then Configure Proxy › Automatic, and enter the proxy setup link as the URL.\n2. In Safari, open the certificate link and allow the download.\n3. Settings › General › VPN & Device Management: tap Pinky's profile and install it.\n4. Settings › General › About › Certificate Trust Settings: turn on full trust for Pinky's certificate.",
+  "@trafficStepsIOS": {
+    "description": "The steps on an iPhone to send its traffic through Pinky's proxy (an automatic proxy with the proxy setup link) and trust Pinky's certificate. Use the names iOS gives these settings in the language."
+  },
+  "trafficStepsAndroid": "On the phone:\n1. Settings › Network & internet › Internet, tap the gear next to the Wi-Fi network, edit it, set Proxy to Proxy Auto-Config and enter the proxy setup link as the PAC URL. Or turn on Route over the cable during tasks below instead.\n2. In the browser, open the certificate link.\n3. Settings › Security & privacy › More security settings › Install a certificate › CA certificate, and pick the file you downloaded.",
+  "@trafficStepsAndroid": {
+    "description": "The steps on an Android phone to send its traffic through Pinky's proxy (Proxy Auto-Config with the proxy setup link) and install Pinky's certificate. Menu names differ between makers; use the names stock Android gives them in the language. Route over the cable during tasks is trafficRouteTitle."
+  },
+  "trafficAndroidAppsWarning": "Most apps made for Android 7 or later trust only the system's certificates, not ones you install, so Pinky sees only the hosts they reach, not their requests. The browser and apps that allow it show in full.",
+  "@trafficAndroidAppsWarning": {
+    "description": "A warning under the Android steps: apps targeting API 24 or later ignore user-installed certificates."
+  },
+  "trafficOutsideTasks": "Pinky's proxy runs only during this phone's tasks. At other times, and while Pinky isn't running, the phone connects directly. If the phone can't reach the proxy setup link at all (on another network, or with this computer asleep), it may not connect until it can, so set its proxy back to Off when you no longer need this.",
+  "@trafficOutsideTasks": {
+    "description": "A note under the steps: the proxy listens only during tasks; otherwise the automatic proxy goes direct, but a phone that can't fetch the setup link may stop connecting."
+  },
+  "trafficRouteTitle": "Route over the cable during tasks",
+  "@trafficRouteTitle": {
+    "description": "Settings › Phones, in an Android phone's traffic setup: a switch that has Pinky set the phone's proxy to itself over USB during tasks. Off by default."
+  },
+  "trafficRouteDesc": "When a task starts, Pinky sets this phone's proxy to itself through the USB cable (port {port}), and puts your setting back when it ends. You don't need the Wi-Fi proxy then.",
+  "@trafficRouteDesc": {
+    "description": "The line under Route over the cable during tasks. port is the proxy's port.",
+    "placeholders": {
+      "port": {
+        "type": "String",
+        "example": "9277"
+      }
+    }
+  },
+  "trafficRouteStranded": "If the cable comes out or Pinky quits during a task, the phone keeps pointing at Pinky and has no web until it is plugged into a running Pinky again. To clear it yourself, run adb shell settings put global http_proxy :0 on a computer.",
+  "@trafficRouteStranded": {
+    "description": "A warning under Route over the cable during tasks: the phone's proxy stays set to Pinky when the cable is unplugged or Pinky stops mid-task. adb shell settings put global http_proxy :0 is a command: keep it as it is."
+  },
+  "trafficRouteChangeFailed": "Couldn't change Route over the cable during tasks for {phone}: {error}",
+  "@trafficRouteChangeFailed": {
+    "description": "A toast when Pinky could not turn the cable route on or off. phone is the phone's name, error what went wrong.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "error": {
+        "type": "String",
+        "example": "connection refused"
+      }
+    }
+  },
+  "trafficProblemNoAddress": "Pinky doesn't know an address of {phone} on a network this computer is on. Connect both to the same Wi-Fi or tailnet.",
+  "@trafficProblemNoAddress": {
+    "description": "Why Pinky's proxy does not listen for the phone: it found no address of the phone on this computer's networks. phone is its name.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "trafficProblemListenFailed": "Another program on this computer uses the proxy's port, so Pinky can't listen.",
+  "@trafficProblemListenFailed": {
+    "description": "Why Pinky's proxy does not listen: its port is taken."
+  },
+  "trafficProblemNoCA": "Pinky couldn't read or make its certificate.",
+  "@trafficProblemNoCA": {
+    "description": "Why Pinky's proxy does not run: its certificate authority could not be read or made."
+  },
+  "trafficProblemRouteFailed": "Pinky couldn't set {phone}'s proxy over its cable.",
+  "@trafficProblemRouteFailed": {
+    "description": "Why the cable route failed. phone is the phone's name.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "trafficProblemRouteBusy": "Another phone is routed over its cable. Pinky routes one phone at a time, so {phone} waits.",
+  "@trafficProblemRouteBusy": {
+    "description": "Why the cable route waits: another phone uses it. phone is this phone's name.",
     "placeholders": {
       "phone": {
         "type": "String",
@@ -4888,6 +5130,36 @@
       }
     }
   },
+  "gwDoReadTraffic": "read the network traffic of {phone}",
+  "@gwDoReadTraffic": {
+    "description": "What a step asked for: give the agent the web requests a phone made during the task (phone_traffic). Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "gwDoReadTrafficWithBodies": "read the network traffic of {phone} with request and response bodies",
+  "@gwDoReadTrafficWithBodies": {
+    "description": "What a step asked for: give the agent the web requests a phone made during the task, with their bodies (phone_traffic). Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "gwDoReadTrafficBodies": "read the request and response bodies in the network traffic of {phone}",
+  "@gwDoReadTrafficBodies": {
+    "description": "What a step asked for: give the agent the bodies of web requests a phone made during the task, after it could read the requests (phone_traffic). Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
   "gwDoReceiveFile": "receive “{path}” from the agent",
   "@gwDoReceiveFile": {
     "description": "What a step tried: take a file the agent sent (phone_files upload) into the folder on the computer that is copied to the phone. Shown only in other languages; in English the gateway's own words show.",
@@ -5330,6 +5602,10 @@
       }
     }
   },
+  "gwStatusScreenOff": "Screen off",
+  "@gwStatusScreenOff": {
+    "description": "A phone's status line: the phone is idle and its own screen is off without a lock screen, such as an Android TV in standby. Shown only in other languages; in English the gateway's own words show."
+  },
   "gwStatusLostOnWiFi": "Lost on Wi-Fi",
   "@gwStatusLostOnWiFi": {
     "description": "A phone's status line: the Mac's device service (usbmuxd) stopped listing an iPhone that is on the same Wi-Fi. Shown only in other languages; in English the gateway's own words show."
@@ -5400,9 +5676,9 @@
   "@gwStatusSwitchCoreDevice": {
     "description": "An iPhone's status line while Pinky moves it back from Pinky on the iPhone to CoreDevice after a task that needed it. Shown only in other languages."
   },
-  "gwStatusSwitchHelper": "Switching to Pinky on the iPhone",
+  "gwStatusSwitchHelper": "Connecting through Pinky on the iPhone",
   "@gwStatusSwitchHelper": {
-    "description": "An iPhone's status line while Pinky moves an agent's task to Pinky on the iPhone, for an app that refuses screen sharing. Shown only in other languages."
+    "description": "An iPhone's status line while Pinky changes how it connects to it, to Pinky on the iPhone (the WebDriverAgent helper), such as for an app that refuses screen sharing. A change of connection, not the task moving to the phone. Shown only in other languages."
   },
   "gwStatusWaiting": "Waiting for you · {title}",
   "@gwStatusWaiting": {
@@ -5713,6 +5989,34 @@
       "app": {
         "type": "String",
         "example": "Example"
+      }
+    }
+  },
+  "gwStepReadTraffic": "Read {count} network requests of {phone}",
+  "@gwStepReadTraffic": {
+    "description": "A step: the agent read the list of web requests a phone made (phone_traffic); history keeps only this line, not the requests. Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "count": {
+        "type": "String",
+        "example": "12"
+      },
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "gwStepReadTrafficOne": "Read network request {id} of {phone}",
+  "@gwStepReadTrafficOne": {
+    "description": "A step: the agent read one web request a phone made, by its id (phone_traffic); history keeps only this line. Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "id": {
+        "type": "String",
+        "example": "104"
+      },
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
       }
     }
   },
@@ -6348,6 +6652,10 @@
   "@mirrorCallType": {
     "description": "A verb phrase that completes the toast \"Couldn't …: <error>\" when text typed on the mirror cannot reach the phone."
   },
+  "mirrorCallWake": "turn the screen on",
+  "@mirrorCallWake": {
+    "description": "A verb phrase that completes the toast \"Couldn't …: <error>\" when a click on the mirror of a phone whose screen is off cannot turn its screen on."
+  },
   "mirrorConnecting": "Connecting…",
   "@mirrorConnecting": {
     "description": "Under a spinner over the mirror while the phone's live picture connects."
@@ -6419,6 +6727,24 @@
         "example": "Pixel 9"
       }
     }
+  },
+  "mirrorScreenOff": "{phone}'s screen is off",
+  "@mirrorScreenOff": {
+    "description": "A pill over the dimmed mirror of a phone whose own screen is off without a lock screen, such as an Android TV in standby, which sends no picture until it wakes. phone is the phone's name. One line over the phone's picture: keep it short.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "TV"
+      }
+    }
+  },
+  "mirrorScreenOffTile": "Screen off",
+  "@mirrorScreenOffTile": {
+    "description": "The same pill over the phone's tile in All phones, which can be 168 points wide."
+  },
+  "mirrorScreenOffWake": "Click to turn it on",
+  "@mirrorScreenOffWake": {
+    "description": "Under mirrorScreenOff: a click on the mirror, or a key, turns the phone's screen on. It never unlocks the phone."
   },
   "mirrorStreamEnded": "The stream ended. Reconnecting…",
   "@mirrorStreamEnded": {
@@ -7710,15 +8036,19 @@
       }
     }
   },
-  "phoneSwitchHelperTitle": "Moving {phone} to Pinky on the iPhone…",
+  "phoneSwitchHelperTitle": "Connecting to {phone} through Pinky on the iPhone…",
   "@phoneSwitchHelperTitle": {
-    "description": "The page of an iPhone while Pinky moves an agent's task to Pinky on the iPhone, which shares no screen, for an app that refuses screen sharing. phone is its name.",
+    "description": "The page of an iPhone while Pinky changes how it connects to it, to Pinky on the iPhone (the WebDriverAgent helper, which shares no screen), such as for an app that refuses screen sharing. The agent on the computer keeps doing the task: word it as a change of connection, not as the task moving to the phone. phone is its name.",
     "placeholders": {
       "phone": {
         "type": "String",
         "example": "DIYgod's iPhone"
       }
     }
+  },
+  "phoneSwitchHelperTask": "The agent on this computer keeps doing the task. Only how Pinky connects to the phone changes.",
+  "@phoneSwitchHelperTask": {
+    "description": "Under the title of an iPhone's page while Pinky changes its connection to Pinky on the iPhone during an agent's task, so the person does not think the task moved to the phone."
   },
   "phoneTailnetAway": "Pinky can't reach {name} through Tailscale now. It connects again by itself once Tailscale says the phone is online.",
   "@phoneTailnetAway": {
@@ -8432,6 +8762,10 @@
   "@ruleAppLogs": {
     "description": "The name of the rule that asks before an agent first reads an app's logs or crash reports in a task (apps that are not development builds)."
   },
+  "ruleNetworkTraffic": "Network traffic",
+  "@ruleNetworkTraffic": {
+    "description": "The name of the rule that asks before an agent first reads a phone's network traffic in a task (phone_traffic)."
+  },
   "ruleBlockedByYou": "Blocked by you",
   "@ruleBlockedByYou": {
     "description": "The name of the policy rule that denies the apps the person blocked."
@@ -8686,9 +9020,43 @@
   "@settingsAgentsApps": {
     "description": "The accessibility label of the field of the apps an agent may use, under the select of what it may do (Settings › Agents, and a first-connection card)."
   },
+  "settingsAgentsAppsAsked": "Asked for",
+  "@settingsAgentsAppsAsked": {
+    "description": "A short note beside an app in the list of apps to tick under \"Only the apps I choose\" on a first-connection card: the agent named this app for its task."
+  },
+  "settingsAgentsAppsBlocked": "Blocked",
+  "@settingsAgentsAppsBlocked": {
+    "description": "A short note beside an app in the list of apps to tick under \"Only the apps I choose\" which a rule blocks for agents: it is greyed and cannot be ticked."
+  },
+  "settingsAgentsAppsChosen": "{count, plural, =0 {No app chosen yet} one {# app chosen} other {# apps chosen}}",
+  "@settingsAgentsAppsChosen": {
+    "description": "Under the list of apps to tick under \"Only the apps I choose\": how many are ticked. With one or more it is a link that shows the ticked apps alone.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "3"
+      }
+    }
+  },
+  "settingsAgentsAppsMissing": "No app by this name",
+  "@settingsAgentsAppsMissing": {
+    "description": "A short note beside a name in the list of apps to tick under \"Only the apps I choose\" that names no app on the connected phones, such as an English name on a phone that shows the app under its Chinese one: a name the agent gave for its task (greyed, unticked), or one chosen before."
+  },
+  "settingsAgentsAppsNone": "No app on your phones matches.",
+  "@settingsAgentsAppsNone": {
+    "description": "In place of the list of apps to tick under \"Only the apps I choose\", when what is typed in the field above it matches no app."
+  },
   "settingsAgentsAppsPlaceholder": "Apps, separated by commas: Dinely, Chatter",
   "@settingsAgentsAppsPlaceholder": {
-    "description": "The placeholder of the field of the apps an agent may use. Dinely and Chatter are example app names; keep them."
+    "description": "The placeholder of the field of the apps an agent may use, shown while no phone lists its apps to tick. Dinely and Chatter are example app names; keep them."
+  },
+  "settingsAgentsAppsSearch": "Search apps",
+  "@settingsAgentsAppsSearch": {
+    "description": "The placeholder and accessibility label of the field that narrows down the list of apps to tick under \"Only the apps I choose\"."
+  },
+  "settingsAgentsAppsShowAll": "Show all apps",
+  "@settingsAgentsAppsShowAll": {
+    "description": "A link under the list of apps to tick under \"Only the apps I choose\", while it shows the apps chosen only (after a click on the count of apps chosen): back to every app."
   },
   "settingsAgentsChangeLabel": "Change what {agent} may do",
   "@settingsAgentsChangeLabel": {
@@ -9313,6 +9681,56 @@
   "settingsPrivacyRecordDesc": "Used for replays in Activity. Recording pauses while a blocked app is open; its notifications and its card in recent apps are recorded as they show. Recordings stay on this computer: an agent gets one only when you allow it, as it saves a task's report.",
   "@settingsPrivacyRecordDesc": {
     "description": "Settings › Privacy: the line under Record the screen during tasks. Activity is the page of finished tasks."
+  },
+  "settingsPrivacyRecordFolder": "Recordings folder",
+  "@settingsPrivacyRecordFolder": {
+    "description": "Settings › Privacy: the row that chooses the folder new task recordings go to, shown under Record the screen during tasks while that is on."
+  },
+  "settingsPrivacyRecordFolderChoose": "Choose…",
+  "@settingsPrivacyRecordFolderChoose": {
+    "description": "Settings › Privacy › Recordings folder: the button that opens the system's folder picker."
+  },
+  "settingsPrivacyRecordFolderDefault": "New recordings go to Pinky's own folder.",
+  "@settingsPrivacyRecordFolderDefault": {
+    "description": "Settings › Privacy: the line under Recordings folder while no folder is chosen."
+  },
+  "settingsPrivacyRecordFolderDesc": "New recordings go to {folder}. Recordings made before stay where they are.",
+  "@settingsPrivacyRecordFolderDesc": {
+    "description": "Settings › Privacy: the line under Recordings folder when the person chose one. folder is its path.",
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "/Volumes/Archive/Pinky"
+      }
+    }
+  },
+  "settingsPrivacyRecordFolderFailed": "Couldn't choose the folder: {reason}",
+  "@settingsPrivacyRecordFolderFailed": {
+    "description": "A toast when the folder picker of Settings › Privacy › Recordings folder failed. reason is the error, in English.",
+    "placeholders": {
+      "reason": {
+        "type": "String",
+        "example": "exit status 1"
+      }
+    }
+  },
+  "settingsPrivacyRecordFolderInside": "That folder is inside Pinky's own recordings folder, which Delete all activity removes. Choose another folder.",
+  "@settingsPrivacyRecordFolderInside": {
+    "description": "A toast when the folder picked for Settings › Privacy › Recordings folder is Pinky's own recordings folder or in it (also through a link); the setting stays as it was. Delete all activity is the button of Settings › Privacy that deletes every task."
+  },
+  "settingsPrivacyRecordFolderMissing": "{folder} isn't there now, so new recordings go to Pinky's own folder until it is.",
+  "@settingsPrivacyRecordFolderMissing": {
+    "description": "Settings › Privacy: the line under Recordings folder when the chosen folder is missing, as on a disk that is not plugged in. folder is its path.",
+    "placeholders": {
+      "folder": {
+        "type": "String",
+        "example": "/Volumes/Archive/Pinky"
+      }
+    }
+  },
+  "settingsPrivacyRecordFolderReset": "Use Pinky's folder",
+  "@settingsPrivacyRecordFolderReset": {
+    "description": "Settings › Privacy › Recordings folder: the button, shown while a folder is chosen, that sends new recordings back to Pinky's own folder."
   },
   "settingsPrivacyRecordOriginal": "Original",
   "@settingsPrivacyRecordOriginal": {
@@ -10365,6 +10783,30 @@
   "tasksReadOnly": "Read only",
   "@tasksReadOnly": {
     "description": "On a task card's line with the agent, the phone and the time, for a task the agent asked to run read-only."
+  },
+  "tasksReadOnlyAgent": "{agent} has read-only access: it browses and searches, and types only into search fields. Change what it may do in Settings › Agents.",
+  "@tasksReadOnlyAgent": {
+    "description": "Under a running task's line with the agent and the phone, when the person gave the agent read-only access on its first-connection card (scopeReadOnly). Settings › Agents is where its Change button changes that; asking the person for approval does not.",
+    "placeholders": {
+      "agent": {
+        "type": "String",
+        "example": "Claude Code"
+      }
+    }
+  },
+  "tasksReadOnlyMode": "Read-only mode is on for every agent: they type only into search fields. Turn it off in Settings › Safety.",
+  "@tasksReadOnlyMode": {
+    "description": "Under a running task's line with the agent and the phone, while Read-only mode (settingsSafetyReadOnly) is on in Settings › Safety. It applies to every agent, whatever access each has."
+  },
+  "tasksReadOnlyTask": "{agent} asked to run this task read-only, so it types only into search fields. To do more, it starts a new task that is not read-only.",
+  "@tasksReadOnlyTask": {
+    "description": "Under a running task's line with the agent and the phone, when the agent itself asked to run the task read-only (phone_connect read_only) and its access is not read-only. Nothing in Settings changes this.",
+    "placeholders": {
+      "agent": {
+        "type": "String",
+        "example": "Claude Code"
+      }
+    }
   },
   "tasksRowDone": "done",
   "@tasksRowDone": {

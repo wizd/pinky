@@ -71,7 +71,7 @@ const (
 type DeviceView struct {
 	Info       driver.Info
 	Status     DeviceStatus
-	StatusLine string // plain words: "Claude Code · Reorder lunch", "Idle", "Locked", "Needs setup", "Camera or microphone in use", "Offline"
+	StatusLine string // plain words: "Claude Code · Reorder lunch", "Idle", "Screen off", "Locked", "Needs setup", "Camera or microphone in use", "Offline"
 	TaskID     string // the running task, if any
 	// LeaseGen changes whenever an agent's task starts or ends on the
 	// phone, and LeaseEnded is when the last one ended (zero when none
@@ -91,6 +91,12 @@ type DeviceView struct {
 	// capturing it (an iPhone's display stream, which iOS shows as screen
 	// sharing, stops a while after the last look or input).
 	Streaming bool
+	// ScreenOff is set while the phone is idle and its own screen is off
+	// without a lock screen, such as an Android TV in standby, so its
+	// mirror gets no picture until the person wakes it (Gateway.Wake). The
+	// gateway reads it only while a mirror watches the phone. StatusLine
+	// is then "Screen off".
+	ScreenOff bool
 }
 
 // Features are the optional driver capabilities the client has controls for.
@@ -130,6 +136,10 @@ type TaskView struct {
 	// ReadOnly is set when the agent asked to run the task read-only
 	// (phone_connect read_only), whatever its scope.
 	ReadOnly bool
+	// AgentReadOnly is set, while the task runs, when the person gave its
+	// agent read-only access (ScopeReadOnly, changed in Settings ›
+	// Agents), whatever the agent asked.
+	AgentReadOnly bool
 }
 
 // StepView is one step of a task.
@@ -228,6 +238,10 @@ type NeedView struct {
 	// asked to only browse and read (phone_connect read_only): the client
 	// offers that scope first.
 	ReadOnly bool
+	// Apps is set on an agent's first-connection card when the agent named
+	// the apps of its task (phone_connect apps), ids or names as it gave
+	// them: the client offers them first under "Only the apps I choose".
+	Apps []string
 }
 
 // Decision answers an approval.

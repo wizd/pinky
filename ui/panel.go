@@ -26,6 +26,12 @@ const (
 	panelFigure = 196
 	panelWide   = 180
 	panelLens   = 96
+	// panelApps is the room a first connection's list of apps takes in
+	// the floating panel, under "Only the apps I choose": the field that
+	// narrows it down, the list (appsListHeight) and how many are chosen.
+	// A phone has more apps than the list shows, so it takes its whole
+	// height; Japanese and an agent that asked to only read take the most.
+	panelApps = appsListHeight + 80
 )
 
 // panelHeight is the floating panel's height for need n, which it asks or
@@ -61,8 +67,11 @@ func (a *app) panelShows() (gateway.NeedView, *answer, bool) {
 // display.
 func (a *app) panelSize() (int, int) {
 	h := panelH
-	if n, _, ok := a.panelShows(); ok {
+	if n, x, ok := a.panelShows(); ok {
 		h = panelHeight(n)
+		if x == nil && newAgentNeed(n) && a.agents.choice[n.ID] == string(gateway.ScopeApps) {
+			h += panelApps
+		}
 	}
 	if a.panelMax > 0 {
 		h = min(h, max(a.panelMax, panelH))

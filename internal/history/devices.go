@@ -18,6 +18,8 @@ var deviceTables = []struct{ table, column string }{
 	{"device_settings", "device_id"},
 	{"device_connections", "device_id"},
 	{"paused_devices", "device_id"},
+	{"traffic_devices", "device_id"},
+	{"traffic_blocklist", "device_id"},
 }
 
 // ForgetDevice deletes the phone's record and its settings: whether agents
@@ -151,5 +153,5 @@ func (s *Store) DeleteDeviceHistory(ctx context.Context, deviceID string, before
 	if err := tx.Commit(); err != nil {
 		return out, err
 	}
-	return out, removeFiles(files)
+	return out, s.removeDropped(ctx, files)
 }

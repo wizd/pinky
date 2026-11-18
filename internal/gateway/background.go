@@ -127,6 +127,16 @@ func (g *Gateway) readyScreen(ctx context.Context, l *lease) {
 			l.bgOff = true
 			g.mu.Unlock()
 		}
+		// The display did not open, so the task moves to the phone's own
+		// screen. As in leaveForPhone, a person who used that screen in
+		// the last minute (whose touches did not pause the task while it
+		// waited for its display) keeps it until they hand it over.
+		g.mu.Lock()
+		using := l.bg == nil && !l.ended && d.lease == l && !d.person && time.Since(d.personAt) < personRecent
+		g.mu.Unlock()
+		if using {
+			g.takeOver(d, false)
+		}
 	}
 	g.mu.Lock()
 	onBG := l.bg != nil
@@ -223,6 +233,13 @@ func (g *Gateway) closeBackgroundLocked(l *lease) {
 		g.stopHub(hubKey(d.id, true), errors.New("the background display closed"))
 		bg.Close()
 	}()
+}
+
+// background reports whether the lease works on a background display: one
+// is open, or its next call opens one (the first, or another after the
+// phone dropped). Callers hold g.mu.
+func (l *lease) background() bool {
+	return l.bg != nil || (l.bgWanted && !l.bgOff)
 }
 
 func joinNote(a, b string) string {

@@ -145,15 +145,26 @@ func parsePhonePower(out string) phonePower {
 	// type. One that is on makes the panel on: scrcpy turns them all off.
 	internal := false
 	for _, m := range sfDisplayRE.FindAllStringSubmatch(out, -1) {
-		switch {
+		switch mode := powerModeName(m[2]); {
 		case m[1] == "connectionType":
-			internal = m[2] == "Internal"
-		case internal && (p.panel == "" || m[2] == "On"):
-			p.panel = m[2]
+			internal = strings.EqualFold(m[2], "Internal")
+		case internal && (p.panel == "" || mode == "On"):
+			p.panel = mode
 			internal = false
 		}
 	}
 	return p
+}
+
+// powerModeName spells SurfaceFlinger's power modes as AOSP does (On, Off,
+// Doze): Samsung's prints them in upper case (ON, OFF).
+func powerModeName(s string) string {
+	for _, m := range []string{"On", "Off", "Doze"} {
+		if strings.EqualFold(s, m) {
+			return m
+		}
+	}
+	return s
 }
 
 // parseDisplayGroup returns a display's group from `dumpsys display`.

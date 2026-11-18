@@ -12,6 +12,7 @@ import (
 
 	"github.com/DIYgod/pinky/cmd/pinky/locales"
 	"github.com/DIYgod/pinky/internal/driver"
+	"github.com/DIYgod/pinky/internal/gateway"
 	"github.com/DIYgod/pinky/internal/telemetry"
 )
 
@@ -95,18 +96,49 @@ func (a *app) diagnosticLines() []string {
 		}
 		return "off"
 	}
-	lines := []string{fmt.Sprintf("Settings: preset %d · read-only %s · unlock from computer %s · hide codes %s · record %s · recordings %s · keep %s · remote agents %s · developer mode %s",
+	lines := []string{fmt.Sprintf("Settings: preset %d · read-only mode %s · unlock from computer %s · hide codes %s · record %s · recordings %s · keep %s · remote agents %s · developer mode %s",
 		s.Preset, onOff(s.ReadOnly), onOff(s.UnlockFromComputer), onOff(s.HideCodes), onOff(s.Record), recordingSize(s.SmallerRecordings), keepLabelIn(locales.In("en"), s.KeepDays),
 		onOff(s.RemoteAgents), onOff(s.DeveloperMode))}
 	if v := videoLineIn(locales.In("en"), a); v != "" {
 		lines = append(lines, "Video: "+v)
 	}
+	lines = append(lines, a.readOnlyDiagnostics()...)
 	// Why the companion's service did not come on, as the phone showed it
 	// (issue #56), for the phones connected now: telemetry puts their
 	// tags in place of their ids.
 	for _, id := range slices.Sorted(maps.Keys(a.comp.failure)) {
 		if a.device(id) != nil {
 			lines = append(lines, fmt.Sprintf("Companion on %s: %s", id, a.comp.failure[id]))
+		}
+	}
+	return lines
+}
+
+// readOnlyDiagnostics say which read-only is not Read-only mode in
+// Settings › Safety (GitHub issue #156): the agents the person gave
+// read-only access, and the running tasks that are read-only, with why.
+// Telemetry puts the phones' tags in place of their ids.
+func (a *app) readOnlyDiagnostics() []string {
+	var lines, names []string
+	if a.agents.loaded {
+		for _, ag := range a.agents.list {
+			if ag.Approved && ag.Scope.Mode == gateway.ScopeReadOnly {
+				names = append(names, ag.Name)
+			}
+		}
+	}
+	if len(names) > 0 {
+		lines = append(lines, "Agents with read-only access (Settings › Agents): "+strings.Join(names, ", "))
+	}
+	for _, t := range a.tasks {
+		if !running(t.State) {
+			continue
+		}
+		switch {
+		case t.AgentReadOnly:
+			lines = append(lines, fmt.Sprintf("Task on %s: read-only, the agent's access", t.DeviceID))
+		case t.ReadOnly:
+			lines = append(lines, fmt.Sprintf("Task on %s: read-only, as the agent asked", t.DeviceID))
 		}
 	}
 	return lines

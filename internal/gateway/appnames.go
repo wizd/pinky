@@ -45,6 +45,25 @@ var knownApps = map[string][]string{
 	"微博":     {"com.sina.weibo"},
 	"weibo":  {"com.sina.weibo"},
 	"网易云音乐":  {"com.netease.cloudmusic"},
+
+	// The English names of iPhone system apps whose bundle ids do not hold
+	// them, so idMatches cannot find them on a phone in another language
+	// ("Settings" is "Ajustes" in Portuguese, GitHub issue #148).
+	"settings":         {"com.apple.Preferences"},
+	"photos":           {"com.apple.mobileslideshow"},
+	"messages":         {"com.apple.MobileSMS"},
+	"phone":            {"com.apple.mobilephone"},
+	"contacts":         {"com.apple.MobileAddressBook"},
+	"calendar":         {"com.apple.mobilecal"},
+	"clock":            {"com.apple.mobiletimer"},
+	"files":            {"com.apple.DocumentsApp"},
+	"wallet":           {"com.apple.Passbook"},
+	"tv":               {"com.apple.tv"},
+	"apple tv":         {"com.apple.tv"},
+	"watch":            {"com.apple.Bridge"},
+	"itunes store":     {"com.apple.MobileStore"},
+	"apple store":      {"com.apple.store.Jolly"},
+	"image playground": {"com.apple.GenerativePlaygroundApp"},
 }
 
 // matchApp finds an app by a sure match (see findApp).

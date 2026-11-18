@@ -33,6 +33,9 @@ type extraDev struct {
 	bgs      []*bgDisplay
 	refuse   map[string]bool // apps that will not run on a background display
 	bgErr    error           // OpenBackground fails with it
+	// bgOpening, when set, runs while OpenBackground opens a display, as
+	// the person may touch the phone during the seconds that takes.
+	bgOpening func()
 
 	pkgs      map[string]driver.Package // phone_app: a file holding a key is that package
 	installed map[string]string         // phone_app: scripted packages installed, id to version
@@ -141,6 +144,12 @@ func (x *extraDev) Push(_ context.Context, p string, r io.Reader, size int64, mt
 }
 
 func (x *extraDev) OpenBackground(context.Context, driver.BackgroundOptions) (driver.Device, error) {
+	x.mu.Lock()
+	opening := x.bgOpening
+	x.mu.Unlock()
+	if opening != nil {
+		opening()
+	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	if x.bgErr != nil {

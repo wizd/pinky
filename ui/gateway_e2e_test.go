@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -358,6 +359,272 @@ func TestGatewayAgentScope(t *testing.T) {
 		defer rec.mu.Unlock()
 		return rec.calls[len(rec.calls)-1] == "scope Codex "+narrow.String()
 	})
+}
+
+// pickerApps is what the phones list in the tests of the list of apps
+// under "Only the apps I choose": more than the list shows without a field
+// to narrow it, an app with another name, and one a rule blocks.
+func pickerApps(ga *gwApp) {
+	var list []gateway.InstalledApp
+	for _, name := range []string{"Calendar", "Chatter", "Clock", "Dinely", "Mail", "Maps", "Notes", "Tally", "Weather"} {
+		list = append(list, gateway.InstalledApp{ID: "app." + strings.ToLower(name), Name: name})
+	}
+	list[1].Aliases = []string{"Talk"}
+	list = append(list, gateway.InstalledApp{ID: "app.paywell", Name: "Paywell", Blocked: true})
+	ga.apps.list, ga.apps.loaded, ga.apps.at = list, true, time.Now()
+}
+
+// firstConnection opens a session of the agent Codex that asks to connect
+// for a task on these apps, and returns its first-connection need.
+func firstConnection(t *testing.T, ga *gwApp, apps ...string) gateway.NeedView {
+	t.Helper()
+	s := ga.w.Gateway.OpenSession(gateway.AgentInfo{Name: "Codex", Client: "codex 1.0"})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() { cancel(); s.Close() })
+	go s.Connect(ctx, gateway.ConnectRequest{Call: gateway.Call{Device: pixel}, Task: "Lunch", Apps: apps})
+	var n gateway.NeedView
+	ga.waitFor(t, "the New agent approval", func() (ok bool) { n, ok = ga.need(newAgentNeed); return })
+	return n
+}
+
+// TestGatewayAgentAppsPicker answers a first connection with "Only the
+// apps I choose": the card lists the phones' apps to tick, with those the
+// agent named for its task ticked already, by name, by another name of the
+// app and by id; a name that is no app on the phones is shown and not
+// chosen, and an app a rule blocks cannot be ticked.
+func TestGatewayAgentAppsPicker(t *testing.T) {
+	ga := newGatewayApp(t, false)
+	rec := &scopeRecorder{Gateway: ga.w.Gateway}
+	ga.app.api = rec
+	n := firstConnection(t, ga, "Dinely", "Talk", "app.tally", "Lunchbox")
+	if strings.Join(n.Apps, ",") != "Dinely,Talk,app.tally,Lunchbox" {
+		t.Fatalf("the need names %q", n.Apps)
+	}
+	pickerApps(ga)
+	tt := mg.NewTester(ga.view, 1280, 820)
+	if hasText(tt, "Calendar") {
+		t.Fatalf("apps listed under another choice: %q", tt.Texts())
+	}
+	chosen := func() string { return ga.agents.apps[n.ID] }
+	frames := func() { tt.Frame(); tt.Frame() }
+	click := func(s string) {
+		t.Helper()
+		if err := tt.Click(s); err != nil {
+			t.Fatalf("%v: %q", err, tt.Texts())
+		}
+		frames()
+	}
+	ga.agents.choice[n.ID] = string(gateway.ScopeApps) // as the menu sets it
+	frames()
+	if chosen() != "Dinely, Chatter, Tally" {
+		t.Fatalf("the apps the agent named: chosen %q", chosen())
+	}
+	for _, s := range []string{"Asked for", "Lunchbox", "No app by this name", "Calendar", "3 apps chosen"} {
+		if !hasText(tt, s) {
+			t.Fatalf("no %q: %q", s, tt.Texts())
+		}
+	}
+	click("Calendar")
+	click("Tally")
+	if chosen() != "Dinely, Chatter, Calendar" {
+		t.Fatalf("after a tick and an untick: chosen %q", chosen())
+	}
+
+	// The count shows the apps chosen alone, and back.
+	click("3 apps chosen")
+	if hasText(tt, "Notes") || hasText(tt, "Lunchbox") || !hasText(tt, "Calendar") || !hasText(tt, "Show all apps") {
+		t.Fatalf("the apps chosen alone: %q", tt.Texts())
+	}
+	click("Show all apps")
+	if !hasText(tt, "Notes") {
+		t.Fatalf("every app again: %q", tt.Texts())
+	}
+
+	// The field narrows the list down; a blocked app is there, greyed.
+	ga.agents.find[n.ID] = "pay"
+	frames()
+	if hasText(tt, "Dinely") || !hasText(tt, "Paywell") || !hasText(tt, "Blocked") {
+		t.Fatalf("narrowed to pay: %q", tt.Texts())
+	}
+	_ = tt.Click("Paywell") // a disabled box takes no click
+	frames()
+	if chosen() != "Dinely, Chatter, Calendar" {
+		t.Fatalf("a blocked app was ticked: chosen %q", chosen())
+	}
+	ga.agents.find[n.ID] = "zzz"
+	frames()
+	if !hasText(tt, "No app on your phones matches.") {
+		t.Fatalf("nothing matches: %q", tt.Texts())
+	}
+	ga.agents.find[n.ID] = ""
+	frames()
+
+	click("Approve")
+	want := gateway.Scope{Mode: gateway.ScopeApps, Apps: []string{"Dinely", "Chatter", "Calendar"}}
+	ga.waitFor(t, "the answer", func() bool {
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		return strings.Join(rec.calls, "; ") == "scope Codex "+want.String()+"; decide allow_once"
+	})
+}
+
+// TestGatewayAgentAppsWait shows a first-connection card: the phones' apps
+// are read at once, before "Only the apps I choose" is picked, and while
+// they are read that choice shows the wait and not the field for typed
+// names, which the list would replace a moment later.
+func TestGatewayAgentAppsWait(t *testing.T) {
+	ga := newGatewayApp(t, false)
+	n := firstConnection(t, ga, "Dinely")
+	tt := mg.NewTester(ga.view, 1280, 820)
+	frames := func() { tt.Frame(); tt.Frame() }
+	frames()
+	if ga.apps.at.IsZero() {
+		t.Fatal("the card is up and the phones' apps are not being read")
+	}
+
+	// A read that has not answered yet.
+	ga.apps.seq++
+	ga.apps.list, ga.apps.loaded, ga.apps.at = nil, false, time.Now()
+	ga.agents.choice[n.ID] = string(gateway.ScopeApps) // as the menu sets it
+	frames()
+	// The field for typed names and the list both go by the name Apps.
+	const wait, noPhone = "Looking for the apps on your phones…", "Connect a phone to pick from its apps"
+	named := func() bool { return slices.Contains(tt.Texts(), "Apps") }
+	if named() || !hasText(tt, wait) {
+		t.Fatalf("while the apps are read: %q", tt.Texts())
+	}
+	if got := ga.agents.apps[n.ID]; got != "Dinely" {
+		t.Fatalf("the wait changed what is chosen to %q", got)
+	}
+
+	// The answer: the list, with the app the agent named ticked.
+	pickerApps(ga)
+	frames()
+	if !named() || !hasText(tt, "Asked for") || !hasText(tt, "Calendar") || hasText(tt, wait) {
+		t.Fatalf("after the apps were read: %q", tt.Texts())
+	}
+
+	// No phone lists an app: the names are typed.
+	ga.apps.list, ga.apps.at = nil, time.Now()
+	frames()
+	if !named() || !hasText(tt, noPhone) || hasText(tt, "Asked for") {
+		t.Fatalf("no field for typed names without a list: %q", tt.Texts())
+	}
+}
+
+// A first-connection card left unanswered is denied, and an agent that
+// asks again gets another: what the person chose on the first goes to it.
+// A card the person answered is forgotten.
+func TestGatewayAgentCardKeepsChoice(t *testing.T) {
+	ga := newGatewayApp(t, false, func(o *demogw.Options) { o.ApprovalTimeout = time.Second })
+	n := firstConnection(t, ga, "Dinely")
+	pickerApps(ga)
+	tt := mg.NewTester(ga.view, 1280, 820)
+	ga.agents.choice[n.ID] = string(gateway.ScopeApps)
+	tt.Frame()
+	if err := tt.Click("Notes"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if got := ga.agents.apps[n.ID]; got != "Dinely, Notes" {
+		t.Fatalf("chosen %q", got)
+	}
+	ga.waitFor(t, "the card to run out", func() bool { tt.Frame(); _, ok := ga.need(newAgentNeed); return !ok })
+
+	again := firstConnection(t, ga, "Dinely")
+	tt.Frame()
+	if _, kept := ga.agents.choice[n.ID]; again.ID == n.ID || kept {
+		t.Fatalf("the first card %s is still held; the second is %s", n.ID, again.ID)
+	}
+	if ga.agents.choice[again.ID] != string(gateway.ScopeApps) || ga.agents.apps[again.ID] != "Dinely, Notes" || !hasText(tt, "2 apps chosen") {
+		t.Fatalf("the second card: choice %q, chosen %q: %q", ga.agents.choice[again.ID], ga.agents.apps[again.ID], tt.Texts())
+	}
+	if err := tt.Click("Deny"); err != nil {
+		t.Fatal(err)
+	}
+	ga.waitFor(t, "the answer", func() bool { tt.Frame(); _, ok := ga.need(newAgentNeed); return !ok })
+
+	third := firstConnection(t, ga, "Dinely")
+	tt.Frame()
+	if ga.agents.choice[third.ID] != string(gateway.ScopeEverything) || hasText(tt, "Notes") {
+		t.Fatalf("the card after a Deny: choice %q: %q", ga.agents.choice[third.ID], tt.Texts())
+	}
+}
+
+// Settings › Agents › Change lists the apps of the agent's scope ticked. A
+// name in it that is no app on the phones, typed before or of a phone that
+// is not connected, stays chosen until it is unticked. While no phone lists
+// its apps the names are typed, as before.
+func TestSettingsAgentAppsPicker(t *testing.T) {
+	ga := newGatewayApp(t, true)
+	rec := &scopeRecorder{Gateway: ga.w.Gateway}
+	ga.app.api = rec
+	ga.w.Gateway.SetAgentScope("Codex", gateway.Scope{Mode: gateway.ScopeApps, Apps: []string{"Dinely", "Oldapp"}})
+	pickerApps(ga)
+	ga.page, ga.set.sec = pageSettings, secAgents
+	tt := mg.NewTester(ga.view, 1280, 820)
+	ga.waitFor(t, "the agent list", func() bool {
+		tt.Frame()
+		return ga.agents.loaded && hasText(tt, "Can use Dinely and Oldapp")
+	})
+	last := func() string {
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		if len(rec.calls) == 0 {
+			return ""
+		}
+		return rec.calls[len(rec.calls)-1]
+	}
+	change := func() { // as a click on Change does
+		ga.agents.editing = "Codex"
+		delete(ga.agents.choice, "Codex")
+		tt.Frame()
+		tt.Frame()
+	}
+	click := func(s string) {
+		t.Helper()
+		if err := tt.Click(s); err != nil {
+			t.Fatalf("%v: %q", err, tt.Texts())
+		}
+		tt.Frame()
+	}
+	change()
+	if got := ga.agents.apps["Codex"]; got != "Dinely, Oldapp" || !hasText(tt, "No app by this name") || !hasText(tt, "2 apps chosen") {
+		t.Fatalf("the editor opens with %q: %q", got, tt.Texts())
+	}
+	click("Calendar")
+	click("Save")
+	ga.waitFor(t, "the scope with the old name kept", func() bool {
+		tt.Frame()
+		return last() == "scope Codex apps:Dinely,Oldapp,Calendar" && hasText(tt, "Can use Dinely, Oldapp and Calendar")
+	})
+	// What narrowed the list and the view of the apps chosen alone are gone
+	// when the editor opens again.
+	ga.agents.find["Codex"], ga.agents.only["Codex"] = "cal", true
+	change()
+	if ga.agents.find["Codex"] != "" || ga.agents.only["Codex"] || !hasText(tt, "Notes") {
+		t.Fatalf("the editor did not open anew: %q", tt.Texts())
+	}
+	// The old name is the last row, below what the box shows of a long
+	// list: the field brings it into view.
+	ga.agents.find["Codex"] = "old"
+	tt.Frame()
+	click("Oldapp")
+	ga.agents.find["Codex"] = ""
+	tt.Frame()
+	click("Save")
+	ga.waitFor(t, "the scope without the old name", func() bool { return last() == "scope Codex apps:Dinely,Calendar" })
+
+	// No phone lists its apps: the names are typed.
+	ga.apps.list = nil
+	change()
+	if hasText(tt, "apps chosen") || !hasText(tt, "Connect a phone to pick from its apps") {
+		t.Fatalf("no phone lists apps: %q", tt.Texts())
+	}
+	ga.agents.apps["Codex"] = "Tally"
+	tt.Frame()
+	click("Save")
+	ga.waitFor(t, "the typed scope", func() bool { return last() == "scope Codex apps:Tally" })
 }
 
 // TestGatewayHandoff answers phone_handoff with Done and a note.

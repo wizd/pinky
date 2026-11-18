@@ -60,6 +60,19 @@ func TestParsePhonePower(t *testing.T) {
     powerMode=On
 `, phonePower{known: true, interactive: true, panel: "On"}},
 		{"no keyguard state", "    powerMode=On\n", phonePower{}},
+		// Samsung's SurfaceFlinger prints the modes in upper case.
+		{"Samsung, panel off", `      showing=true
+      interactiveState=INTERACTIVE_STATE_AWAKE
+    connectionType=Internal
+    powerMode=OFF
+`, phonePower{known: true, interactive: true, locked: true, panel: "Off"}},
+		{"Samsung foldable, outer panel on", `      showing=false
+      interactiveState=INTERACTIVE_STATE_AWAKE
+    connectionType=INTERNAL
+    powerMode=OFF
+    connectionType=INTERNAL
+    powerMode=ON
+`, phonePower{known: true, interactive: true, panel: "On"}},
 	} {
 		if got := parsePhonePower(c.out); got != c.want {
 			t.Errorf("%s: got %+v, want %+v", c.name, got, c.want)

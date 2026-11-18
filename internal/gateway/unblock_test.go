@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -160,6 +161,44 @@ func TestNewAgentAsksForReadOnly(t *testing.T) {
 }
 
 func newAgentNeedView(n NeedView) bool { return n.Kind == NeedApproval && n.Rule == "New agent" }
+
+// A first connection that names the task's apps brings them to its card
+// (NeedView.Apps), for the client to offer under "Only the apps I choose":
+// tidied and bounded, as an agent wrote them. Other approvals carry none.
+func TestNewAgentNeedNamesTheTasksApps(t *testing.T) {
+	ctx := context.Background()
+	g, _ := newTestGateway(t, func(o *Options) { o.TrustNewAgents = false })
+	s := g.OpenSession(AgentInfo{Name: "Codex", Client: "codex 1.0"})
+	defer s.Close()
+	apps := []string{" Dinely ", "dinely", "", "com.chatter.app", strings.Repeat("x", maxAskedApp+1)}
+	for i := 0; i < maxAskedApps; i++ {
+		apps = append(apps, fmt.Sprintf("App %d", i))
+	}
+	go func() {
+		n := waitNeed(t, g)
+		if n.Rule != "New agent" || len(n.Apps) != maxAskedApps || n.Apps[0] != "Dinely" || n.Apps[1] != "com.chatter.app" || n.Apps[2] != "App 0" {
+			t.Errorf("first connection: %+v, apps %q", n, n.Apps)
+		}
+		if err := g.Decide(n.ID, AllowOnce, ""); err != nil {
+			t.Error(err)
+		}
+	}()
+	mustStatus(t, s.Connect(ctx, ConnectRequest{Task: "Lunch", Apps: apps}), StatusSettled)
+
+	cart := toCart(t, s)
+	done := make(chan *Result, 1)
+	go func() {
+		done <- s.Act(ctx, Call{Intent: "Pay"}, Action{Tool: "tap", Ref: ref(t, cart, "Place order · $12.80")})
+	}()
+	pay := waitNeed(t, g)
+	if pay.Rule != "Payments" || len(pay.Apps) != 0 {
+		t.Fatalf("payment approval: %+v, apps %q", pay, pay.Apps)
+	}
+	if err := g.Decide(pay.ID, Deny, ""); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+}
 
 // sameApp matches by id, or by name when one side has none.
 func TestSameApp(t *testing.T) {

@@ -4,8 +4,10 @@
 // PIN anywhere else, never logs it and never gives it to agents.
 //
 // It also keeps the API keys of the model services Pinky's own agent uses
-// (ModelKeyAccount). Those are read without asking the person (Get): Pinky
-// sends them to the service the person chose, never to a phone or an agent.
+// (ModelKeyAccount), and on macOS the private key of the certificate
+// authority Pinky's traffic proxy signs with (TrafficCAKeyAccount). Those
+// are read without asking the person (Get): Pinky sends the API keys to the
+// service the person chose, and the CA key never leaves Pinky.
 package secret
 
 import (
@@ -89,10 +91,14 @@ const modelKeyPrefix = "model-key:"
 // ("anthropic", "openai") is saved under.
 func ModelKeyAccount(service string) string { return modelKeyPrefix + service }
 
-// ErrNotModelKey is what Get returns for an account that is not a model
-// service's API key: every other secret, a PIN above all, goes through
-// Reveal and the person's confirmation.
-var ErrNotModelKey = errors.New("secret: only model API keys can be read without confirmation")
+// TrafficCAKeyAccount is the account the traffic proxy's CA private key is
+// saved under (docs/notes/traffic-capture.md).
+const TrafficCAKeyAccount = "traffic-ca-key"
+
+// ErrNotModelKey is what Get returns for an account that is neither a model
+// service's API key nor the traffic CA's key: every other secret, a PIN
+// above all, goes through Reveal and the person's confirmation.
+var ErrNotModelKey = errors.New("secret: only model API keys and the traffic CA key can be read without confirmation")
 
 // Getter is a Store that can return a secret without asking the person to
 // confirm. Only Pinky's API keys are read this way; PINs always go through
@@ -105,9 +111,10 @@ type Getter interface {
 // (where the system keeps Pinky's secrets locked, as Linux's Secret Service
 // does, it may still ask to unlock them). It returns ErrNotFound when
 // nothing is saved, ErrUnsupported for a store that can only Reveal, and
-// ErrNotModelKey for an account ModelKeyAccount did not make.
+// ErrNotModelKey for an account other than one ModelKeyAccount made and
+// TrafficCAKeyAccount.
 func Get(ctx context.Context, s Store, account string) (string, error) {
-	if !strings.HasPrefix(account, modelKeyPrefix) {
+	if !strings.HasPrefix(account, modelKeyPrefix) && account != TrafficCAKeyAccount {
 		return "", ErrNotModelKey
 	}
 	if g, ok := s.(Getter); ok {

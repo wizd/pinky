@@ -180,6 +180,7 @@ type device struct {
 	paused     bool   // the person paused Pinky's connection to it (pause.go)
 	streams    int    // its streams open now, for DeviceView.Streaming
 	rotation   string // the screen's rotation the person set; "" is portrait
+	screenOff  bool   // its screen is off without a lock screen (SetScreenOff)
 }
 
 type task struct {
@@ -465,6 +466,8 @@ func (a *API) deviceView(d *device) gateway.DeviceView {
 		v.Status, v.StatusLine = gateway.DeviceWorking, d.statusLine
 	case d.locked:
 		v.Status, v.StatusLine = gateway.DeviceLocked, "Locked"
+	case d.screenOff:
+		v.Status, v.StatusLine, v.ScreenOff = gateway.DeviceIdle, "Screen off", true
 	default:
 		v.Status, v.StatusLine = gateway.DeviceIdle, "Idle"
 	}
@@ -627,6 +630,30 @@ func (a *API) Unlock(deviceID string) error {
 		n.decision <- decision{d: gateway.AllowOnce}
 	}
 	a.emit(gateway.Event{Kind: gateway.EventNeeds, DeviceID: deviceID})
+	a.emit(gateway.Event{Kind: gateway.EventDevices, DeviceID: deviceID})
+	return nil
+}
+
+// Wake implements gateway.API: the screen turns on.
+func (a *API) Wake(deviceID string) error {
+	return a.setScreenOff(deviceID, false)
+}
+
+// SetScreenOff turns the device's screen off or on, without a lock screen,
+// as an Android TV in standby (DeviceView.ScreenOff).
+func (a *API) SetScreenOff(deviceID string, off bool) error {
+	return a.setScreenOff(deviceID, off)
+}
+
+func (a *API) setScreenOff(deviceID string, off bool) error {
+	a.mu.Lock()
+	d := a.device(deviceID)
+	if d == nil {
+		a.mu.Unlock()
+		return fmt.Errorf("fakeapi: no device %q: %w", deviceID, driver.ErrNotFound)
+	}
+	d.screenOff = off
+	a.mu.Unlock()
 	a.emit(gateway.Event{Kind: gateway.EventDevices, DeviceID: deviceID})
 	return nil
 }

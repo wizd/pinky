@@ -227,34 +227,45 @@ func (a *app) askBox(c *mg.Context) {
 		if st.err != "" && st.errFor == id {
 			mg.Text(c, st.err).FontSize(fsSmall).LineHeight(1.4).TextColor(p.red).Role(mg.RoleStatus)
 		}
-		// The model and the limit, on a line each, so that they fit beside
-		// Start in the panel's width.
-		mg.Row(c).Gap(sp3).AlignItems(mg.Center).Children(func() {
-			mg.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+		// The model and the limit, on a line each, beside the buttons when
+		// they fit there and above them when not: the buttons do not
+		// shrink, and the lines would else be squeezed to a letter each
+		// ("Up to 10,000,000 tokens a task" down the side of the box).
+		mg.Row(c).Gap(sp3).AlignItems(mg.Center).Justify(mg.End).Wrap().Children(func() {
+			mg.Column(c).Grow(1).Basis(askInfoWidth).MinWidth(0).Gap(2).Children(func() {
 				mg.Text(c, modelLine(cfg)).FontSize(fsCaption).FontWeight(fwMedium).TextColor(p.ink2).SingleLine()
 				mg.Text(c, locales.AskTaskLimit(limitText(cfg))).FontSize(fsCaption).TextColor(p.ink3).FontFeatures("tnum")
 				if today, ok := a.usageToday(); ok {
 					mg.Text(c, locales.AskToday(today)).FontSize(fsCaption).TextColor(p.ink3).FontFeatures("tnum")
 				}
 			})
-			// About the screen: a question about what the phone shows now,
-			// which may be left empty to have the screen explained.
-			screen := button(c, locales.AskScreen(), btnOpt{small: true}).Disabled(why != "").
-				Tooltip(locales.AskScreenTooltip())
-			if why == "" && screen.Clicked() {
-				a.askStart(id, true)
-			}
-			if a.schedOn() && quietButton(c.Key("ask-schedule"), locales.SchedButton()).Clicked() {
-				a.newSchedule(id, st.draft)
-			}
-			can := why == "" && strings.TrimSpace(st.draft) != ""
-			start := button(c, locales.AskStart(), btnOpt{kind: btnPrimary, small: true}).Disabled(!can)
-			if can && (start.Clicked() || area.Shortcut(mg.Cmd, mg.KeyEnter)) {
-				a.askStart(id, false)
-			}
+			// The buttons wrap too: in English and Japanese the three are
+			// wider together than a narrow panel's box.
+			mg.Row(c).Gap(sp3).AlignItems(mg.Center).Justify(mg.End).Wrap().Children(func() {
+				// About the screen: a question about what the phone shows
+				// now, which may be left empty to have the screen explained.
+				screen := button(c, locales.AskScreen(), btnOpt{small: true}).Disabled(why != "").
+					Tooltip(locales.AskScreenTooltip())
+				if why == "" && screen.Clicked() {
+					a.askStart(id, true)
+				}
+				if a.schedOn() && quietButton(c.Key("ask-schedule"), locales.SchedButton()).Clicked() {
+					a.newSchedule(id, st.draft)
+				}
+				can := why == "" && strings.TrimSpace(st.draft) != ""
+				start := button(c, locales.AskStart(), btnOpt{kind: btnPrimary, small: true}).Disabled(!can)
+				if can && (start.Clicked() || area.Shortcut(mg.Cmd, mg.KeyEnter)) {
+					a.askStart(id, false)
+				}
+			})
 		})
 	})
 }
+
+// askInfoWidth is the room the model and the limit want beside the box's
+// buttons, as "Up to 10,000,000 tokens a task" takes: with less, the
+// buttons go below them.
+const askInfoWidth = 180
 
 // askPicker chooses the phone on All phones.
 func (a *app) askPicker(c *mg.Context, id string) {

@@ -329,7 +329,7 @@ func (a *app) trustPhone(d gateway.DeviceView) {
 // Wi-Fi (gateway.DeviceConnecting).
 func (a *app) connectingPage(c *mg.Context, d gateway.DeviceView) {
 	p := pal(c)
-	title := locales.PhoneConnectingTitle(d.Info.Name)
+	title, sub := locales.PhoneConnectingTitle(d.Info.Name), locales.PhoneConnectingTask()
 	switch d.StatusLine {
 	case "Moving to Wi-Fi":
 		title = locales.PhoneMovingWiFiTitle(d.Info.Name)
@@ -337,6 +337,8 @@ func (a *app) connectingPage(c *mg.Context, d gateway.DeviceView) {
 		title = locales.PhoneMovingCableTitle(d.Info.Name)
 	case "Switching to Pinky on the iPhone", "Switching to Pinky for iPhone", "Switching to the helper":
 		title = locales.PhoneSwitchHelperTitle(d.Info.Name)
+		// The agent on the computer goes on: only the connection changes.
+		sub = locales.PhoneSwitchHelperTask()
 	case "Switching to CoreDevice":
 		title = locales.PhoneSwitchCoreDeviceTitle(d.Info.Name)
 	}
@@ -346,7 +348,7 @@ func (a *app) connectingPage(c *mg.Context, d gateway.DeviceView) {
 		})
 		mg.Text(c, title).FontSize(fsTitle3).FontWeight(fwSemibold).TextAlign(mg.Center)
 		if d.TaskID != "" {
-			mg.Text(c, locales.PhoneConnectingTask()).FontSize(fsSmall).TextColor(p.ink2).TextAlign(mg.Center)
+			mg.Text(c, sub).FontSize(fsSmall).TextColor(p.ink2).TextAlign(mg.Center)
 		}
 	})
 }

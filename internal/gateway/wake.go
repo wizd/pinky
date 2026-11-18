@@ -48,6 +48,7 @@ func (g *Gateway) wake(ctx context.Context, d *device) {
 	g.mu.Lock()
 	d.wokeAt = time.Now()
 	g.mu.Unlock()
+	g.setScreenOff(d, false)
 }
 
 // unlockPINTimeout bounds getting the PIN, which waits for the person to
@@ -269,6 +270,38 @@ func (g *Gateway) lockedNow(ctx context.Context, dev driver.Device) (locked, kno
 	return s.Locked, true
 }
 
+// freshLockTimeout bounds the read of the lock state an action makes when
+// the gateway last saw the phone locked (unlockedNow). A variable for tests.
+var freshLockTimeout = 3 * time.Second
+
+// unlockedNow asks the phone whether it is still locked, for an action the
+// cached lock state would refuse, and clears that state when the phone
+// answers in time that it is unlocked. seq is d.lockSeq when the cache was
+// seen locked: if another lock state was recorded while the phone
+// answered, the cache stands, since nothing tells which came last. It
+// reports whether the cache was cleared; a read that fails or runs out of
+// time, or a phone that says it is locked, leaves the phone locked.
+func (g *Gateway) unlockedNow(l *lease, seq uint64) bool {
+	d := l.dev
+	dev := g.driverOf(d) // the phone's own screen, where its lock shows
+	if dev == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(l.ctx, freshLockTimeout)
+	defer cancel()
+	locked, known := g.lockedNow(ctx, dev)
+	if !known || locked {
+		return false
+	}
+	g.mu.Lock()
+	if d.lockSeq != seq || !d.locked {
+		g.mu.Unlock()
+		return false
+	}
+	g.setLockedLocked(d, false)
+	return true
+}
+
 // recordUnlock adds the unlock to the task running on the phone, if any.
 func (g *Gateway) recordUnlock(l *lease, start time.Time, err error) {
 	if l == nil {
@@ -301,4 +334,84 @@ func (g *Gateway) readLock(ctx context.Context, d *device, dev driver.Device) {
 		return
 	}
 	g.setLocked(d, s.Locked)
+}
+
+// A phone whose screen is off without a lock screen sends the mirror no
+// picture: an Android TV in standby (TVs have no lock screen), or a phone
+// whose lock waits a while after its screen goes off. Without a word the
+// mirror would look as if it were still connecting. While someone watches
+// an idle phone, the gateway reads its screen with the lock (pollLocks),
+// says "Screen off" for it, and the person wakes it from the client
+// (Wake). Pinky still never wakes a phone by itself when nobody asked.
+
+// checkScreen reads whether an idle, unlocked phone's own screen is off.
+func (g *Gateway) checkScreen(ctx context.Context, d *device) {
+	g.mu.Lock()
+	dev, skip := d.dev, d.locked || d.lease != nil || !d.online
+	g.mu.Unlock()
+	w, ok := dev.(driver.Waker)
+	if !ok || skip {
+		g.setScreenOff(d, false)
+		return
+	}
+	on, err := w.ScreenOn(ctx)
+	if err != nil {
+		if errors.Is(err, driver.ErrOffline) {
+			g.setOffline(d, "")
+		}
+		return
+	}
+	g.setScreenOff(d, !on)
+}
+
+// setScreenOff records whether the phone's screen is off and tells the
+// clients when that changed.
+func (g *Gateway) setScreenOff(d *device, off bool) {
+	g.mu.Lock()
+	if d.screenOff == off {
+		g.mu.Unlock()
+		return
+	}
+	d.screenOff = off
+	g.mu.Unlock()
+	g.emit(Event{Kind: EventDevices, DeviceID: d.id})
+}
+
+// wakeTimeout bounds the person's Wake: the drivers wait about 2 s for the
+// screen, after opening their session when it is not open yet.
+const wakeTimeout = 15 * time.Second
+
+// Wake implements API: it turns the phone's screen on, as the person asked
+// from the client. It never unlocks: a phone with a lock screen wakes to
+// it.
+func (g *Gateway) Wake(deviceID string) error {
+	d, err := g.device(deviceID)
+	if err != nil {
+		return err
+	}
+	dev := g.driverOf(d)
+	if dev == nil {
+		return driver.ErrOffline
+	}
+	w, ok := dev.(driver.Waker)
+	if !ok {
+		return fmt.Errorf("%s cannot turn its screen on from the computer: %w", d.name(), driver.ErrUnsupported)
+	}
+	ctx, cancel := context.WithTimeout(g.ctx, wakeTimeout)
+	defer cancel()
+	if err := w.Wake(ctx); err != nil {
+		if errors.Is(err, driver.ErrOffline) {
+			g.setOffline(d, "")
+		}
+		g.log.Info("wake from the computer", "device", d.id, "ok", false, "err", err.Error())
+		return err
+	}
+	g.log.Info("wake from the computer", "device", d.id, "ok", true)
+	g.mu.Lock()
+	d.wokeAt = time.Now()
+	g.mu.Unlock()
+	g.setScreenOff(d, false)
+	// A phone with a lock screen shows it now.
+	g.checkLock(ctx, d)
+	return nil
 }

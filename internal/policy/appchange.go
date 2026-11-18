@@ -164,9 +164,10 @@ func (e *Engine) appChangeLocked(in Input) Verdict {
 			}
 		}
 	}
-	if in.ReadOnly || e.readOnlyLocked(in.Device) {
+	if global := e.readOnlyLocked(in.Device); in.ReadOnly || global {
+		why, fix := readOnlyWhy(in, global)
 		return Verdict{Decision: Deny, Rule: RuleReadOnly,
-			Reason: "Read-only mode is on: agents cannot install, uninstall or stop apps."}
+			Reason: why + ": agents cannot install, uninstall or stop apps. " + fix}
 	}
 	if len(asks) == 0 {
 		return Verdict{Decision: Allow}

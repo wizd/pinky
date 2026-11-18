@@ -311,6 +311,14 @@ func (s *Session) Act(ctx context.Context, c Call, a Action) *Result {
 // gate refuses a call the device cannot take now. Reads (action false) pass
 // while the person is in control or an approval is open.
 func (g *Gateway) gate(l *lease, approvalID string, action bool) *Result {
+	return g.gateOnce(l, approvalID, action, true)
+}
+
+// gateOnce is gate. With fresh, an action on a phone the gateway last saw
+// locked asks the phone once more before it is refused (unlockedNow): the
+// phone may have been unlocked since, by a script or by hand, and the
+// gateway reads the lock state only every few seconds (pollLocks).
+func (g *Gateway) gateOnce(l *lease, approvalID string, action, fresh bool) *Result {
 	g.mu.Lock()
 	d := l.dev
 	for !l.ended && g.waitMovingLocked(l.ctx, d) {
@@ -359,7 +367,12 @@ func (g *Gateway) gate(l *lease, approvalID string, action bool) *Result {
 				busy.Rule, busy.Title, tool, busy.ID)}
 	}
 	if d.locked && l.bg == nil {
+		seq := d.lockSeq
 		g.mu.Unlock()
+		if fresh && g.unlockedNow(l, seq) {
+			// Everything above may have changed while the phone answered.
+			return g.gateOnce(l, approvalID, action, false)
+		}
 		return g.withCurrentScreen(l, statusResult(StatusLocked,
 			"The phone is locked. Nothing was done. Call phone_handoff so the person can unlock it."))
 	}
@@ -788,7 +801,8 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 	virtual := d.info.Virtual
 	g.mu.Unlock()
 	p.input = policy.Input{Device: d.id, App: fg, Screen: cur, TaskApps: apps, LongPress: a.LongPress,
-		ReadOnly: scope.Mode == ScopeReadOnly || readOnly, AllowBlocked: fgAllowed, Virtual: virtual}
+		ReadOnly: scope.Mode == ScopeReadOnly || readOnly, ReadOnlyAccess: scope.Mode == ScopeReadOnly,
+		AllowBlocked: fgAllowed, Virtual: virtual}
 	if scope.Mode == ScopeApps {
 		p.input.Scoped, p.input.ScopeApps = true, scope.Apps
 	}
@@ -2099,6 +2113,15 @@ func (g *Gateway) perform(ctx context.Context, dev driver.Device, a Action, p *p
 // that prove nothing happened become errors; the rest are uncertain.
 func (g *Gateway) actionError(l *lease, err error) *Result {
 	if res := g.onPhoneResult(l, err); res != nil {
+		return res
+	}
+	var se *driver.SetupError
+	if errors.As(err, &se) && se.Setup != "" {
+		// The phone refused what the input needs, and says why: an iPhone
+		// whose camera or microphone an app uses refuses the stream that
+		// input goes over (driver.SetupMediaInUse). The phone stays open.
+		res := statusResult(StatusNeedsSetup, "%s Nothing was done.", strings.TrimSpace(se.Detail))
+		res.Setup = se.Setup
 		return res
 	}
 	switch {

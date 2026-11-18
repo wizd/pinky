@@ -129,6 +129,10 @@
     <string name="phone_pill_waiting">Waiting for you</string>
     <!-- Short: the pill stays over the screen Pinky on a computer works on. -->
     <string name="phone_pill_computer">In use by your computer</string>
+    <!-- Read out for the pill shrunk to a dot; %1$s is the pill's line, such as "In use by your computer". -->
+    <string name="phone_pill_dot">Pinky: %1$s</string>
+    <!-- What a tap on the dot does: shows the whole pill with its Stop. -->
+    <string name="phone_pill_expand">Show</string>
     <string name="phone_close">Close</string>
     <string name="phone_asks">Pinky asks</string>
     <string name="phone_rule">Rule: %1$s</string>

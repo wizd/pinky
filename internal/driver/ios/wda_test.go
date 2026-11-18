@@ -425,6 +425,7 @@ type fakeWDA struct {
 	// For reads.
 	app         string        // /wda/activeAppInfo's value
 	locked      bool          // /wda/locked
+	homeRefused string        // /wda/homescreen fails with this message; "" answers OK
 	sourceDelay time.Duration // before /source answers; set before the first request
 	shots       int           // /screenshot requests
 	shotAt      time.Time     // the last one
@@ -470,12 +471,19 @@ func (f *fakeWDA) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST /session":
 		f.sessions++
 		fmt.Fprintf(w, `{"value":{"sessionId":"s%d","capabilities":{}},"sessionId":"s%d"}`, f.sessions, f.sessions)
-	case "POST /appium/settings", "POST /actions", "POST /wda/keys", "POST /element/E1/clear", "POST /url":
+	case "POST /appium/settings", "POST /actions", "POST /wda/keys", "POST /wda/performIoHidEvent", "POST /element/E1/clear", "POST /url":
 		fmt.Fprint(w, `{"value":null}`)
 	case "GET /wda/activeAppInfo":
 		fmt.Fprintf(w, `{"value":%s}`, f.app)
 	case "GET /wda/locked":
 		fmt.Fprintf(w, `{"value":%v}`, f.locked)
+	case "POST /wda/homescreen":
+		if f.homeRefused != "" {
+			w.WriteHeader(500)
+			fmt.Fprintf(w, `{"value":{"error":"unknown error","message":%q}}`, f.homeRefused)
+			return
+		}
+		fmt.Fprint(w, `{"value":null}`)
 	case "GET /source":
 		f.sourceAt = time.Now()
 		fmt.Fprint(w, `{"value":{"type":"XCUIElementTypeApplication","label":"App","rect":{"x":0,"y":0,"width":100,"height":200},"isVisible":"1",`+
@@ -559,6 +567,64 @@ func TestWDAClient(t *testing.T) {
 	}
 	if err := c.do(ctx, c.hc, http.MethodGet, "/element/active?none", nil, nil); !errors.As(err, &we) || we.Code != "no such element" {
 		t.Fatalf("no such element: %v", err)
+	}
+}
+
+func TestWDAKeyUsesHIDForNavKeys(t *testing.T) {
+	f := &fakeWDA{}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	d := &WDADevice{c: newWDAURL(srv.URL, ""), scale: 1}
+	ctx := context.Background()
+	// An arrow key has no character, so it goes as a HID usage on the
+	// keyboard page, the way the iOS 27 path presses it.
+	if err := d.Key(ctx, driver.KeyDpadLeft); err != nil {
+		t.Fatal(err)
+	}
+	body := f.bodies["POST /wda/performIoHidEvent"]
+	if len(body) != 1 {
+		t.Fatalf("hid events %v", body)
+	}
+	var ev struct {
+		Page     int     `json:"page"`
+		Usage    int     `json:"usage"`
+		Duration float64 `json:"duration"`
+	}
+	if err := json.Unmarshal([]byte(body[0]), &ev); err != nil {
+		t.Fatal(err)
+	}
+	if ev.Page != keyboardPage || ev.Usage != keyLeft || ev.Duration != wdaKeyHold.Seconds() {
+		t.Fatalf("event %+v", ev)
+	}
+	// Keys a character names still go as text, not as usages.
+	if err := d.Key(ctx, driver.KeyTab); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.bodies["POST /wda/keys"]) != 1 || len(f.bodies["POST /wda/performIoHidEvent"]) != 1 {
+		t.Fatalf("keys %v, hid events %v", f.bodies["POST /wda/keys"], f.bodies["POST /wda/performIoHidEvent"])
+	}
+	if err := d.Key(ctx, driver.Key("nothing")); !errors.Is(err, driver.ErrUnsupported) {
+		t.Fatalf("unknown key: %v", err)
+	}
+}
+
+// A locked phone refuses to open SpringBoard, which is the wake rather than
+// a failure: the Home key must not surface it.
+func TestWDAHomeKeyOnLockedPhone(t *testing.T) {
+	f := &fakeWDA{homeRefused: `Error Domain=FBSOpenApplicationServiceErrorDomain Code=1 "The request to open "com.apple.springboard" failed." UserInfo={BSErrorCodeDescription=Locked, NSLocalizedFailureReason=Unable to launch (null) because the device was not, or could not be, unlocked.}`}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	d := &WDADevice{c: newWDAURL(srv.URL, ""), scale: 1}
+	ctx := context.Background()
+	if err := d.Key(ctx, driver.KeyHome); err != nil {
+		t.Fatalf("locked: %v", err)
+	}
+	// A failure to open SpringBoard for any other reason is still a failure.
+	f.mu.Lock()
+	f.homeRefused = `Error Domain=FBSOpenApplicationServiceErrorDomain Code=1 "The request to open "com.apple.springboard" failed."`
+	f.mu.Unlock()
+	if err := d.Key(ctx, driver.KeyHome); err == nil {
+		t.Fatal("not locked: no error")
 	}
 }
 
@@ -661,5 +727,32 @@ func TestBackButtonSplitView(t *testing.T) {
 	root.Children[1].Children[0].Name, root.Children[1].Children[0].Identifier = nil, nil
 	if p, ok = backButton(&root, 2); ok {
 		t.Fatalf("leading button %v", p)
+	}
+}
+
+// Opening an iPhone loads the OCR models in the background: an agent's
+// first read comes with OCR, and would otherwise wait while macOS compiles
+// them for a program that has not used them yet.
+func TestWDAOpenWarmsOCR(t *testing.T) {
+	warmed := 0
+	old := ocrWarm
+	ocrWarm = func() { warmed++ }
+	defer func() { ocrWarm = old }()
+	f := &fakeWDA{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/wda/screen") {
+			fmt.Fprint(w, `{"value":{"scale":3,"screenSize":{"width":390,"height":844}}}`)
+			return
+		}
+		f.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	d, err := openWDA(context.Background(), driver.Info{ID: "sim"}, newWDAURL(srv.URL, ""), goios.DeviceEntry{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if warmed != 1 {
+		t.Fatalf("OCR warmed %d times, want once", warmed)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -235,4 +236,53 @@ func saveRecFile(t *testing.T, s *Store, task string, at time.Time) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+// readOnly makes dir read-only until the test ends, so the files in it
+// cannot be removed, as on a read-only disk. It skips the test where that
+// does not stop removing: on Windows, and for root.
+func readOnly(t *testing.T, dir string) {
+	t.Helper()
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("no read-only folders this way")
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o700) })
+}
+
+func writable(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDeleteTasksRemovesWhatItCan checks that a file that cannot be removed
+// leaves no other of the same deletion behind: the task's screenshot goes
+// though its recording cannot.
+func TestDeleteTasksRemovesWhatItCan(t *testing.T) {
+	ctx := context.Background()
+	s := openStore(t)
+	at := time.Now().Add(-time.Hour)
+	saveEnded(t, s, "t1", at)
+	shot := saveShot(t, s)
+	saveStepShot(t, s, "t1", 0, shot)
+	shotFile, err := s.MediaPath(ctx, shot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := saveRecFile(t, s, "t1", at)
+	readOnly(t, filepath.Dir(rec))
+
+	if _, err := s.DeleteTasks(ctx, []string{"t1"}, nil); err == nil {
+		t.Error("DeleteTasks reported no error for the recording it could not remove")
+	}
+	if _, err := os.Stat(shotFile); !os.IsNotExist(err) {
+		t.Errorf("the screenshot is still there: %v", err)
+	}
+	if _, err := os.Stat(rec); err != nil {
+		t.Errorf("the recording in the read-only folder is gone: %v", err)
+	}
 }

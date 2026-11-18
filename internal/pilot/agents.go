@@ -329,9 +329,9 @@ func (a agentTasks) Run(req mcp.TaskRequest) (mcp.Task, error) {
 	// Without a key the task would end at once: say so now. The key is
 	// read again, and kept, only by the task.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	key, err := a.r.opt.Key(ctx, cfg.Provider)
+	key, err := a.r.opt.Key(ctx, cfg.KeyName())
 	cancel()
-	if errors.Is(err, secret.ErrNotFound) || err == nil && strings.TrimSpace(key) == "" {
+	if !cfg.KeyOptional() && (errors.Is(err, secret.ErrNotFound) || err == nil && strings.TrimSpace(key) == "") {
 		return mcp.Task{}, &mcp.TaskError{Code: gateway.ErrUnsupported,
 			Message: "Pinky's own agent has no API key for its model yet. Ask the person to add one in Pinky's Settings › Agents › Ask Pinky, or drive the phone with the phone_* tools."}
 	}

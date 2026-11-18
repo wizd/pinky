@@ -71,7 +71,7 @@ func (s *Store) Prune(ctx context.Context, cutoff time.Time, keep []string) (Pru
 	if err := tx.Commit(); err != nil {
 		return out, err
 	}
-	return out, removeFiles(files)
+	return out, errors.Join(s.removePending(ctx), s.removeDropped(ctx, files))
 }
 
 // DeleteTasks deletes the tasks ids names, with their steps, approvals,
@@ -133,7 +133,7 @@ func (s *Store) DeleteTasks(ctx context.Context, ids, keep []string) (Pruned, er
 	if err := tx.Commit(); err != nil {
 		return out, err
 	}
-	return out, removeFiles(files)
+	return out, errors.Join(s.removePending(ctx), s.removeDropped(ctx, files))
 }
 
 // dropTasks deletes tasks with their steps, approvals and recordings in tx,
@@ -173,11 +173,11 @@ func (s *Store) dropTasks(ctx context.Context, tx *sql.Tx, ids []string, out *Pr
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, rel := range recs {
-			if !strings.Contains(rel, "..") {
-				files = append(files, filepath.Join(s.dir, filepath.FromSlash(rel)))
-			}
+		recFiles, err := s.dropRecordingFiles(ctx, tx, recs)
+		if err != nil {
+			return nil, nil, err
 		}
+		files = append(files, recFiles...)
 		out.Recordings += len(recs)
 		for _, del := range []struct {
 			table string
@@ -232,14 +232,18 @@ func (s *Store) dropMedia(ctx context.Context, tx *sql.Tx, candidates map[string
 	return files, nil
 }
 
-// removeFiles removes files whose rows are gone; one already gone is fine.
-func removeFiles(files []string) error {
+// removeEach removes files whose rows are gone; one already gone is fine.
+// It tries every file, so one that cannot be removed leaves no other
+// behind, and returns those it could not remove, with their errors.
+func removeEach(files []string) (failed []string, err error) {
+	var errs []error
 	for _, f := range files {
 		if err := os.Remove(f); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
+			failed = append(failed, f)
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return failed, errors.Join(errs...)
 }
 
 func (s *Store) strings(ctx context.Context, q string, args ...any) ([]string, error) {

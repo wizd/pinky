@@ -477,7 +477,11 @@ func (b *Background) Screenshot(ctx context.Context) (image.Image, error) {
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	img, err := png.Decode(bytes.NewReader(out))
+	pic, _, ok := cutPNG(out)
+	if !ok {
+		pic = out
+	}
+	img, err := png.Decode(bytes.NewReader(pic))
 	if err != nil {
 		return nil, fmt.Errorf("android: screencap of display %d: %q: %w", b.display, firstLine(out), driver.ErrUnsupported)
 	}

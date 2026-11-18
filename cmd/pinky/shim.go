@@ -17,7 +17,9 @@ import (
 // stdio and the gateway's socket, where the MCP server runs, starts the
 // gateway first when none is running, and keeps the agent's session when
 // the gateway goes away: it waits for the app to restart for an update, or
-// for the person to open it again after quitting it.
+// for the person to open it again after quitting it. When the person quit
+// Pinky before the shim started, it starts the agent's session without
+// Pinky and waits for them to open it (shimquit.go).
 func runMCP(args []string) error {
 	fs := flag.NewFlagSet("pinky mcp", flag.ContinueOnError)
 	fake := fs.Bool("fake", false, "when no gateway runs, start one with fake phones")
@@ -30,7 +32,11 @@ func runMCP(args []string) error {
 	}
 	conn, err := api.Dial(dirs)
 	if err != nil {
-		if conn, err = launchGateway(dirs, *fake); err != nil {
+		conn, err = launchGateway(dirs, *fake)
+		if errors.Is(err, errPersonQuit) {
+			return runQuitShim(dirs, os.Stdin, os.Stdout)
+		}
+		if err != nil {
 			return err
 		}
 	}
@@ -54,7 +60,13 @@ func runMCP(args []string) error {
 // and the person opening Pinky later finds it already open. Without a
 // desktop, with fake phones, or when the app cannot start, it starts
 // `pinky daemon`, which the app takes over when the person opens it.
+//
+// After the person quit Pinky it starts nothing and returns errPersonQuit,
+// until they open Pinky again (quitmark.go); fake phones start anyway.
 func launchGateway(dirs api.Dirs, fake bool) (net.Conn, error) {
+	if !fake && quitByPerson(dirs) {
+		return nil, errPersonQuit
+	}
 	mode := daemonMode
 	switch {
 	case fake:

@@ -18,6 +18,10 @@ var ocrLanguages = ocr.Languages
 
 func recognizeText(img []byte, opt ocrOptions) ([]ocrLine, error) { return ocr.Recognize(img, opt) }
 
+// ocrWarm loads the recognizer's models in the background (ocr.Warm). It is
+// a variable for tests.
+var ocrWarm = ocr.Warm
+
 func ocrRect(l ocrLine, w, h int) screen.Rect { return ocr.Rect(l, w, h) }
 
 // keyboardFromOCR finds an on-screen keyboard in OCR lines (ocr.KeyboardTop).

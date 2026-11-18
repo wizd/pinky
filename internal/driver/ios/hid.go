@@ -219,6 +219,20 @@ type hidSession struct {
 	down     bool
 	last     [2]uint16
 	held     *[2]uint64 // a button held down: usage page and usage
+	// surface is the touchscreen service touches go to: 0 for the built-in
+	// one (surfaceTouchscreen), else the one under the display in use; see
+	// touchSurface.
+	surface uint64
+}
+
+// useSurface sets the touchscreen later touches go to. A contact still down
+// stays on the one it went down on until it lifts.
+func (h *hidSession) useSurface(id uint64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.down {
+		h.surface = id
+	}
 }
 
 // alive reports whether the touch connection still works.
@@ -271,7 +285,7 @@ func (h *hidSession) touchLocked(down bool, x, y uint16) error {
 		}
 		state = touchRelease
 	}
-	if err := h.touch.send(universalReport(surfaceTouchscreen, touchReport(state, x, y, hidTimestamp())), false); err != nil {
+	if err := h.touch.send(universalReport(touchService(h.surface), touchReport(state, x, y, hidTimestamp())), false); err != nil {
 		return err
 	}
 	h.down = down

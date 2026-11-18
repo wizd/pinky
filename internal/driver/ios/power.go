@@ -343,7 +343,7 @@ func (p devicePower) pressHome(ctx context.Context) error {
 func (p devicePower) swipeUp(ctx context.Context) error {
 	s := p.d.freshDisplay(ctx).upright()
 	x := s.Width / 2
-	return p.d.Swipe(ctx, screen.Point{X: x, Y: s.Height - 1}, screen.Point{X: x, Y: s.Height / 2}, 300*time.Millisecond)
+	return p.d.fling(ctx, screen.Point{X: x, Y: s.Height - 1}, screen.Point{X: x, Y: s.Height / 2}, 300*time.Millisecond)
 }
 
 // keypadShown looks for the passcode pad: buttons for all ten digits (their

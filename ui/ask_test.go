@@ -11,6 +11,7 @@ import (
 
 	mg "github.com/egoist/mygo/ui"
 
+	"github.com/DIYgod/pinky/cmd/pinky/locales"
 	"github.com/DIYgod/pinky/internal/gateway"
 	"github.com/DIYgod/pinky/internal/pilot"
 	"github.com/DIYgod/pinky/internal/secret"
@@ -650,5 +651,51 @@ func TestPilotConfigOfBefore(t *testing.T) {
 	s.setPilotModel("kimi-cn", "kimi-k3.1-pro")
 	if cl.PilotModels["kimi-cn"] != "kimi-k3" {
 		t.Error("clone shares PilotModels")
+	}
+}
+
+// TestAskPinkyLimitFits: the model, the limit and today's use beside the
+// box's buttons keep their lines whatever the room. In a narrow Tasks
+// panel the buttons took all of it, and "Up to 10,000,000 tokens a task"
+// was drawn a letter a line, down the side of the box; the buttons now go
+// below the lines when they do not fit beside them.
+func TestAskPinkyLimitFits(t *testing.T) {
+	for _, lang := range testLanguages() {
+		t.Run(langShort(lang), func(t *testing.T) {
+			ta, _, tt, _ := newSchedApp(t) // with Schedule…, as most have it
+			inLanguage(t, lang, tt)
+			ta.settings.PilotAnthropicModel = "a-model-pinky-has-no-prices-for"
+			ta.settings.PilotMaxCost = 10
+			limit := locales.AskTaskLimit(locales.AskTokens(10_000_000))
+			for _, w := range []int{960, 1280, 1920} {
+				tt.SetSize(w, 900)
+				frameUntil(t, ta, tt, locales.SchedButton())
+				r, ok := tt.Find(limit)
+				if !ok {
+					t.Fatalf("width %d: no %q in %q", w, limit, tt.Texts())
+				}
+				b, ok := tt.Find(locales.AskScreen())
+				if !ok {
+					t.Fatalf("width %d: no %q", w, locales.AskScreen())
+				}
+				if r.H > 2*float32(fsCaption) || r.W < 100 {
+					t.Errorf("width %d: the limit is %v, not one line", w, r)
+				}
+				if b.Y < r.Y+r.H && b.X < r.X+r.W {
+					t.Errorf("width %d: %q %v overlaps the limit %v", w, locales.AskScreen(), b, r)
+				}
+				// The buttons stay in the box: 開始 (Start) went past its
+				// right edge, to the window's, in Japanese.
+				box, ok := tt.AccessByRole(mg.RoleGroup, locales.AskTitle())
+				if !ok {
+					t.Fatalf("width %d: no box", w)
+				}
+				for _, name := range []string{locales.AskScreen(), locales.SchedButton(), locales.AskStart()} {
+					if b, ok := tt.AccessByRole(mg.RoleButton, name); !ok || b.Bounds.X+b.Bounds.W > box.Bounds.X+box.Bounds.W {
+						t.Errorf("width %d: %q %v is not inside the box %v", w, name, b.Bounds, box.Bounds)
+					}
+				}
+			}
+		})
 	}
 }

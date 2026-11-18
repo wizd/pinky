@@ -292,6 +292,11 @@ func (g *Gateway) endLeaseLocked(l *lease, outcome, summary string) {
 	}
 	l.ended, l.endedBy = true, outcome
 	d := l.dev
+	g.quietLocked(d, quietHandoff, false)
+	// What the proxy captured belongs to the task: it goes with it, and
+	// the proxy stops (and the phone's proxy setting goes back) shortly.
+	g.dropTraffic(d.id)
+	g.captureSoon()
 	if d.lease == l {
 		// Person control stays with the device until HandBack.
 		d.lease = nil

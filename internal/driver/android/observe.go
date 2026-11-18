@@ -47,7 +47,7 @@ func (d *Device) ObserveWithText(ctx context.Context, opt driver.ObserveOptions)
 		return nil, TextStats{}, err
 	}
 	src := textSource{
-		shot:  func(ctx context.Context) ([]byte, error) { return d.screencap(ctx, "screencap -p") },
+		shot:  d.screencap,
 		moved: d.movedSince(0),
 	}
 	if d.info.Connection != "usb" {
@@ -236,7 +236,7 @@ func (d *Device) Screenshot(ctx context.Context) (image.Image, error) {
 	if err := d.acting(ctx); err != nil {
 		return nil, err
 	}
-	out, err := d.screencap(ctx, "screencap -p")
+	out, err := d.screencap(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -245,18 +245,6 @@ func (d *Device) Screenshot(ctx context.Context) (image.Image, error) {
 		return nil, fmt.Errorf("android: screencap: %v (%d bytes: %q)", err, len(out), firstLine(out))
 	}
 	return img, nil
-}
-
-// screencap runs a screencap command and returns its PNG.
-func (d *Device) screencap(ctx context.Context, cmd string) ([]byte, error) {
-	out, err := d.client.Exec(ctx, d.info.ID, cmd)
-	if err != nil {
-		return nil, wrapErr(err)
-	}
-	if !bytes.HasPrefix(out, []byte("\x89PNG")) {
-		return nil, fmt.Errorf("android: screencap: no PNG (%d bytes: %q)", len(out), firstLine(out))
-	}
-	return out, nil
 }
 
 // Locked implements driver.LockReporter: true while the lock screen is

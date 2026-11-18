@@ -36,6 +36,7 @@ type fakeADB struct {
 	pairs         int
 	autoSerial    string            // a serial the server adds by itself after pairing
 	props         map[string]string // getprop output by serial; none fails the shell
+	mute          bool              // a phone the server connects does not answer getprop: its shell fails
 	connectOK     map[string]bool   // addresses host:connect reaches; nil: all
 	quitOnConnect bool              // the server crashes on host:connect, as platform-tools 37 can
 	slowDevices   time.Duration     // how long host:devices-l takes, as on a busy computer
@@ -86,6 +87,24 @@ func startFakeADB(t *testing.T) *fakeADB {
 
 func (f *fakeADB) config() Config {
 	return Config{Client: &adb.Client{Addr: f.ln.Addr().String()}, Browser: f, Logf: f.t.Logf}
+}
+
+// pixelProps is what a phone the server connects answers propsCommand
+// with: a Pixel 9 whose shell reads no serial, so that it is known by the
+// serial in its connection's name, or by its address.
+const pixelProps = "Pixel 9\n14\n34\nnull\n\npinky-boot=\npinky-booted=1\n"
+
+// answers has the phone at a connection the server just made answer
+// propsCommand, unless the test set what it answers or it is mute. The
+// caller holds f.mu.
+func (f *fakeADB) answers(serial string) {
+	if _, ok := f.props[serial]; ok || f.mute {
+		return
+	}
+	if f.props == nil {
+		f.props = map[string]string{}
+	}
+	f.props[serial] = pixelProps
 }
 
 func (f *fakeADB) set(fn func(f *fakeADB)) {
@@ -181,6 +200,7 @@ func (f *fakeADB) handle(c net.Conn) {
 		io.WriteString(c, "OKAY")
 		if f.autoSerial != "" {
 			f.devices = append(f.devices, f.autoSerial+"\tdevice product:x model:Pixel_9 device:x transport_id:7")
+			f.answers(f.autoSerial)
 		}
 		if f.guid == "" {
 			reply("Successfully paired to " + addr)
@@ -220,6 +240,7 @@ func (f *fakeADB) handle(c net.Conn) {
 			f.devices = append(f.devices, addr+"\toffline transport_id:8")
 		} else {
 			f.devices = append(f.devices, addr+"\tdevice product:x model:Pixel_9 device:x transport_id:8")
+			f.answers(addr)
 		}
 		reply("connected to " + addr)
 	case strings.HasPrefix(req, "host:disconnect:"):
@@ -323,9 +344,9 @@ func TestQRPairing(t *testing.T) {
 	}
 	// The server lists the phone, so it is connected by its service name,
 	// which is the serial the server's own auto-connect gives it. (This
-	// phone's shell reads no properties, so the serial is its id.)
+	// phone's shell reads no serial, so its id is the one in that name.)
 	const named = "adb-R5CN20ABC-x1y2z3._adb-tls-connect._tcp"
-	if info.ID != named || info.Connection != "wifi" || info.State != driver.StateOnline {
+	if info.ID != "R5CN20ABC" || info.Connection != "wifi" || info.State != driver.StateOnline {
 		t.Errorf("Wait = %+v", info)
 	}
 	f.mu.Lock()
@@ -524,7 +545,7 @@ func TestPairWithCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.ID != "adb-R5CN20ABC-x1y2z3._adb-tls-connect._tcp" || info.Connection != "wifi" {
+	if info.ID != "R5CN20ABC" || info.Connection != "wifi" {
 		t.Errorf("PairWithCode = %+v", info)
 	}
 	f.mu.Lock()

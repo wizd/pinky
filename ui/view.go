@@ -138,7 +138,7 @@ func (a *app) sidebar(c *mg.Context) {
 			stop.TextColor(p.red).Children(func() {
 				mg.Icon(c, icStop).FontSize(iconBody)
 				mg.Text(c, locales.SidebarStopAll()).FontSize(fsBody).Grow(1)
-				mg.Text(c, shortcutLabel()).FontSize(fsCaption).TextColor(p.ink3)
+				mg.Text(c, a.shortcutLabel()).FontSize(fsCaption).TextColor(p.ink3)
 			})
 		})
 	})
@@ -189,7 +189,7 @@ func (a *app) sidebarPhones(c *mg.Context) {
 				reveal(row, d.Info.ID)
 			}
 			row.ContextMenu(func(m *mg.Menu) { a.phoneMenu(m, d) })
-			row.MinHeight(44).Label(locales.SidebarPhoneRow(d.Info.Name, statusLine(d))).Children(func() {
+			row.MinHeight(44).Label(locales.SidebarPhoneRow(d.Info.Name, sidebarLine(d))).Children(func() {
 				statusDot(c, d)
 				mg.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
 					name := mg.Text(c, d.Info.Name).FontSize(fsBody).FontWeight(fwMedium).SingleLine()
@@ -198,7 +198,7 @@ func (a *app) sidebarPhones(c *mg.Context) {
 					}
 					// No empty second line: it would lift the name off the
 					// dot beside it.
-					if line := statusLine(d); line != "" {
+					if line := sidebarLine(d); line != "" {
 						textSwap(mg.Text(c, line).FontSize(fsCaption).TextColor(p.ink2).SingleLine())
 					}
 				})
@@ -206,6 +206,21 @@ func (a *app) sidebarPhones(c *mg.Context) {
 			})
 		}
 	})
+}
+
+// sidebarLine is a phone's line under its name in the sidebar: its status,
+// after "Simulator" or "Emulator" for a virtual phone. A Simulator is
+// named after the phone it copies, "iPhone Air", and without the word it
+// read as a second, offline copy of the person's iPhone Air.
+func sidebarLine(d gateway.DeviceView) string {
+	line := statusLine(d)
+	if !d.Info.Virtual {
+		return line
+	}
+	if line == "" {
+		return virtualKind(d.Info.Platform)
+	}
+	return virtualKind(d.Info.Platform) + " · " + line
 }
 
 // phoneRow is a row of the sidebar: a phone, All phones, Add phone.

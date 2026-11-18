@@ -3,6 +3,8 @@ package gateway
 import (
 	"fmt"
 	"slices"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/DIYgod/pinky/internal/approval"
 	"github.com/DIYgod/pinky/internal/policy"
@@ -101,7 +103,8 @@ func isUnblock(info approval.Info) bool {
 
 // agentRequest is what an agent's first connection asked for.
 type agentRequest struct {
-	readOnly bool // phone_connect read_only
+	readOnly bool     // phone_connect read_only
+	apps     []string // phone_connect apps
 }
 
 // askedReadOnly reports whether an agent's first connection asked to only
@@ -109,4 +112,39 @@ type agentRequest struct {
 func askedReadOnly(info approval.Info) bool {
 	r, ok := info.Data.(agentRequest)
 	return ok && info.Kind == approval.KindAgent && r.readOnly
+}
+
+// askedApps returns the apps an agent's first connection named for its
+// task (NeedView.Apps).
+func askedApps(info approval.Info) []string {
+	r, ok := info.Data.(agentRequest)
+	if !ok || info.Kind != approval.KindAgent {
+		return nil
+	}
+	return r.apps
+}
+
+// The card shows what the agent wrote, so it is bounded: maxAskedApps of
+// the apps it named, none longer than maxAskedApp, which no name or id is.
+const (
+	maxAskedApps = 20
+	maxAskedApp  = 100 // characters
+)
+
+// cleanApps returns the apps an agent named for its task as the card gets
+// them: trimmed, without empty, repeated or overlong ones, maxAskedApps at
+// most.
+func cleanApps(apps []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, a := range apps {
+		a = strings.TrimSpace(a)
+		k := strings.ToLower(a)
+		if a == "" || seen[k] || utf8.RuneCountInString(a) > maxAskedApp || len(out) == maxAskedApps {
+			continue
+		}
+		seen[k] = true
+		out = append(out, a)
+	}
+	return out
 }

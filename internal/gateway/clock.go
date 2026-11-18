@@ -9,7 +9,9 @@ import (
 // recording takes a picture that arrived after its task started and before
 // the task ended, and a read vouches for the pictures that arrived before
 // it started (video.go); a history screenshot is kept by a read that
-// started after the screenshot was taken (shots.go). The gateway orders
+// started after the screenshot was taken (shots.go); a read of a phone's
+// network traffic leaves out the requests that started while the person
+// held the phone (traffic.go). The gateway orders
 // these events by their times, and two equal times cannot say which came
 // first. time.Now gives equal times: on Windows it moves only with the
 // system's clock tick (under a millisecond to 16 ms), so a picture of the

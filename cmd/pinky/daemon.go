@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -20,6 +21,8 @@ import (
 	"github.com/DIYgod/pinky/internal/gateway"
 	"github.com/DIYgod/pinky/internal/mcp"
 	"github.com/DIYgod/pinky/internal/policy"
+	"github.com/DIYgod/pinky/internal/secret"
+	"github.com/DIYgod/pinky/internal/tailnet"
 	"github.com/DIYgod/pinky/internal/telemetry"
 	"github.com/DIYgod/pinky/internal/update"
 	"github.com/DIYgod/pinky/internal/vcorplink"
@@ -61,9 +64,12 @@ func runDaemon(args []string) error {
 	defer rg.Close()
 	// Agents' copies of Pinky's skill follow this version.
 	go refreshSkills(c.Log)
-	// Recording, retention, iPhones over Wi-Fi and usage statistics follow
+	// Recording and its folder, retention, iPhones over Wi-Fi and usage statistics follow
 	// the app's settings, when there are any.
 	s := loadSettings(filepath.Join(rg.Dirs.Config, "settings.json"), c.Log)
+	if err := rg.G.SetRecordingsDir(s.RecordingsDir); err != nil {
+		c.Log.Warn("settings: recordings folder", "err", err)
+	}
 	rg.G.SetRecording(s.Record)
 	rg.G.SetSmallerRecordings(s.SmallerRecordings)
 	rg.G.SetRetention(s.KeepDays)
@@ -213,6 +219,8 @@ func startGateway(c gatewayConfig) (*runningGateway, error) {
 		// and socket clients may answer approvals (for scripted tests).
 		TrustNewAgents: c.Fake,
 		PIN:            c.PIN,
+		TrafficKeys:    trafficKeys(c.Fake),
+		TrafficTailnet: trafficTailnet(c.Fake),
 	})
 	if err != nil {
 		ln.Close()
@@ -230,6 +238,8 @@ func startGateway(c gatewayConfig) (*runningGateway, error) {
 		srv.Features = append(srv.Features, vcorplink.Feature)
 	}
 	log.Info("gateway ready", "socket", dirs.Socket(), "data", dataDir, "devices", len(g.Devices()), "fake", c.Fake, "pid", os.Getpid())
+	// Pinky runs again, however it started (quitmark.go).
+	gatewayUp(dirs, c.Fake, log)
 	return &runningGateway{Dirs: dirs, DataDir: dataDir, Policy: pol, G: g, Remote: newRemoteAgents(m, tok, log), MCP: m,
 		Mirror: newWebMirror(g, log), ln: ln, srv: srv, log: log, fake: c.Fake}, nil
 }
@@ -249,4 +259,24 @@ func (r *runningGateway) Close() {
 	}
 	r.G.Close()
 	r.ln.Close()
+}
+
+// trafficKeys is where Pinky keeps its traffic certificate's private key:
+// the keychain on macOS; elsewhere, and for fake phones, a file in the
+// data folder that only this user reads (docs/notes/traffic-capture.md).
+// trafficTailnet reads Tailscale on this computer, so the traffic proxy
+// takes a phone at a Tailscale address only when it is a peer; fake
+// phones have none.
+func trafficTailnet(fake bool) func(context.Context) (tailnet.Status, error) {
+	if fake {
+		return nil
+	}
+	return tailnet.Read
+}
+
+func trafficKeys(fake bool) secret.Store {
+	if fake || runtime.GOOS != "darwin" || !secret.Supported(secret.System()) {
+		return nil
+	}
+	return secret.System()
 }

@@ -188,7 +188,10 @@ type Settings struct {
 	// SmallerRecordings makes each task's recording smaller when the task
 	// ends (internal/recording.Smaller); off keeps the phone's own stream.
 	SmallerRecordings bool
-	DeveloperMode     bool
+	// RecordingsDir is the folder new recordings go to; "" is Pinky's own
+	// (gateway.SetRecordingsDir).
+	RecordingsDir string
+	DeveloperMode bool
 	// RemoteAgents serves MCP over Streamable HTTP at RemoteAddr, for agents
 	// that cannot start `pinky mcp`; each request needs the agent token.
 	RemoteAgents bool
@@ -450,6 +453,8 @@ type app struct {
 	quitting  bool
 	focused   bool // the main window has the keyboard
 	shortcut  string
+	keys      string // the keys the desktop bound to the shortcut, where it binds them (Wayland): none when the person declined it
+	keysTold  bool   // the desktop told keys
 	videoErr  error
 	buildSeq  int
 	updating  atomic.Bool
@@ -458,6 +463,7 @@ type app struct {
 	setq      settingsQueue // settings on their way to the gateway
 	postHook  func(func())  // tests run posted functions themselves
 	shownOnce bool          // the main window has shown (Options.Hidden)
+	docked    bool          // a hidden-started app has its Dock icon (regularApp)
 
 	mediaCache map[string]*mediaEntry // step screenshots by media id
 	mediaSweep bool                   // a sweepMedia is due (mediaKeep)
@@ -477,6 +483,7 @@ type app struct {
 	t         telState       // usage statistics, crash reports and feedback
 	comp      companionState // the Android companion app, per phone
 	bg        bgState        // background displays, per phone
+	traffic   trafficState   // Read network traffic, per phone (traffic.go)
 	conn      connState      // iPhones: how Pinky connects, per phone
 	helper    helperState    // iPhones: installing the helper from the window (helper.go)
 	tasksTip  tasksTipState  // the card about tasks on the phone itself (phonetasks.go)
@@ -503,6 +510,9 @@ type app struct {
 	awayAwakeOn bool
 	exportTo    func() (string, error) // where exports go; tests replace it
 	reveal      func(path string)      // shows an exported file; tests replace it
+	// openDialog is the system's open dialog (mygo.Dialog.Open) when nil;
+	// tests replace it.
+	openDialog func(mygo.OpenDialogOptions) ([]string, error)
 }
 
 // Run starts the client and returns when it quits. It owns the main
@@ -591,6 +601,7 @@ func (a *app) ready() {
 	a.devices, a.tasks = a.api.Devices(), a.api.Tasks()
 	a.setNeeds(a.api.Needs())
 	a.setBackgrounds(a.readBackground(a.devices))
+	a.setTraffics(a.readTraffic(a.devices))
 	a.loaded = true
 	a.applySettings()
 	a.afterRefresh(true)
@@ -629,7 +640,7 @@ func (a *app) ready() {
 	a.main.OnMinimize(a.closeMirrors)
 	a.main.OnShow(a.main.Invalidate)
 	a.main.OnRestore(a.main.Invalidate)
-	a.main.OnFocus(func() { a.focused = true; a.syncPanel() })
+	a.main.OnFocus(func() { a.focused = true; a.regularApp(); a.syncPanel() })
 	a.main.OnBlur(func() { a.focused = false; a.syncPanel() })
 	a.focused = a.main.IsFocused()
 
@@ -755,10 +766,11 @@ func (a *app) refresh(devs, tasks, needs bool) {
 	var d []gateway.DeviceView
 	var t []gateway.TaskView
 	var n []gateway.NeedView
-	var bg map[string]bool
+	var bg, tr map[string]bool
 	if devs {
 		d = a.api.Devices()
 		bg = a.readBackground(d)
+		tr = a.readTraffic(d)
 	}
 	if tasks {
 		t = a.api.Tasks()
@@ -770,6 +782,7 @@ func (a *app) refresh(devs, tasks, needs bool) {
 		if devs {
 			a.devices = d
 			a.setBackgrounds(bg)
+			a.setTraffics(tr)
 			for id := range a.pin.wrong {
 				if dv := a.device(id); dv != nil && dv.Status != gateway.DeviceLocked && dv.Status != gateway.DeviceNeedsYou {
 					delete(a.pin.wrong, id) // unlocked on the phone: the person may try again
@@ -964,6 +977,7 @@ func (a *app) setNeeds(n []gateway.NeedView) {
 	if asks != a.agents.asks {
 		a.agents.asks, a.agents.lastLoad = asks, time.Time{}
 	}
+	a.agents.cardsChanged(a.needs, n)
 	a.needs = n
 	live := map[string]bool{}
 	for _, x := range n {
@@ -1082,6 +1096,7 @@ func (a *app) selectPhone(id string) {
 }
 
 func (a *app) decide(n gateway.NeedView, d gateway.Decision, note string) {
+	a.agents.answered(n)
 	a.remember(n, d, note)
 	a.call(n.DeviceID, locales.CallAnswer(), func() error {
 		err := a.api.Decide(n.ID, d, note)
@@ -1148,15 +1163,19 @@ func (a *app) openForNeed(n gateway.NeedView) {
 		return
 	}
 	a.selectPhone(n.DeviceID)
-	a.regularApp()
+	a.shownOnce = true
 	a.main.ShowInactive()
 }
 
-// regularApp gives a hidden-started app its Dock icon once a window shows.
+// regularApp gives a hidden-started app its Dock icon when the person
+// opens or focuses its window. On macOS that also makes it the active app,
+// whose front window takes the keyboard, so a window that opened by itself
+// (openForNeed) waits for the person to come to it.
 func (a *app) regularApp() {
-	if a.opt.Hidden && !a.shownOnce && runtime.GOOS == "darwin" {
+	if a.opt.Hidden && !a.docked && runtime.GOOS == "darwin" {
 		mygo.App.SetActivationPolicy(mygo.ActivationPolicyRegular)
 	}
+	a.docked = true
 	a.shownOnce = true
 }
 
@@ -1216,15 +1235,34 @@ func (a *app) registerShortcut() {
 	if acc == "" {
 		acc = "CmdOrCtrl+Alt+."
 	}
-	if err := mygo.GlobalShortcut.Register(acc, a.stopAll); err != nil {
+	opts := mygo.GlobalShortcutOptions{
+		// What the desktop calls the shortcut where it asks about it and
+		// in its settings.
+		Description: locales.SidebarStopAll(),
+		OnKeys: func(keys string) {
+			a.keys, a.keysTold = keys, true
+			if a.main != nil && !a.main.IsDestroyed() {
+				a.main.Invalidate()
+			}
+			a.invalidate()
+		},
+	}
+	if err := mygo.GlobalShortcut.RegisterWith(acc, opts, a.stopAll); err != nil {
 		log.Printf("pinky: global shortcut %s: %v", acc, err)
 		return
 	}
 	a.shortcut = acc
 }
 
-// shortcutLabel is how the sidebar and the flyout write the shortcut.
-func shortcutLabel() string {
+// shortcutLabel is how the sidebar and the flyout write the shortcut:
+// nothing when there is none, or when the desktop bound no keys to it.
+func (a *app) shortcutLabel() string {
+	if a.shortcut == "" {
+		return ""
+	}
+	if a.keysTold {
+		return a.keys
+	}
 	if runtime.GOOS == "darwin" {
 		return "⌥⌘."
 	}

@@ -143,6 +143,74 @@ func TestUnseenPrefixAcceptsALongAccessibilityFragment(t *testing.T) {
 	}
 }
 
+// rows lays texts out as a list's rows from y, h pixels each.
+func rows(y, h int, texts ...string) []viewportLine {
+	out := lines(texts...)
+	for i := range out {
+		out[i].Bounds = screen.Rect{X: 48, Y: y + i*h, W: 1224, H: h}
+	}
+	return out
+}
+
+// Above a strong shared run, lines that are not content a swipe could have
+// skipped do not make a gap; the same lines above a weak run still do.
+func TestUnseenAboveExcusesWhatIsNotSkippedContent(t *testing.T) {
+	area := screen.Rect{X: 0, Y: 600, W: 1320, H: 2268}
+	previous := rows(600, 150, "Wi-Fi, Home", "Bluetooth, On", "Cellular", "Battery", "General", "Accessibility", "Camera")
+	ocr := viewportLine{Text: "1", Role: screen.RoleText, Source: screen.SourceOCR, Bounds: screen.Rect{X: 1120, Y: 790, W: 60, H: 70}}
+	cut := viewportLine{Text: "Batte", Role: screen.RoleText, Source: screen.SourceTree, Bounds: screen.Rect{X: 48, Y: 760, W: 1224, H: 140}}
+	title := viewportLine{Text: "Settings", Role: screen.RoleText, Source: screen.SourceTree, Bounds: screen.Rect{X: 48, Y: 760, W: 400, H: 140}}
+	band := viewportLine{Text: "Personal Hotspot, Off", Role: screen.RoleButton, Source: screen.SourceTree, Bounds: screen.Rect{X: 48, Y: 600, W: 1224, H: 150}}
+	seen := []viewportLine{{Text: "Settings", Role: screen.RoleText, Bounds: screen.Rect{X: 48, Y: 290, W: 600, H: 120}}}
+	gc := gapContext{area: area, seen: seen}
+	for name, line := range map[string]viewportLine{
+		"an OCR line": ocr, "a cut-off row": cut, "a title seen outside the list": title, "a row in the top band": band,
+	} {
+		strong := append([]viewportLine{line}, rows(900, 150, "General", "Accessibility", "Camera")...)
+		if got := unseenAbove(previous, strong, gc); len(got) != 0 {
+			t.Errorf("%s above a strong run counted as unseen: %#v", name, viewportTexts(got))
+		}
+		weak := append([]viewportLine{line}, rows(900, 150, "Accessibility", "Camera")...)
+		if got := unseenAbove(previous, weak, gc); len(got) != 1 {
+			t.Errorf("%s above a weak run did not count: %#v", name, viewportTexts(got))
+		}
+	}
+}
+
+// A strong run does not hide rows that were not on the last screen below
+// the top band: content added above the shared rows, or a swipe that
+// skipped part of the list, is still a gap.
+func TestUnseenAboveKeepsRealGapsAboveAStrongRun(t *testing.T) {
+	area := screen.Rect{X: 0, Y: 600, W: 1320, H: 2268}
+	previous := rows(600, 150, "Wi-Fi, Home", "Bluetooth, On", "Cellular", "Battery", "General", "Accessibility", "Camera")
+	current := append(rows(600, 150, "Personal Hotspot, Off", "VPN, Not Connected", "Screen Time"),
+		rows(1050, 150, "General", "Accessibility", "Camera", "Control Center")...)
+	got := unseenAbove(previous, current, gapContext{area: area})
+	if want := []string{"VPN, Not Connected", "Screen Time"}; !reflect.DeepEqual(viewportTexts(got), want) {
+		t.Fatalf("unseen = %#v, want %#v", viewportTexts(got), want)
+	}
+	// Without the list's place, no line is in a top band.
+	if got := unseenAbove(previous, current, gapContext{}); len(got) != 3 {
+		t.Fatalf("unseen without an area = %#v", viewportTexts(got))
+	}
+}
+
+// Elements on one row read left to right whichever of them lies a pixel
+// higher, so the row reads the same on every screen.
+func TestCollectViewportKeepsARowInOrder(t *testing.T) {
+	for _, badgeY := range []int{2614, 2616} {
+		s := &screen.Screen{Width: 1320, Height: 2868, Elements: []screen.Element{
+			{Role: screen.RoleText, Label: "1", Source: screen.SourceOCR, Bounds: screen.Rect{X: 1116, Y: badgeY, W: 65, H: 73}},
+			{Role: screen.RoleButton, Label: "General", Bounds: screen.Rect{X: 48, Y: 2572, W: 1224, H: 156}},
+			{Role: screen.RoleButton, Label: "Accessibility", Bounds: screen.Rect{X: 48, Y: 2728, W: 1224, H: 140}},
+		}}
+		got := viewportTexts(collectViewport(s, screen.Rect{W: 1320, H: 2868}))
+		if want := []string{"General", "1", "Accessibility"}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("badge at %d: lines = %#v, want %#v", badgeY, got, want)
+		}
+	}
+}
+
 func TestSameViewportStopsOnlyForSameOrder(t *testing.T) {
 	a := lines("one", "two")
 	if !sameViewport(a, lines("ONE", "two")) {
