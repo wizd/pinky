@@ -319,6 +319,47 @@ func scanCompanion(t *companion.Tree) textScan {
 	return sc
 }
 
+// scanRead scans the companion tree a screen was read from. Where the
+// phone gave the tree no window of the app in front (screen.Screen.
+// AppHidden), the whole screen is an area whose text the tree misses,
+// but for what the windows the tree has (a system sidebar, Pinky's pill)
+// cover of it, as a screen read without a tree is (observeRestless).
+func scanRead(s *screen.Screen, t *companion.Tree) textScan {
+	sc := scanCompanion(t)
+	if !s.AppHidden || t == nil {
+		return sc
+	}
+	w, h := t.Display.Width, t.Display.Height
+	if w <= 0 || h <= 0 {
+		w, h = s.Width, s.Height
+	}
+	full := screen.Rect{W: w, H: h}
+	var above []screen.Rect
+	for _, win := range t.Windows {
+		for _, r := range win.Region {
+			above = append(above, hiddenCover(companionRect(r), full)...)
+		}
+		if len(win.Region) == 0 {
+			above = append(above, hiddenCover(companionRect(win.Bounds), full)...)
+		}
+	}
+	sc.areas = []textArea{{rect: full, above: above, kind: "window", path: "hidden:" + s.App.ID}}
+	return sc
+}
+
+// hiddenCover returns r clipped to the screen, for what a window over a
+// hidden app covers of it; nothing when r spans half the screen or more.
+// The window manager has the app in front, so a window that claims most
+// of the screen is a see-through overlay, and leaving out all it spans
+// would leave out the app's text with it.
+func hiddenCover(r, full screen.Rect) []screen.Rect {
+	r = intersect(r, full)
+	if r.Empty() || rectArea(r) >= rectArea(full)/2 {
+		return nil
+	}
+	return []screen.Rect{r}
+}
+
 func companionNode(n *companion.Node) *textNode {
 	tn := &textNode{
 		class:    n.Class,

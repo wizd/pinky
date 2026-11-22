@@ -34,24 +34,50 @@ func main() {
 	ios.PinkyVersion = version // the iPhone app kit of this release
 	cmd, args := commandOf(os.Args[1:])
 	err := dispatch(cmd, args)
-	if err != nil {
-		if errors.Is(err, errUnknownCommand) {
-			usage()
-			os.Exit(2)
-		}
-		if errors.Is(err, flag.ErrHelp) {
-			os.Exit(2)
-		}
+	if err == nil {
+		return
+	}
+	switch {
+	case errors.Is(err, errUnknownCommand):
+		usage()
+	case errors.Is(err, flag.ErrHelp):
+		// The command printed its usage because the command line asked
+		// for it (-h, --help, help).
+	default:
 		var ee *exitError
 		if errors.As(err, &ee) {
+			// A usage error that printed itself (taskUsageError) has
+			// nothing left to say.
 			if ee.err != nil {
 				fmt.Fprintf(os.Stderr, "pinky %s: %v\n", cmd, ee.err)
 			}
-			os.Exit(ee.code)
+		} else {
+			fmt.Fprintf(os.Stderr, "pinky %s: %v\n", cmd, err)
 		}
-		fmt.Fprintf(os.Stderr, "pinky %s: %v\n", cmd, err)
-		os.Exit(1)
 	}
+	os.Exit(exitCode(err))
+}
+
+// exitCode is how a command ends: 0 when it did what it was asked,
+// which includes printing its usage because the command line asked for
+// help, as the commands spelled as a flag (-h, --help, help) do; 2 for a
+// command Pinky does not know, and for a usage error that ends through
+// exitError; 1 for another failure.
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exitError
+	if errors.As(err, &ee) {
+		return ee.code
+	}
+	switch {
+	case errors.Is(err, flag.ErrHelp):
+		return 0
+	case errors.Is(err, errUnknownCommand):
+		return 2
+	}
+	return 1
 }
 
 // errUnknownCommand says the command line named a command Pinky does not

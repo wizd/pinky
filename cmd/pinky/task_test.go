@@ -183,17 +183,6 @@ func (s *taskBuffer) String() string {
 	return s.b.String()
 }
 
-func exitCode(err error) int {
-	if err == nil {
-		return 0
-	}
-	var ee *exitError
-	if errors.As(err, &ee) {
-		return ee.code
-	}
-	return -1
-}
-
 // TestTaskRun: run hands the task over as the agent "Pinky CLI", prints
 // the steps and the person's wait on stderr, once, and only the status
 // line and summary on stdout; how the task ended gives the exit status.

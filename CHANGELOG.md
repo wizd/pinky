@@ -2,6 +2,22 @@
 
 What changed for people in each release of Pinky, newest first. A version is the release's date in Asia/Shanghai and that day's count: 2026.1107.2 is the second release of 7 November 2026. Notes wait under "Unreleased" until the next release takes them; see [docs/RELEASING.md](docs/RELEASING.md).
 
+## 2026.1122.5 (2026-11-22)
+
+- With the Assistant open on an Android phone, Pinky no longer tells the agent that an app with a blank name came to the front, and no longer refuses its next action for it. Thanks @pseudoyu.
+
+## 2026.1122.4 (2026-11-22)
+
+- With the Assistant open on an Android phone, Pinky no longer tells the agent that the app behind it is hidden from accessibility. Thanks @pseudoyu.
+
+## 2026.1122.3 (2026-11-22)
+
+- On phones that keep an app's screen from accessibility services, such as WeChat on ColorOS 17, Pinky now names the app and reads its text by OCR, and tells the agent why it gets text only. Screenshots of the app follow its rules, as for any other app. Thanks @ECxiaozong for reporting it.
+
+## 2026.1122.2 (2026-11-22)
+
+- `pinky <command> -h`, `--help` and `help` now print the usage and exit with status 0 instead of 2 (1 for `pinky helper`), so scripts no longer take asking for help as a failure. `pinky task` with a missing or wrong subcommand still exits with 2. Thanks @6moran.
+
 ## 2026.1122.1 (2026-11-22)
 
 - Opening a background display on an Android phone reached over a slow network, such as Tailscale, no longer times out: Pinky now copies its screen helper to the phone once instead of every time. Thanks @garryforreg for reporting it.

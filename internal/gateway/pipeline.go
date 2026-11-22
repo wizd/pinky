@@ -2554,9 +2554,21 @@ func (g *Gateway) screenResult(l *lease, raw *screen.Screen, full bool) *Result 
 		res.Message = fmt.Sprintf("The foreground app is blocked by the rule %q; Pinky hides its screen. Press home or launch another app.", rule)
 	} else if raw.Unsettled {
 		res.Message = unsettledMessage
+	} else if raw.AppHidden {
+		res.Message = appHiddenMessage
 	}
 	return res
 }
+
+// appHiddenMessage goes with a read where the phone gave Pinky's
+// accessibility service no window of the app in front, so that the
+// driver named the app from the window manager (screen.Screen.AppHidden,
+// GitHub issue #191).
+const appHiddenMessage = "Android did not give this app's window to Pinky's accessibility service (some phones keep certain apps, " +
+	"such as WeChat on ColorOS, from accessibility services), so Pinky gets none of the app's elements: " +
+	"this read has only other windows' elements and any text OCR read from a picture of the screen (phone_observe ocr: true). " +
+	"Tap the app by x and y, or ask for a screenshot where the app's rules allow one. " +
+	"If the app has just started, observe again in a few seconds: it may not have shown its window yet."
 
 // unsettledMessage goes with a read whose screen kept changing, so that the
 // driver could read no element tree (screen.Screen.Unsettled).

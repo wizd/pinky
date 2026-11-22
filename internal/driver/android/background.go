@@ -398,7 +398,7 @@ func (b *Background) ObserveWithText(ctx context.Context, opt driver.ObserveOpti
 	if err != nil {
 		return nil, TextStats{}, err
 	}
-	st := addText(ctx, s, scanCompanion(t), opt, since, textSource{
+	st := addText(ctx, s, scanRead(s, t), opt, since, textSource{
 		frame: opt.Frame,
 		moved: func(_ context.Context, since time.Time, _ screen.App) bool {
 			changed, ok := b.d.comp.windowSince(b.display, since)
@@ -461,13 +461,14 @@ func (b *Background) observeTree(ctx context.Context) (*screen.Screen, *companio
 	}
 	s := t.Screen(companion.ScreenOptions{})
 	s.CapturedAt = c.HostTime(t.Time)
-	s.App.Name = b.d.companionAppName(s.App)
 	if s.App.ID == "" && b.started.Load() {
 		b.nudge(ctx, t)
 	}
 	// The phone's lock screen is on the main display; from Android 13 the
 	// virtual display is always unlocked.
 	s.Locked = t.Locked && !b.d.alwaysUnlocked()
+	b.d.hiddenApp(ctx, t, s, b.display)
+	s.App.Name = b.d.companionAppName(s.App)
 	return s, t, nil
 }
 

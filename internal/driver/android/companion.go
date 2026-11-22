@@ -905,9 +905,64 @@ func (d *Device) observeCompanion(ctx context.Context, c *companion.Client) (*sc
 	// shows while the agent holds the phone, lie over the app: a tap there
 	// lands on them.
 	s.Covered = append(s.Covered, read.OverlaysOf(c.App().Package)...)
+	d.hiddenApp(ctx, read, s, 0)
 	s.App.Name = d.companionAppName(s.App)
 	s.Events = d.comp.takeEvents()
-	return s, scanCompanion(read), nil
+	return s, scanRead(s, read), nil
+}
+
+// hiddenApp names the app in front of a display from the window manager
+// when the companion's tree has no application window and so names none:
+// ColorOS 17 gives no accessibility service WeChat's window, while
+// `dumpsys window` has WeChat focused (GitHub issue #191). It sets
+// s.AppHidden, so the read says why it has none of the app's elements,
+// and the gateway's rules for the app decide about pictures of it, as for
+// a screen read without a tree (observeRestless). A locked phone keeps
+// no app: the lock screen is in front, whatever the window manager says.
+// Nor does a focused window over most of the screen, such as the
+// Assistant's overlay: the person is looking at it, and the tree has it.
+func (d *Device) hiddenApp(ctx context.Context, t *companion.Tree, s *screen.Screen, display int) {
+	if t == nil || s.Locked || s.App.ID != "" || hasAppWindow(t) || hasFocusedCover(t) {
+		return
+	}
+	out, err := d.client.Shell(ctx, d.info.ID, focusedAppsCmd)
+	if err != nil {
+		d.cfg.logf("android: %s: read the focused app: %v", d.info.ID, err)
+		return
+	}
+	pkg := parseFocusedAppOn(string(out), display)
+	if pkg == "" {
+		return
+	}
+	s.App = screen.App{ID: pkg}
+	s.AppHidden = true
+}
+
+// hasAppWindow reports whether a companion tree has an application window.
+func hasAppWindow(t *companion.Tree) bool {
+	for _, w := range t.Windows {
+		if w.Type == companion.WindowApplication {
+			return true
+		}
+	}
+	return false
+}
+
+// hasFocusedCover reports whether a companion tree has a focused window
+// that spans half the screen or more: an overlay in front of the app the
+// window manager has focused, such as the Assistant's, which Android
+// gives accessibility services with no application type.
+func hasFocusedCover(t *companion.Tree) bool {
+	full := screen.Rect{W: t.Display.Width, H: t.Display.Height}
+	if full.Empty() {
+		return false
+	}
+	for _, w := range t.Windows {
+		if w.Focused && rectArea(intersect(companionRect(w.Bounds), full)) >= rectArea(full)/2 {
+			return true
+		}
+	}
+	return false
 }
 
 // companionAppName names the foreground app from the driver's app list,

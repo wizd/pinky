@@ -25,6 +25,13 @@ const helperUsage = "usage: pinky helper install [--team ID] [--bundle-id ID] [-
 // (appinstall.go), unless --helper-only.
 // Run again to sign it anew once its signature runs out.
 func runHelper(args []string) error {
+	if len(args) > 0 {
+		switch args[0] {
+		case "help", "-h", "-help", "--help":
+			fmt.Fprintln(os.Stdout, helperUsage)
+			return nil
+		}
+	}
 	if len(args) == 0 || args[0] != "install" {
 		return errors.New(helperUsage)
 	}

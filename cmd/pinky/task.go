@@ -116,7 +116,7 @@ func (l *stepLog) Write(p []byte) (int, error) {
 func runTask(args []string) error {
 	if len(args) == 0 {
 		taskUsage(os.Stderr)
-		return flag.ErrHelp
+		return &exitError{code: exitTaskError}
 	}
 	sub, args := args[0], args[1:]
 	fs := flag.NewFlagSet("pinky task "+sub, flag.ContinueOnError)
@@ -141,7 +141,7 @@ func runTask(args []string) error {
 		return nil
 	default:
 		taskUsage(os.Stderr)
-		return flag.ErrHelp
+		return &exitError{code: exitTaskError}
 	}
 	fs.Usage = func() { taskUsage(fs.Output()) }
 	if err := fs.Parse(args); err != nil {
@@ -184,10 +184,14 @@ func runTask(args []string) error {
 	return task(ctx, cs, o, os.Stdout, log)
 }
 
+// taskUsageError ends the command with the exit code of a usage error,
+// after saying what is wrong and printing the usage: 2, as an unknown
+// command or a bad flag do, not flag.ErrHelp, which is a command line
+// that asked for the usage.
 func taskUsageError(fs *flag.FlagSet, msg string) error {
 	fmt.Fprintf(fs.Output(), "pinky task: %s\n\n", msg)
 	taskUsage(fs.Output())
-	return flag.ErrHelp
+	return &exitError{code: exitTaskError}
 }
 
 func taskUsage(w io.Writer) {

@@ -58,10 +58,11 @@ func (g *Gateway) switchedApp(l *lease, cur *screen.Screen, readAt time.Time, ow
 	if calls != 0 || d.inputs != l.mark.inputs || (g.opt.SwitchGrace > 0 && readAt.Sub(d.inputAt) < g.opt.SwitchGrace) {
 		return "", "", false
 	}
-	if sameApp(prev.App, view.App) {
+	from, to = appLabel(prev.App), appLabel(view.App)
+	if from == "" || to == "" || sameApp(prev.App, view.App) {
 		return "", "", false
 	}
-	return appLabel(prev.App), appLabel(view.App), true
+	return from, to, true
 }
 
 // aimed reports whether an action depends on the screen the agent saw:

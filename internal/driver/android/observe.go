@@ -244,9 +244,11 @@ func (d *Device) ReadsText() bool { return ocrSupported() == nil }
 var errEmptyTree = errors.New("the tree has no elements while the keyboard shows")
 
 // emptyWithKeyboard reports whether a screen is empty although an app has
-// the keyboard up, which only happens when the tree is incomplete.
+// the keyboard up, which only happens when the tree is incomplete. An app
+// the phone hides from accessibility (screen.Screen.AppHidden) is never in
+// the tree, which is not the companion's failure.
 func emptyWithKeyboard(s *screen.Screen) bool {
-	return len(s.Elements) == 0 && s.Keyboard && !s.Locked && s.App.ID != ""
+	return len(s.Elements) == 0 && s.Keyboard && !s.Locked && s.App.ID != "" && !s.AppHidden
 }
 
 // observeDump reads the screen with `uiautomator dump`.

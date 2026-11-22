@@ -176,3 +176,36 @@ func TestAppSwitchAcrossLock(t *testing.T) {
 		t.Fatalf("note after a lock: %q", res.Message)
 	}
 }
+
+// A screen that names no app, such as the Android Assistant's overlay over
+// the whole screen, is no app that came by itself: it gives no note and
+// does not hold back an action, either way. It used to read
+// " is in front now instead of Dinely" and refuse the action.
+func TestAppSwitchUnnamedScreen(t *testing.T) {
+	ctx := context.Background()
+	v := newVideoDev("pixel")
+	g := newVideoGateway(t, v, noSwitchGrace)
+	s := inDinely(t, g)
+	v.setNoApp(true)
+
+	res := s.Observe(ctx, ObserveRequest{})
+	mustStatus(t, res, StatusSettled)
+	if strings.Contains(res.Message, switchedWords) {
+		t.Fatalf("note for a screen with no app: %q", res.Message)
+	}
+	before := len(v.Inputs())
+	res = s.Act(ctx, Call{}, Action{Tool: "swipe", Direction: "up"})
+	mustStatus(t, res, StatusSettled)
+	if len(v.Inputs()) == before {
+		t.Fatal("swipe not sent")
+	}
+
+	// Back from the screen with no app: no note either.
+	mustStatus(t, s.Observe(ctx, ObserveRequest{}), StatusSettled)
+	v.setNoApp(false)
+	res = s.Observe(ctx, ObserveRequest{})
+	mustStatus(t, res, StatusSettled)
+	if strings.Contains(res.Message, switchedWords) {
+		t.Fatalf("note after a screen with no app: %q", res.Message)
+	}
+}

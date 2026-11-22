@@ -49,6 +49,32 @@ func parseFocusedApp(out string) string {
 	return ""
 }
 
+// focusedAppsCmd lists each display's focused activity, under the line
+// that starts the display's section.
+const focusedAppsCmd = "dumpsys window displays | grep -E 'Display: mDisplayId=|mFocusedApp='"
+
+var displaySectionRE = regexp.MustCompile(`Display: mDisplayId=(\d+)`)
+
+// parseFocusedAppOn returns the package of the activity focused on a
+// display, from focusedAppsCmd. Output without display lines is display
+// 0's alone.
+func parseFocusedAppOn(out string, display int) string {
+	cur := 0
+	for _, line := range strings.Split(out, "\n") {
+		if m := displaySectionRE.FindStringSubmatch(line); m != nil {
+			cur, _ = strconv.Atoi(m[1])
+			continue
+		}
+		if cur != display {
+			continue
+		}
+		if pkg := parseFocusedApp(line); pkg != "" {
+			return pkg
+		}
+	}
+	return ""
+}
+
 var (
 	wakefulnessRE = regexp.MustCompile(`mWakefulness=(\w+)`)
 	displayIDRE   = regexp.MustCompile(`mDisplayId=\s*:?\s*(-?\d+)`)
