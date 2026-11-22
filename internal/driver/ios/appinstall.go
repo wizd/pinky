@@ -40,9 +40,16 @@ var PinkyVersion = "0.0.0-dev"
 // an unpacked folder (ios/build.sh kit), for development builds.
 const iphoneKitEnv = "PINKY_IPHONE_KIT"
 
+// KitRepo and KitTagPrefix name the GitHub repository and tag prefix whose
+// releases carry the iPhone app kit; overridden with -ldflags for fork builds.
+var (
+	KitRepo      = "DIYgod/pinky"
+	KitTagPrefix = "v"
+)
+
 // iphoneKitURL is where a release's kit is; a var for tests.
 var iphoneKitURL = func(version string) string {
-	return "https://github.com/DIYgod/pinky/releases/download/v" + version + "/pinky-iphone-" + version + ".tar.gz"
+	return "https://github.com/" + KitRepo + "/releases/download/" + KitTagPrefix + version + "/pinky-iphone-" + version + ".tar.gz"
 }
 
 // iphoneKitMax bounds an unpacked kit; the core alone is some 35 MB.

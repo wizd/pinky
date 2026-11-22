@@ -1,0 +1,519 @@
+name: VCorp Release
+run-name: VCorp Release ${{ github.event_name == 'push' && github.ref_name || (inputs.version || 'auto') }}
+
+# Automated build and GitHub Release for the VCorp fork of Pinky (macOS +
+# Windows). Kept separate from upstream's release.yml and release-cache.yml so
+# merges from upstream/main stay conflict-free and TestReleaseCaches passes.
+#
+# Tag format: <YEAR.MDD.N>-vcorp.<R>, e.g. 2026.1122.1-vcorp.1.
+# - Does not start with "v", so upstream's release.yml (tags: ["v*"]) never runs.
+# - The "-vcorp.<R>" suffix makes internal/update.IsRelease return false, so
+#   upstream's updater never overwrites VCorp builds with stock DIYgod/pinky.
+# - Build ldflags clear internal/telemetry.Endpoint and point the iPhone app
+#   kit URL to this repository's release.
+# - macOS uses ad-hoc signing (SIGN="-", NOTARIZE=0) by default, and
+#   automatically upgrades to Developer ID signing + Apple notarization if
+#   MACOS_CERTIFICATE (plus notary secrets) is configured on the repository.
+on:
+  push:
+    tags:
+      - "*-vcorp.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version / tag (e.g. 2026.1122.1-vcorp.1; leave empty to auto-number for today)
+        required: false
+        default: ""
+      platforms:
+        description: Platforms to build
+        type: choice
+        default: all
+        options:
+          - all
+          - macos
+          - windows
+      publish:
+        description: Publish a GitHub Release (off keeps build files as workflow artifacts only)
+        type: boolean
+        default: true
+
+concurrency:
+  group: vcorp-release-${{ github.event_name == 'push' && github.ref_name || (inputs.version || github.ref_name) }}
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  prepare:
+    name: Prepare release & Companion APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      ref: ${{ steps.meta.outputs.ref }}
+      build_macos: ${{ steps.meta.outputs.build_macos }}
+      build_windows: ${{ steps.meta.outputs.build_windows }}
+      should_publish: ${{ steps.meta.outputs.should_publish }}
+      companion_tag: ${{ steps.companion.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Resolve version and targets
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PLATFORMS: ${{ inputs.platforms }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "push" ]; then
+            version="$REF_NAME"
+            ref="refs/tags/$REF_NAME"
+            platforms="all"
+            should_publish="true"
+          else
+            ref="$GITHUB_SHA"
+            platforms="${INPUT_PLATFORMS:-all}"
+            should_publish="${INPUT_PUBLISH:-true}"
+            if [ -n "$INPUT_VERSION" ]; then
+              version="$INPUT_VERSION"
+            else
+              # Date in Asia/Shanghai (UTC+8): YEAR.MDD.1-vcorp.N
+              prefix=$(python3 - <<'EOF'
+          import datetime
+          now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=8)))
+          print(f"{now.year}.{now.month}{now.day:02d}.1-vcorp.")
+          EOF
+          )
+              max_n=0
+              while IFS= read -r t; do
+                n="${t#"$prefix"}"
+                case "$n" in
+                  ''|*[!0-9]*) continue ;;
+                esac
+                if [ "$n" -gt "$max_n" ]; then
+                  max_n="$n"
+                fi
+              done < <(git tag -l "${prefix}*")
+              version="${prefix}$((max_n + 1))"
+            fi
+          fi
+
+          if [[ "$version" == v* ]]; then
+            echo "::error::Version '$version' must not start with 'v' (tags starting with 'v' trigger upstream release.yml)"
+            exit 1
+          fi
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-vcorp\.[0-9]+$ ]]; then
+            echo "::error::Version '$version' must match <YEAR.MDD.N>-vcorp.<R> (e.g. 2026.1122.1-vcorp.1)"
+            exit 1
+          fi
+
+          build_macos="false"
+          build_windows="false"
+          case "$platforms" in
+            all) build_macos="true"; build_windows="true" ;;
+            macos) build_macos="true" ;;
+            windows) build_windows="true" ;;
+            *) echo "::error::Unknown platforms '$platforms'"; exit 1 ;;
+          esac
+
+          {
+            echo "version=$version"
+            echo "tag=$version"
+            echo "ref=$ref"
+            echo "build_macos=$build_macos"
+            echo "build_windows=$build_windows"
+            echo "should_publish=$should_publish"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved release: version=$version ref=$ref macos=$build_macos windows=$build_windows publish=$should_publish"
+      - name: Fetch signed upstream Companion APK
+        id: companion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/companion"
+          upstream_tag=""
+          for try in 1 2 3; do
+            upstream_tag=$(gh release view --repo DIYgod/pinky --json tagName --jq .tagName) &&
+              gh release download "$upstream_tag" --repo DIYgod/pinky --pattern pinky-android.apk --dir "$RUNNER_TEMP/companion" --clobber &&
+              break
+            [ "$try" = 3 ] && exit 1
+            sleep 20
+          done
+          info=$(unzip -p "$RUNNER_TEMP/companion/pinky-android.apk" assets/pinky-companion.json)
+          echo "Companion APK from DIYgod/pinky $upstream_tag: $info"
+          case "$info" in
+            *'"package":"app.pinky.companion"'*) ;;
+            *) echo "::error::Downloaded APK is not the release build: $info"; exit 1 ;;
+          esac
+          echo "tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: companion
+          path: ${{ runner.temp }}/companion/pinky-android.apk
+          if-no-files-found: error
+          retention-days: 3
+
+  macos:
+    name: macOS (arm64 + amd64)
+    needs: prepare
+    if: needs.prepare.outputs.build_macos == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    outputs:
+      signed: ${{ steps.signing.outputs.signed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Cache FFmpeg
+        id: ffmpeg
+        uses: actions/cache@v6
+        with:
+          path: build/ffmpeg-dist
+          key: ffmpeg-macos-${{ hashFiles('scripts/ffmpeg.sh') }}
+      - name: Install nasm, for FFmpeg's Intel assembly
+        if: steps.ffmpeg.outputs.cache-hit != 'true'
+        run: brew install --quiet nasm
+      - name: Cache adb
+        id: adb
+        uses: actions/cache@v6
+        with:
+          path: build/adb-dist
+          key: adb-macos-${{ hashFiles('scripts/adb.sh', 'scripts/adb/**') }}
+      - name: Install CMake, for adb
+        if: steps.adb.outputs.cache-hit != 'true'
+        run: command -v cmake >/dev/null || brew install --quiet cmake
+      - name: Configure macOS signing
+        id: signing
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ vars.MACOS_SIGN_IDENTITY }}
+          NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER: ${{ secrets.NOTARY_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "No MACOS_CERTIFICATE secret set: using ad-hoc signing (SIGN='-', NOTARIZE=0)"
+            {
+              echo "SIGN=-"
+              echo "NOTARIZE=0"
+              echo "STRICT=0"
+            } >> "$GITHUB_ENV"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          keychain="$RUNNER_TEMP/pinky-signing.keychain-db"
+          password="$(openssl rand -base64 24)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign >/dev/null
+          rm -f "$RUNNER_TEMP/developer-id.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$keychain"
+          if [ -n "$NOTARY_API_KEY" ]; then
+            printf '%s\n' "$NOTARY_API_KEY" > "$RUNNER_TEMP/notary-key.p8"
+            xcrun notarytool store-credentials pinky-notary --keychain "$keychain" \
+              --key "$RUNNER_TEMP/notary-key.p8" --key-id "$NOTARY_API_KEY_ID" --issuer "$NOTARY_API_ISSUER" >/dev/null
+          elif [ -n "$APPLE_ID" ]; then
+            xcrun notarytool store-credentials pinky-notary --keychain "$keychain" \
+              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" >/dev/null
+          else
+            echo "::error::MACOS_CERTIFICATE is set, but neither NOTARY_API_KEY nor APPLE_ID is configured"
+            exit 1
+          fi
+          {
+            echo "NOTARY_KEYCHAIN=$keychain"
+            echo "SIGN=$MACOS_SIGN_IDENTITY"
+            echo "NOTARIZE=1"
+            echo "STRICT=1"
+          } >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v8
+        with:
+          name: companion
+          path: ${{ runner.temp }}/companion
+      - name: Stamp version into mygo.json
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python3 - "$VERSION" <<'EOF'
+          import re, sys
+          path = "cmd/pinky/mygo.json"
+          with open(path, "r", encoding="utf-8") as f:
+              text = f.read()
+          out, n = re.subn(r'("version"\s*:\s*")[^"]*(")', lambda m: m.group(1) + sys.argv[1] + m.group(2), text, count=1)
+          assert n == 1, "version field not found in cmd/pinky/mygo.json"
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(out)
+          EOF
+          grep '"version"' cmd/pinky/mygo.json
+      - name: Build macOS apps and disk images
+        env:
+          COMPANION_APK: ${{ runner.temp }}/companion/pinky-android.apk
+          GH_TOKEN: ${{ github.token }}
+          MYGO_LDFLAGS: "-X github.com/DIYgod/pinky/internal/telemetry.Endpoint= -X github.com/DIYgod/pinky/internal/driver/ios.KitRepo=${{ github.repository }} -X github.com/DIYgod/pinky/internal/driver/ios.KitTagPrefix="
+        run: scripts/dist.sh darwin "$RUNNER_TEMP/dist"
+      - name: Pack the iPhone app kit
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          command -v xcodegen >/dev/null || brew install --quiet xcodegen
+          ios/build.sh kit "$RUNNER_TEMP/dist/pinky-iphone-${VERSION}.tar.gz" "${VERSION}"
+      - name: Verify packaged macOS bundles and adb
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          for arch in arm64 amd64; do
+            zip="$RUNNER_TEMP/dist/pinky-${VERSION}-darwin-${arch}.zip"
+            dmg="$RUNNER_TEMP/dist/pinky-${VERSION}-${arch}.dmg"
+            test -f "$zip"
+            test -f "$dmg"
+            dir="$RUNNER_TEMP/check-mac-$arch"
+            rm -rf "$dir"
+            ditto -x -k "$zip" "$dir"
+            app="$dir/Pinky.app"
+            test -f "$app/Contents/Resources/pinky-android.apk"
+            test -f "$app/Contents/Frameworks/libavcodec.63.dylib"
+            test -f "$app/Contents/Helpers/adb"
+            if [ "$arch" = amd64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+              echo "No Rosetta on this runner: skipping runtime checks for Intel app"
+              continue
+            fi
+            got=$("$app/Contents/MacOS/Pinky" version)
+            echo "macOS $arch version: $got"
+            [ "$got" = "pinky ${VERSION}" ]
+            PINKY_ADB_APP="$app" go test -count=1 -run TestPackagedADB -v ./internal/driver/android/adb/ | grep -E -e '--- |^(ok|FAIL)|packaged_test.go'
+          done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: ${{ runner.temp }}/dist/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove temporary keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/pinky-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/notary-key.p8"
+
+  windows-build:
+    name: Windows (build on Ubuntu)
+    needs: prepare
+    if: needs.prepare.outputs.build_windows == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install NSIS
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends nsis >/dev/null
+      - name: Cache FFmpeg
+        uses: actions/cache@v6
+        with:
+          path: build/ffmpeg-dist
+          key: ffmpeg-windows-vcorp-${{ hashFiles('scripts/ffmpeg.sh') }}
+          restore-keys: |
+            ffmpeg-windows-linux-${{ hashFiles('scripts/ffmpeg.sh') }}
+      - name: Cache adb
+        uses: actions/cache@v6
+        with:
+          path: build/adb-dist
+          key: adb-windows-vcorp-${{ hashFiles('scripts/adb.sh', 'scripts/adb/**') }}
+          restore-keys: |
+            adb-windows-linux-${{ hashFiles('scripts/adb.sh', 'scripts/adb/**') }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: companion
+          path: ${{ runner.temp }}/companion
+      - name: Stamp version into mygo.json
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          python3 - "$VERSION" <<'EOF'
+          import re, sys
+          path = "cmd/pinky/mygo.json"
+          with open(path, "r", encoding="utf-8") as f:
+              text = f.read()
+          out, n = re.subn(r'("version"\s*:\s*")[^"]*(")', lambda m: m.group(1) + sys.argv[1] + m.group(2), text, count=1)
+          assert n == 1, "version field not found in cmd/pinky/mygo.json"
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(out)
+          EOF
+          grep '"version"' cmd/pinky/mygo.json
+      - name: Build Windows installer and portable zip
+        env:
+          STRICT: "1"
+          COMPANION_APK: ${{ runner.temp }}/companion/pinky-android.apk
+          GH_TOKEN: ${{ github.token }}
+          MYGO_LDFLAGS: "-X github.com/DIYgod/pinky/internal/telemetry.Endpoint= -X github.com/DIYgod/pinky/internal/driver/ios.KitRepo=${{ github.repository }} -X github.com/DIYgod/pinky/internal/driver/ios.KitTagPrefix="
+        run: scripts/dist.sh windows "$RUNNER_TEMP/dist"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: ${{ runner.temp }}/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-test:
+    name: Windows (verify package)
+    needs: [prepare, windows-build]
+    if: needs.prepare.outputs.build_windows == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows
+          path: ${{ runner.temp }}/dist
+      - name: Download static ffmpeg for decoder test streams
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for try in {1..20}; do
+            gh release download latest --repo FFmpeg-Builds/FFmpeg-Builds --pattern ffmpeg-n9.0-latest-win64-gpl-9.0.zip --dir "$RUNNER_TEMP" --clobber && exit 0
+            sleep 30
+          done
+          exit 1
+      - name: Unpack Windows zip and test ffmpeg
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Expand-Archive "$env:RUNNER_TEMP\dist\pinky-$env:VERSION-windows-amd64.zip" -DestinationPath "$env:RUNNER_TEMP\windows-package"
+          Expand-Archive "$env:RUNNER_TEMP\ffmpeg-n9.0-latest-win64-gpl-9.0.zip" -DestinationPath "$env:RUNNER_TEMP\ffmpeg"
+          (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName + "\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          Get-ChildItem "$env:RUNNER_TEMP\windows-package"
+      - name: Check Windows binary version, FFmpeg and adb
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          got=$("$RUNNER_TEMP/windows-package/Pinky.exe" version | tr -d '\r')
+          echo "Windows version: $got"
+          [ "$got" = "pinky ${VERSION}" ]
+          PINKY_FFMPEG_APP="$RUNNER_TEMP\windows-package" go test -count=1 -run TestPackagedFFmpeg -v ./internal/video/ | grep -E -e '--- |^(ok|FAIL)|video_test.go'
+          PINKY_ADB_APP="$RUNNER_TEMP\windows-package" go test -count=1 -run TestPackagedADB -v ./internal/driver/android/adb/ | grep -E -e '--- |^(ok|FAIL)|packaged_test.go'
+
+  publish:
+    name: Publish GitHub Release
+    needs: [prepare, macos, windows-build, windows-test]
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.should_publish == 'true' &&
+      (needs.macos.result == 'success' || needs.macos.result == 'skipped') &&
+      (needs.windows-build.result == 'success' || needs.windows-build.result == 'skipped') &&
+      (needs.windows-test.result == 'success' || needs.windows-test.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.build_macos == 'true'
+        with:
+          name: macos
+          path: ${{ runner.temp }}/dist
+      - uses: actions/download-artifact@v8
+        if: needs.prepare.outputs.build_windows == 'true'
+        with:
+          name: windows
+          path: ${{ runner.temp }}/dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: companion
+          path: ${{ runner.temp }}/dist
+      - name: Write SHA256SUMS and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          BUILD_MACOS: ${{ needs.prepare.outputs.build_macos }}
+          BUILD_WINDOWS: ${{ needs.prepare.outputs.build_windows }}
+          MACOS_SIGNED: ${{ needs.macos.outputs.signed }}
+          COMPANION_TAG: ${{ needs.prepare.outputs.companion_tag }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/dist"
+          rm -f SHA256SUMS
+          sha256sum $(LC_ALL=C ls -1) > SHA256SUMS
+          ls -lh
+
+          notes="$RUNNER_TEMP/release-notes.md"
+          {
+            echo "## Pinky VCorp ${VERSION}"
+            echo ""
+            echo "定制版 Pinky，内置 VCorp 云端连接与组织内手机设备共享支持（已禁用上游自动覆盖更新与上游遥测）。"
+            echo ""
+            echo "### 下载说明"
+            if [ "$BUILD_MACOS" = "true" ]; then
+              echo "- **macOS (Apple Silicon M1–M4)**: \`pinky-${VERSION}-arm64.dmg\`（或免安装 \`pinky-${VERSION}-darwin-arm64.zip\`）"
+              echo "- **macOS (Intel)**: \`pinky-${VERSION}-amd64.dmg\`（或免安装 \`pinky-${VERSION}-darwin-amd64.zip\`）"
+              echo "- **iPhone 套件**: \`pinky-iphone-${VERSION}.tar.gz\`（连接 iPhone 时由桌面端自动下载）"
+            fi
+            if [ "$BUILD_WINDOWS" = "true" ]; then
+              echo "- **Windows 安装包**: \`pinky-setup-${VERSION}-amd64.exe\`"
+              echo "- **Windows 免安装压缩包**: \`pinky-${VERSION}-windows-amd64.zip\`"
+            fi
+            echo "- **Android Companion APK**: \`pinky-android.apk\`（复用上游 ${COMPANION_TAG} 官方签名包，同时已内置于各桌面安装包内）"
+            if [ "$BUILD_MACOS" = "true" ] && [ "$MACOS_SIGNED" != "true" ]; then
+              echo ""
+              echo "### macOS 首次打开说明（未公证构建）"
+              echo "将 \`Pinky.app\` 拖入 \`/Applications\` 后，若 macOS 提示无法打开或已损坏，请在终端执行一次去隔离属性命令："
+              echo '```bash'
+              echo "xattr -cr /Applications/Pinky.app"
+              echo '```'
+            fi
+            echo ""
+            echo "---"
+            echo "Commit: \`${GITHUB_SHA}\`"
+          } > "$notes"
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber ./*
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "Pinky VCorp ${VERSION}" --notes-file "$notes" --latest
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Pinky VCorp ${VERSION}" --notes-file "$notes" --latest ./*
+          fi

@@ -137,7 +137,7 @@ build() {
 		lacking "no companion APK at $apk (scripts/dist.sh companion): the apps will not offer to install it"
 	fi
 	say "mygo build $platforms (Pinky $version)"
-	MYGO_LDFLAGS="-X main.version=$version" go tool mygo build -platform "$platforms" "$@" -o "$stage" cmd/pinky
+	MYGO_LDFLAGS="-X main.version=$version${MYGO_LDFLAGS:+ $MYGO_LDFLAGS}" go tool mygo build -platform "$platforms" "$@" -o "$stage" cmd/pinky
 	unstage
 }
 
