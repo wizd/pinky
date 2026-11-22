@@ -52,6 +52,11 @@ type AgentInfo struct {
 	// server sets it; it lets the session continue a task (Continue) and
 	// take the person's messages (PersonSaid), and changes nothing else.
 	Pilot bool
+	// NoAlwaysAllow isolates this agent from the person's global "Always
+	// allow" exemptions: existing exemptions do not lift asks for it, and
+	// its approvals neither offer nor keep Always allow. Used for
+	// organization-member tasks relayed through VCorp.
+	NoAlwaysAllow bool
 }
 
 // Status is the outcome of a call, from DESIGN.md's Results table.

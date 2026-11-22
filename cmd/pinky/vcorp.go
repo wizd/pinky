@@ -35,10 +35,11 @@ import (
 //	pinky vcorp pair <code> --origin https://maker.example.com
 //	pinky vcorp run
 //	pinky vcorp status
+//	pinky vcorp grant [on|off]
 //	pinky vcorp unpair
 func runVcorp(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: pinky vcorp pair <code> --origin <url> | run | status | unpair")
+		return errors.New("usage: pinky vcorp pair <code> --origin <url> | run | status | grant [on|off] | unpair")
 	}
 	dirs, err := api.DefaultDirs()
 	if err != nil {
@@ -62,8 +63,14 @@ func runVcorp(args []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("paired with %s on %s as %s (%s)\n", c.Account, c.Origin, c.Name, c.DeviceID)
+		grant := "off"
+		if c.GrantOK {
+			grant = "on"
+		}
+		fmt.Printf("paired with %s on %s as %s (%s); organization sharing: %s\n", c.Account, c.Origin, c.Name, c.DeviceID, grant)
 		return nil
+	case "grant":
+		return vcorpGrant(file, args[1:])
 	case "unpair":
 		if err := vcorplink.Remove(file); err != nil {
 			return err
@@ -72,6 +79,41 @@ func runVcorp(args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown: pinky vcorp %s", args[0])
+}
+
+func vcorpGrant(file string, args []string) error {
+	c, err := vcorplink.Load(file)
+	if errors.Is(err, fs.ErrNotExist) {
+		return errors.New("not paired: run pinky vcorp pair first")
+	}
+	if err != nil {
+		return err
+	}
+	if len(args) == 0 {
+		if c.GrantOK {
+			fmt.Println("organization sharing: on")
+		} else {
+			fmt.Println("organization sharing: off")
+		}
+		return nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "on", "true", "1":
+		c.GrantOK = true
+	case "off", "false", "0":
+		c.GrantOK = false
+	default:
+		return errors.New("usage: pinky vcorp grant [on|off]")
+	}
+	if err := vcorplink.Save(file, c); err != nil {
+		return err
+	}
+	if c.GrantOK {
+		fmt.Println("organization sharing: on")
+	} else {
+		fmt.Println("organization sharing: off")
+	}
+	return nil
 }
 
 func vcorpPair(file string, args []string) error {
@@ -196,10 +238,11 @@ func (r *runningGateway) StartVcorp(ctx context.Context) {
 	file := vcorplink.File(r.Dirs.Config)
 	host := &vcorplink.GatewayHost{G: r.G, MCP: r.MCP}
 	go vcorplink.Supervise(ctx, file, func(c *vcorplink.Config) *vcorplink.Link {
-		r.vcorp.set(c.DeviceID, false, nil)
 		id := c.DeviceID
-		return &vcorplink.Link{Cfg: c, Host: host, Version: version, Platform: hostPlatform(), Log: r.log,
+		l := &vcorplink.Link{Cfg: c, Host: host, Version: version, Platform: hostPlatform(), Log: r.log,
 			OnState: func(connected bool, err error) { r.vcorp.set(id, connected, err) }}
+		r.vcorp.setLink(id, l)
+		return l
 	}, r.log)
 }
 
@@ -208,16 +251,38 @@ func (r *runningGateway) StartVcorp(ctx context.Context) {
 type vcorpState struct {
 	mu        sync.Mutex
 	device    string
+	link      *vcorplink.Link
 	connected bool
 	err       string
+}
+
+func (s *vcorpState) setLink(device string, l *vcorplink.Link) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.device, s.link, s.connected, s.err = device, l, false, ""
 }
 
 func (s *vcorpState) set(device string, connected bool, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.device, s.connected, s.err = device, connected, ""
+	if s.device != device {
+		return
+	}
+	s.connected, s.err = connected, ""
 	if err != nil {
 		s.err = err.Error()
+	}
+}
+
+func (s *vcorpState) setGrantOK(device string, on bool) {
+	s.mu.Lock()
+	var l *vcorplink.Link
+	if s.device == device {
+		l = s.link
+	}
+	s.mu.Unlock()
+	if l != nil {
+		l.SetGrantOK(on)
 	}
 }
 
@@ -250,7 +315,7 @@ func (v *vcorpUI) Status() ui.VcorpStatus {
 		return ui.VcorpStatus{}
 	}
 	connected, why := v.rg.vcorp.get(c.DeviceID)
-	return ui.VcorpStatus{Paired: true, Account: c.Account, Origin: c.Origin, Name: c.Name, Connected: connected, Err: why}
+	return ui.VcorpStatus{Paired: true, Account: c.Account, Origin: c.Origin, Name: c.Name, Connected: connected, GrantOK: c.GrantOK, Err: why}
 }
 
 func (v *vcorpUI) Claim(ctx context.Context, origin, code string) (string, string, error) {
@@ -272,6 +337,19 @@ func (v *vcorpUI) Pair(ctx context.Context, origin, code string) error {
 }
 
 func (v *vcorpUI) Unpair() error { return vcorplink.Remove(v.file) }
+
+func (v *vcorpUI) SetGrantOK(on bool) error {
+	c, err := vcorplink.Load(v.file)
+	if err != nil {
+		return err
+	}
+	c.GrantOK = on
+	if err := vcorplink.Save(v.file, c); err != nil {
+		return err
+	}
+	v.rg.vcorp.setGrantOK(c.DeviceID, on)
+	return nil
+}
 
 func hostPlatform() string {
 	switch runtime.GOOS {

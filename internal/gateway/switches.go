@@ -386,7 +386,7 @@ func (g *Gateway) askSettings(ctx context.Context, l *lease, req DeviceRequest, 
 		}
 		info = g.approvals.Open(approval.Request{Kind: approval.KindAction, Binding: b, Rule: settingsRule, Title: title,
 			Detail: detail, Agent: s.agent.Name, TaskID: l.task.id, DeviceName: l.dev.name(),
-			Data: &standingAsk{rule: settingsRule, agent: s.agent.Name, device: l.dev.id, deviceName: l.dev.name()}})
+			Data: &standingAsk{rule: settingsRule, agent: s.agent.Name, device: l.dev.id, deviceName: l.dev.name(), noAlwaysAllow: s.agent.NoAlwaysAllow}})
 		if res := g.afterOpen(l, info); res != nil {
 			return res
 		}

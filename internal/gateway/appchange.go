@@ -305,7 +305,7 @@ func appDetail(agent, intent string, t appTarget) string {
 // rule of the person's asks too (it would keep asking), or when the
 // package names no app id or signer.
 func installStanding(l *lease, t appTarget, v policy.Verdict) *standingAsk {
-	if t.op != policy.OpInstall || len(v.Asks) != 1 || v.Asks[0] != policy.RuleInstall ||
+	if l.session.agent.NoAlwaysAllow || t.op != policy.OpInstall || len(v.Asks) != 1 || v.Asks[0] != policy.RuleInstall ||
 		t.pkg.ID == "" || t.pkg.SignerKey == "" {
 		return nil
 	}

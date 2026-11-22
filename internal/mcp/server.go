@@ -258,6 +258,9 @@ func (s *Server) agentLocked(req *sdk.CallToolRequest, remote bool) gateway.Agen
 	if ci := req.ClientInfo(); ci != nil {
 		info.Name = DisplayName(ci.Name, ci.Title)
 		info.Client = strings.TrimSpace(ci.Name + " " + ci.Version)
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(ci.Name)), vcorpGrantPrefix) {
+			info.NoAlwaysAllow = true
+		}
 	}
 	if remote {
 		// Clients over HTTP may open a session for every call, or leave
@@ -285,6 +288,11 @@ var knownClients = map[string]string{
 // coworkPrefix starts the client names of Claude Desktop's Cowork, which
 // names its MCP client after the server: "local-agent-mode-pinky".
 const coworkPrefix = "local-agent-mode-"
+
+// vcorpGrantPrefix starts the MCP client names vcorplink uses for
+// organization-member tasks; those sessions never inherit or keep global
+// "Always allow" exemptions.
+const vcorpGrantPrefix = "vcorp-grant-"
 
 // DisplayName turns an MCP client name into the name shown to the person.
 // A client that calls itself Pinky is not Pinky's own agent, and is shown

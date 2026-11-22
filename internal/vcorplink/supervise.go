@@ -28,6 +28,7 @@ func Supervise(ctx context.Context, file string, mk func(*Config) *Link, log *sl
 	}
 	type running struct {
 		cfg    Config
+		link   *Link
 		cancel context.CancelFunc
 		done   chan error
 	}
@@ -53,14 +54,17 @@ func Supervise(ctx context.Context, file string, mk func(*Config) *Link, log *sl
 				log.Info("vcorp: unpaired; disconnecting")
 				stop()
 			}
-		case cur == nil || cur.cfg != *c:
+		case cur == nil || !samePairing(cur.cfg, *c):
 			stop()
 			lctx, cancel := context.WithCancel(ctx)
-			r := &running{cfg: *c, cancel: cancel, done: make(chan error, 1)}
 			l := mk(c)
+			r := &running{cfg: *c, link: l, cancel: cancel, done: make(chan error, 1)}
 			go func() { r.done <- l.Run(lctx) }()
 			cur = r
 			log.Info("vcorp: linking to the platform", "origin", c.Origin, "account", c.Account)
+		case cur.cfg.GrantOK != c.GrantOK:
+			cur.cfg.GrantOK = c.GrantOK
+			cur.link.SetGrantOK(c.GrantOK)
 		}
 		if cur != nil {
 			select {
@@ -89,6 +93,12 @@ func Supervise(ctx context.Context, file string, mk func(*Config) *Link, log *sl
 		case <-t.C:
 		}
 	}
+}
+
+// samePairing reports whether a and b are the same platform pairing,
+// ignoring runtime-toggleable options such as GrantOK.
+func samePairing(a, b Config) bool {
+	return a.Origin == b.Origin && a.DeviceID == b.DeviceID && a.Account == b.Account && a.Key == b.Key && a.Name == b.Name
 }
 
 // waitChange waits for the pairing at file to differ from c.

@@ -78,10 +78,10 @@ func (g *Gateway) RemoveExemption(x Exemption) error {
 // that cannot be used.
 func (g *Gateway) canAlwaysAllow(info approval.Info) bool {
 	if st, ok := standingOf(info); ok {
-		return g.policy.CanKeepStanding(st.grant())
+		return !st.noAlwaysAllow && g.policy.CanKeepStanding(st.grant())
 	}
 	snap, ok := actionSnapshot(info)
-	return ok && g.policy.CanExempt(snap.asks, snap.grantApp)
+	return ok && !snap.noAlwaysAllow && g.policy.CanExempt(snap.asks, snap.grantApp)
 }
 
 // standingAsk is the Data of an approval to change a phone's settings or
@@ -93,13 +93,14 @@ func (g *Gateway) canAlwaysAllow(info approval.Info) bool {
 // over a screen recording and uninstalling have none: those ask every
 // time.
 type standingAsk struct {
-	rule       string // settingsRule, policy.RuleAppLogs or policy.RuleInstall
-	agent      string
-	device     string
-	deviceName string
-	app        screen.App // the app whose logs, or the app installed; zero for settings
-	signer     string     // install: driver.Package.SignerKey
-	signerName string     // install: driver.Package.Signer
+	rule          string // settingsRule, policy.RuleAppLogs or policy.RuleInstall
+	agent         string
+	device        string
+	deviceName    string
+	app           screen.App // the app whose logs, or the app installed; zero for settings
+	signer        string     // install: driver.Package.SignerKey
+	signerName    string     // install: driver.Package.Signer
+	noAlwaysAllow bool
 }
 
 // grant is what the policy keeps for the answer.
@@ -125,6 +126,9 @@ func standingOf(info approval.Info) (*standingAsk, bool) {
 // standingAllowed reports whether the person always allows the lease's
 // agent what rule asks about on its phone (in app, for logs).
 func (g *Gateway) standingAllowed(l *lease, rule string, app screen.App) bool {
+	if l.session.agent.NoAlwaysAllow {
+		return false
+	}
 	return g.policy.Standing(policy.Grant{Rule: rule, Agent: l.session.agent.Name, Device: l.dev.id, App: app})
 }
 
@@ -140,6 +144,9 @@ func actionSnapshot(info approval.Info) (*snapshot, bool) {
 // may have offered Always allow before it broke).
 func (g *Gateway) alwaysAllow(info approval.Info) error {
 	if st, ok := standingOf(info); ok {
+		if st.noAlwaysAllow {
+			return nil
+		}
 		x, err := g.policy.KeepStanding(st.grant())
 		switch {
 		case errors.Is(err, policy.ErrNotExemptable):
@@ -152,7 +159,7 @@ func (g *Gateway) alwaysAllow(info approval.Info) error {
 		return nil
 	}
 	snap, ok := actionSnapshot(info)
-	if !ok {
+	if !ok || snap.noAlwaysAllow {
 		return nil
 	}
 	x, err := g.policy.Exempt(snap.asks, snap.grantApp)

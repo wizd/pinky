@@ -28,6 +28,8 @@ type Vcorp interface {
 	Pair(ctx context.Context, origin, code string) error
 	// Unpair forgets the pairing here; the link drops.
 	Unpair() error
+	// SetGrantOK turns organization member access to shared phones on or off.
+	SetGrantOK(on bool) error
 }
 
 // VcorpStatus is the pairing and the link's state.
@@ -37,6 +39,7 @@ type VcorpStatus struct {
 	Origin    string
 	Name      string // the name the platform shows for this Pinky
 	Connected bool
+	GrantOK   bool   // organization members may use shared phones
 	Err       string // why the link is down, after a drop
 }
 
@@ -180,6 +183,10 @@ func (a *app) vcorpPaired(c *mg.Context, st VcorpStatus) {
 			mg.Text(c, word).FontSize(fsSmall).TextColor(p.ink2)
 		})
 	})
+	grantOn := st.GrantOK
+	if a.toggleRowFor(c, "vcorp-grant", locales.VcorpGrantTitle(), locales.VcorpGrantDesc(), false, &grantOn) {
+		a.vcorpSetGrant(grantOn)
+	}
 	settingRow(c, locales.VcorpUnpairTitle(), locales.VcorpUnpairDesc(), true, func() {
 		mg.Row(c).Gap(sp2).AlignItems(mg.Center).Shrink(0).Children(func() {
 			if !v.unpairAsk {
@@ -256,6 +263,23 @@ func (a *app) vcorpUnpair() {
 			v.st = VcorpStatus{}
 			a.vcorpRefresh()
 			a.toasts = append(a.toasts, locales.VcorpUnpairedToast())
+		})
+	}()
+}
+
+func (a *app) vcorpSetGrant(on bool) {
+	v := &a.vcorp
+	v.err = ""
+	v.st.GrantOK = on
+	v.stGen++
+	vc := a.opt.Vcorp
+	go func() {
+		err := vc.SetGrantOK(on)
+		a.post(func() {
+			if err != nil {
+				v.err = locales.VcorpErrGrant(err.Error())
+			}
+			a.vcorpRefresh()
 		})
 	}()
 }

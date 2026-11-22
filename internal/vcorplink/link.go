@@ -44,18 +44,29 @@ var Tools = []string{
 	"phone_request_approval", "phone_handoff",
 }
 
+// GrantTools are the MCP tools an organization member's task may call:
+// screen interaction only. File transfer, app install/uninstall, app logs
+// and phone settings stay closed.
+var GrantTools = []string{
+	"phone_connect", "phone_release", "phone_observe", "phone_tap", "phone_type", "phone_swipe",
+	"phone_pinch", "phone_drag", "phone_key", "phone_launch", "phone_apps", "phone_batch",
+	"phone_wait_for", "phone_request_approval", "phone_handoff",
+}
+
 // ErrRevoked: the person removed this Pinky on the platform's page, or
 // unpaired it; the link stops and the pairing is void.
 var ErrRevoked = errors.New("the platform removed this pairing")
 
 const (
-	readTimeout  = 90 * time.Second // the platform pings every 25 s
-	callTimeout  = 7 * time.Minute  // under the platform's 8 minutes
-	sessionIdle  = 30 * time.Minute // a task that went quiet without job_end
-	phonesEvery  = 5 * time.Second
-	clientName   = "vcorp-cloud"
-	clientTitle  = "VCorp (cloud)" // the agent name the person approves in Pinky
-	maxTextBytes = 256 << 10
+	readTimeout       = 90 * time.Second // the platform pings every 25 s
+	callTimeout       = 7 * time.Minute  // under the platform's 8 minutes
+	sessionIdle       = 30 * time.Minute // a task that went quiet without job_end
+	phonesEvery       = 5 * time.Second
+	clientName        = "vcorp-cloud"
+	clientTitle       = "VCorp (cloud)" // the agent name the person approves in Pinky
+	GrantClientPrefix = "vcorp-grant-"  // MCP client name prefix for org-member tasks
+	grantTitlePrefix  = "VCorp · "
+	maxTextBytes      = 256 << 10
 )
 
 // Link keeps one connection to the platform.
@@ -72,16 +83,29 @@ type Link struct {
 	wmu sync.Mutex
 	ws  *websocket.Conn
 
-	mu       sync.Mutex
-	phones   map[string]Phone // platform id -> phone
-	reported string           // the phone list last sent, as JSON
-	sessions map[string]*jobSession
+	mu        sync.Mutex
+	phones    map[string]Phone // platform id -> phone
+	reported  string           // the phone list last sent, as JSON
+	sessions  map[string]*jobSession
+	grantInit bool
+	grantOK   bool
+	welcomed  bool
 }
 
 type jobSession struct {
-	cs   *sdk.ClientSession
-	mu   sync.Mutex // one call at a time per task
-	last time.Time
+	cs       *sdk.ClientSession
+	grantKey string     // "" for owner tasks; grant.ID + "\x00" + grant.For for grant tasks
+	mu       sync.Mutex // one call at a time per task
+	last     time.Time
+}
+
+type jobGrant struct {
+	ID  string `json:"id"`
+	For string `json:"for"`
+}
+
+type inJob struct {
+	Grant *jobGrant `json:"grant"`
 }
 
 type inMsg struct {
@@ -89,6 +113,7 @@ type inMsg struct {
 	Nonce  string          `json:"nonce"`
 	ID     string          `json:"id"`
 	JobID  string          `json:"jobId"`
+	Job    *inJob          `json:"job"`
 	Cmd    string          `json:"cmd"`
 	Params json.RawMessage `json:"params"`
 	To     *struct {
@@ -177,11 +202,17 @@ func (l *Link) once(ctx context.Context) error {
 	l.wmu.Unlock()
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer func() {
+		l.mu.Lock()
+		l.welcomed = false
+		l.mu.Unlock()
+	}()
 	go func() {
 		<-cctx.Done()
 		ws.Close()
 	}()
 	welcomed := false
+	helloGrant := false
 	for {
 		ws.SetReadDeadline(time.Now().Add(readTimeout))
 		var raw string
@@ -197,11 +228,20 @@ func (l *Link) once(ctx context.Context) error {
 		}
 		switch m.Type {
 		case "challenge":
-			if err := l.hello(ctx, m.Nonce); err != nil {
+			g, err := l.hello(ctx, m.Nonce)
+			if err != nil {
 				return err
 			}
+			helloGrant = g
 		case "welcome":
 			welcomed = true
+			l.mu.Lock()
+			l.welcomed = true
+			curGrant := l.grantEnabledLocked()
+			l.mu.Unlock()
+			if curGrant != helloGrant {
+				_ = l.send(map[string]any{"type": "config", "grantOk": curGrant})
+			}
 			l.state(true, nil)
 			l.Log.Info("vcorp: connected", "account", m.Account, "origin", l.Cfg.Origin)
 			go l.watchPhones(cctx)
@@ -239,20 +279,63 @@ func (l *Link) send(v any) error {
 	return websocket.Message.Send(l.ws, string(b))
 }
 
-func (l *Link) hello(ctx context.Context, nonce string) error {
+func (l *Link) grantEnabledLocked() bool {
+	if !l.grantInit && l.Cfg != nil {
+		l.grantOK = l.Cfg.GrantOK
+		l.grantInit = true
+	}
+	return l.grantOK
+}
+
+func (l *Link) grantEnabled() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.grantEnabledLocked()
+}
+
+// SetGrantOK updates whether organization members may use shared phones over
+// this link. Turning it off immediately releases any active member sessions
+// without disturbing the owner's own cloud tasks, and notifies the platform.
+func (l *Link) SetGrantOK(on bool) {
+	l.mu.Lock()
+	was := l.grantEnabledLocked()
+	l.grantOK = on
+	welcomed := l.welcomed
+	var drop []*jobSession
+	if !on {
+		for id, s := range l.sessions {
+			if s.grantKey != "" {
+				delete(l.sessions, id)
+				drop = append(drop, s)
+			}
+		}
+	}
+	l.mu.Unlock()
+	for _, s := range drop {
+		l.releaseSession(s, "The phone's owner turned off organization access.")
+	}
+	if was != on && welcomed {
+		_ = l.send(map[string]any{"type": "config", "grantOk": on})
+	}
+}
+
+func (l *Link) hello(ctx context.Context, nonce string) (bool, error) {
 	sig, err := Sign(l.Cfg.Key, l.Cfg.Origin, l.Cfg.DeviceID, nonce)
 	if err != nil {
-		return err
+		return false, err
 	}
 	list, _ := l.listPhones(ctx)
 	l.mu.Lock()
 	b, _ := json.Marshal(list)
 	l.reported = string(b)
+	grantOK := l.grantEnabledLocked()
 	l.mu.Unlock()
-	return l.send(map[string]any{
+	err = l.send(map[string]any{
 		"type": "hello", "deviceId": l.Cfg.DeviceID, "sig": sig, "kind": "pinky",
 		"version": l.Version, "name": l.Cfg.Name, "platform": l.Platform, "devices": list,
+		"grantOk": grantOK,
 	})
+	return grantOK, err
 }
 
 // listPhones asks Pinky for its phones and remembers which platform id is
@@ -314,6 +397,49 @@ type cmdError struct {
 	Message string `json:"message"`
 }
 
+func cleanGrantField(s string, maxRunes int) string {
+	var b strings.Builder
+	space := false
+	n := 0
+	for _, r := range strings.TrimSpace(s) {
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
+			if !space && n > 0 {
+				space = true
+			}
+			continue
+		}
+		if space {
+			if n+1 >= maxRunes {
+				break
+			}
+			b.WriteByte(' ')
+			n++
+			space = false
+		}
+		if n >= maxRunes {
+			break
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return b.String()
+}
+
+func parseGrant(j *inJob) (*jobGrant, *cmdError) {
+	if j == nil || j.Grant == nil {
+		return nil, nil
+	}
+	id := cleanGrantField(j.Grant.ID, 64)
+	who := cleanGrantField(j.Grant.For, 40)
+	if id == "" || who == "" {
+		return nil, &cmdError{"CLOUD_DENIED", "grant task must include grant.id and grant.for"}
+	}
+	return &jobGrant{ID: id, For: who}, nil
+}
+
 func (l *Link) command(ctx context.Context, m inMsg) {
 	phoneID := ""
 	if m.To != nil {
@@ -331,7 +457,16 @@ func (l *Link) command(ctx context.Context, m inMsg) {
 			l.Log.Warn("vcorp: send result", "err", err)
 		}
 	}
+	grant, gerr := parseGrant(m.Job)
+	if gerr != nil {
+		reply(false, nil, gerr)
+		return
+	}
 	if m.Cmd != "phone" {
+		if grant != nil {
+			reply(false, nil, &cmdError{"GRANT_SCOPE", "organization member tasks on Pinky can only use phone commands"})
+			return
+		}
 		reply(false, nil, &cmdError{"CLOUD_DENIED", "Pinky only takes phone commands, not " + m.Cmd})
 		return
 	}
@@ -343,6 +478,16 @@ func (l *Link) command(ctx context.Context, m inMsg) {
 	if !slices.Contains(Tools, p.Tool) {
 		reply(false, nil, &cmdError{"CLOUD_DENIED", "not a Pinky phone tool: " + p.Tool})
 		return
+	}
+	if grant != nil {
+		if !l.grantEnabled() {
+			reply(false, nil, &cmdError{"GRANT_OFF", "the phone's owner has not enabled organization member access in Pinky"})
+			return
+		}
+		if !slices.Contains(GrantTools, p.Tool) {
+			reply(false, nil, &cmdError{"GRANT_SCOPE", "organization member tasks on this phone can only interact with the screen (" + p.Tool + " is not allowed)"})
+			return
+		}
 	}
 	l.mu.Lock()
 	phone, ok := l.phones[phoneID]
@@ -358,15 +503,28 @@ func (l *Link) command(ctx context.Context, m inMsg) {
 	if p.Args == nil {
 		p.Args = map[string]any{}
 	}
+	if grant != nil {
+		// Never write files to the owner's computer for an organization member's task.
+		switch p.Tool {
+		case "phone_observe":
+			delete(p.Args, "save")
+		case "phone_release":
+			delete(p.Args, "export")
+		}
+	}
 	// The platform chose the phone; the task cannot point elsewhere.
 	p.Args["device"] = phone.ID
-	s, err := l.session(ctx, m.JobID)
-	if err != nil {
-		reply(false, nil, &cmdError{"PINKY_OFFLINE", "could not reach Pinky on the computer: " + err.Error()})
+	s, cerr := l.session(ctx, m.JobID, grant)
+	if cerr != nil {
+		reply(false, nil, cerr)
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if grant != nil && !l.grantEnabled() {
+		reply(false, nil, &cmdError{"GRANT_OFF", "the phone's owner turned off organization member access in Pinky"})
+		return
+	}
 	s.last = time.Now()
 	cctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
@@ -414,30 +572,48 @@ func resultData(res *sdk.CallToolResult) map[string]any {
 	return data
 }
 
-func (l *Link) session(ctx context.Context, jobID string) (*jobSession, error) {
+func (l *Link) session(ctx context.Context, jobID string, grant *jobGrant) (*jobSession, *cmdError) {
+	wantKey := ""
+	name, title := clientName, clientTitle
+	if grant != nil {
+		wantKey = grant.ID + "\x00" + grant.For
+		name = GrantClientPrefix + grant.For
+		title = grantTitlePrefix + grant.For
+	}
 	l.mu.Lock()
 	s := l.sessions[jobID]
 	l.mu.Unlock()
 	if s != nil {
+		if s.grantKey != wantKey {
+			return nil, &cmdError{"CLOUD_DENIED", "task identity changed mid-session"}
+		}
 		return s, nil
 	}
 	cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	t, err := l.Host.Connect(cctx)
 	if err != nil {
-		return nil, err
+		return nil, &cmdError{"PINKY_OFFLINE", "could not reach Pinky on the computer: " + err.Error()}
 	}
-	client := sdk.NewClient(&sdk.Implementation{Name: clientName, Title: clientTitle, Version: l.Version}, nil)
+	client := sdk.NewClient(&sdk.Implementation{Name: name, Title: title, Version: l.Version}, nil)
 	// The session outlives this command, so it is not bound to cctx.
 	cs, err := client.Connect(context.WithoutCancel(ctx), t, nil)
 	if err != nil {
-		return nil, err
+		return nil, &cmdError{"PINKY_OFFLINE", "could not reach Pinky on the computer: " + err.Error()}
 	}
-	s = &jobSession{cs: cs, last: time.Now()}
+	s = &jobSession{cs: cs, grantKey: wantKey, last: time.Now()}
 	l.mu.Lock()
+	if grant != nil && !l.grantEnabledLocked() {
+		l.mu.Unlock()
+		cs.Close()
+		return nil, &cmdError{"GRANT_OFF", "the phone's owner turned off organization member access in Pinky"}
+	}
 	if had := l.sessions[jobID]; had != nil {
 		l.mu.Unlock()
 		cs.Close()
+		if had.grantKey != wantKey {
+			return nil, &cmdError{"CLOUD_DENIED", "task identity changed mid-session"}
+		}
 		return had, nil
 	}
 	l.sessions[jobID] = s
@@ -465,6 +641,10 @@ func (l *Link) endJob(jobID string) {
 		return
 	}
 	l.Log.Info("vcorp: task ended", "job", jobID)
+	l.releaseSession(s, "The cloud task ended without releasing the phone.")
+}
+
+func (l *Link) releaseSession(s *jobSession, summary string) {
 	go func() {
 		// Closing alone would keep the phone a minute for a reconnect
 		// that never comes: the task is over, so release it now. A task
@@ -472,7 +652,7 @@ func (l *Link) endJob(jobID string) {
 		s.mu.Lock()
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		s.cs.CallTool(ctx, &sdk.CallToolParams{Name: "phone_release", Arguments: map[string]any{
-			"outcome": "partial", "summary": "The cloud task ended without releasing the phone."}})
+			"outcome": "partial", "summary": summary}})
 		cancel()
 		s.mu.Unlock()
 		s.cs.Close()

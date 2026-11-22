@@ -271,7 +271,10 @@ func (e *Engine) Evaluate(in Input) Verdict {
 		}
 	}
 	// The person's "Always allow" answers come last: they lift asks, never
-	// a deny or read-only mode.
+	// a deny or read-only mode. Agents with NoExemptions never inherit them.
+	if in.NoExemptions {
+		return v
+	}
 	return e.liftLocked(v, app)
 }
 

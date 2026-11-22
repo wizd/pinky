@@ -381,3 +381,51 @@ func TestAlwaysAllowNotOffered(t *testing.T) {
 		mustStatus(t, res, StatusDenied)
 	})
 }
+
+func TestNoAlwaysAllowIsolation(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	g, _ := newHookGateway(t, func(o *Options) { o.Policy = loadPolicy(t, dir) })
+
+	// 1. An isolated agent cannot save Always allow, even if a client sends it.
+	guest := g.OpenSession(AgentInfo{Name: "VCorp · alice", NoAlwaysAllow: true})
+	defer guest.Close()
+	mustStatus(t, guest.Connect(ctx, ConnectRequest{Task: "Guest lunch"}), StatusSettled)
+	answer(t, g, AllowAlways, func(n NeedView) {
+		if n.Rule != "Payments" || n.AlwaysAllow || !n.AllowTask {
+			t.Errorf("guest need %+v (want AlwaysAllow=false, AllowTask=true)", n)
+		}
+	})
+	mustStatus(t, payInDinely(t, guest), StatusSettled)
+	if got := g.Exemptions(); len(got) != 0 {
+		t.Fatalf("guest saved an exemption: %+v", got)
+	}
+	mustStatus(t, guest.Release(ctx, ReleaseRequest{Outcome: "done"}), StatusSettled)
+
+	// 2. Owner adds a global Always allow for Payments in Dinely.
+	owner, _ := connect(t, g, "Owner lunch")
+	answer(t, g, AllowAlways, func(n NeedView) {
+		if !n.AlwaysAllow {
+			t.Errorf("owner need %+v (want AlwaysAllow=true)", n)
+		}
+	})
+	mustStatus(t, payInDinely(t, owner), StatusSettled)
+	if len(g.Exemptions()) != 1 {
+		t.Fatalf("owner exemption missing: %+v", g.Exemptions())
+	}
+	mustStatus(t, owner.Release(ctx, ReleaseRequest{Outcome: "done"}), StatusSettled)
+
+	// 3. The isolated agent does NOT inherit the owner's exemption: it must still ask.
+	mustStatus(t, guest.Connect(ctx, ConnectRequest{Task: "Guest lunch 2"}), StatusSettled)
+	asked := false
+	answer(t, g, Deny, func(n NeedView) {
+		asked = true
+		if n.Rule != "Payments" || n.AlwaysAllow {
+			t.Errorf("guest second need %+v", n)
+		}
+	})
+	mustStatus(t, payInDinely(t, guest), StatusDenied)
+	if !asked {
+		t.Fatal("guest bypassed owner's global Always allow exemption")
+	}
+}

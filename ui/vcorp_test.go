@@ -53,6 +53,16 @@ func (f *fakeVcorp) Unpair() error {
 	return nil
 }
 
+func (f *fakeVcorp) SetGrantOK(on bool) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.st.Paired {
+		return errors.New("not paired")
+	}
+	f.st.GrantOK = on
+	return nil
+}
+
 func vcorpApp(t *testing.T) (*testApp, *mg.Tester, *fakeVcorp) {
 	t.Helper()
 	ta := newTestApp(t, fakeapi.OnePhone)
@@ -128,6 +138,24 @@ func TestVcorpDown(t *testing.T) {
 	if !hasText(tt, "Connecting…") {
 		t.Errorf("down: %q", tt.Texts())
 	}
+}
+
+func TestVcorpGrantToggle(t *testing.T) {
+	ta, tt, f := vcorpApp(t)
+	f.st = VcorpStatus{Paired: true, Account: "a@b.c", Origin: "https://maker.vcorp.ai", Connected: true}
+	tt.Frame()
+	ta.waitFor(t, "grant row", func() bool { tt.Frame(); return hasText(tt, "Allow organization members to use my phones") })
+	if f.Status().GrantOK {
+		t.Fatal("grant started on")
+	}
+	if err := tt.Click("Allow organization members to use my phones"); err != nil {
+		t.Fatal(err)
+	}
+	ta.waitFor(t, "grant enabled", func() bool { tt.Frame(); return f.Status().GrantOK })
+	if err := tt.Click("Allow organization members to use my phones"); err != nil {
+		t.Fatal(err)
+	}
+	ta.waitFor(t, "grant disabled", func() bool { tt.Frame(); return !f.Status().GrantOK })
 }
 
 // TestVcorpScreenshots draws the form, the confirm step and the paired

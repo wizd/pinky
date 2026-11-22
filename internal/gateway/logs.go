@@ -253,7 +253,7 @@ func (g *Gateway) askForLogs(ctx context.Context, l *lease, c Call, app driver.A
 		}
 		info = g.approvals.Open(approval.Request{Kind: approval.KindAction, Binding: b, Rule: policy.RuleAppLogs, Title: title,
 			Detail: detail, App: label, Agent: s.agent.Name, TaskID: l.task.id, DeviceName: l.dev.name(),
-			Data: &standingAsk{rule: policy.RuleAppLogs, agent: s.agent.Name, device: l.dev.id, deviceName: l.dev.name(), app: sa}})
+			Data: &standingAsk{rule: policy.RuleAppLogs, agent: s.agent.Name, device: l.dev.id, deviceName: l.dev.name(), app: sa, noAlwaysAllow: s.agent.NoAlwaysAllow}})
 		if res := g.afterOpen(l, info); res != nil {
 			return res
 		}

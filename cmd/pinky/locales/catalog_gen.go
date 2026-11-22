@@ -32567,6 +32567,22 @@ func (msgs Messages) VcorpErrClaim(error string) string {
 	return Catalog.Format(msgs.locale, "vcorpErrClaim", map[string]any{"error": error})
 }
 
+// VcorpErrGrant says "Couldn't update organization access: {error}"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: when saving the organization member access
+// switch failed. error is why, in English.
+func VcorpErrGrant(error string) string { return In(i18n.Locale()).VcorpErrGrant(error) }
+
+// VcorpErrGrant says "Couldn't update organization access: {error}"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: when saving the organization member access
+// switch failed. error is why, in English.
+func (msgs Messages) VcorpErrGrant(error string) string {
+	return Catalog.Format(msgs.locale, "vcorpErrGrant", map[string]any{"error": error})
+}
+
 // VcorpErrPair says "Couldn't pair: {error}"
 // in the language the app shows.
 //
@@ -32597,6 +32613,38 @@ func VcorpErrUnpair(error string) string { return In(i18n.Locale()).VcorpErrUnpa
 // removed. error is why, in English.
 func (msgs Messages) VcorpErrUnpair(error string) string {
 	return Catalog.Format(msgs.locale, "vcorpErrUnpair", map[string]any{"error": error})
+}
+
+// VcorpGrantDesc says "Only phones you share on the platform can be used, for screen actions only. Each member still needs your approval her…"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: description under the switch allowing
+// organization members to use shared phones.
+func VcorpGrantDesc() string { return In(i18n.Locale()).VcorpGrantDesc() }
+
+// VcorpGrantDesc says "Only phones you share on the platform can be used, for screen actions only. Each member still needs your approval her…"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: description under the switch allowing
+// organization members to use shared phones.
+func (msgs Messages) VcorpGrantDesc() string {
+	return Catalog.Format(msgs.locale, "vcorpGrantDesc", nil)
+}
+
+// VcorpGrantTitle says "Allow organization members to use my phones"
+// in the language the app shows.
+//
+// Settings › Agents › VCorp: label of the switch allowing organization
+// members to use shared phones.
+func VcorpGrantTitle() string { return In(i18n.Locale()).VcorpGrantTitle() }
+
+// VcorpGrantTitle says "Allow organization members to use my phones"
+// in the language of msgs.
+//
+// Settings › Agents › VCorp: label of the switch allowing organization
+// members to use shared phones.
+func (msgs Messages) VcorpGrantTitle() string {
+	return Catalog.Format(msgs.locale, "vcorpGrantTitle", nil)
 }
 
 // VcorpIntro says "Pair Pinky with your VCorp Super Agent account, and its cloud tasks can use the phones here. Pinky stays connected wh…"

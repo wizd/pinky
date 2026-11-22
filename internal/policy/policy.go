@@ -135,6 +135,9 @@ type Input struct {
 	// that block whole apps do not apply to it. Every other rule still
 	// does, and password managers stay blocked.
 	AllowBlocked bool
+	// NoExemptions ignores the person's "Always allow" rules for this
+	// action, such as an organization member's task relayed through VCorp.
+	NoExemptions bool
 }
 
 // Verdict is the policy's answer for one action.

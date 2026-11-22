@@ -802,7 +802,7 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 	g.mu.Unlock()
 	p.input = policy.Input{Device: d.id, App: fg, Screen: cur, TaskApps: apps, LongPress: a.LongPress,
 		ReadOnly: scope.Mode == ScopeReadOnly || readOnly, ReadOnlyAccess: scope.Mode == ScopeReadOnly,
-		AllowBlocked: fgAllowed, Virtual: virtual}
+		AllowBlocked: fgAllowed, Virtual: virtual, NoExemptions: l.session.agent.NoAlwaysAllow}
 	if scope.Mode == ScopeApps {
 		p.input.Scoped, p.input.ScopeApps = true, scope.Apps
 	}
@@ -2623,12 +2623,15 @@ type snapshot struct {
 	// opener is the app that opens a link the person was asked about: the
 	// approval is stale when another would open it now.
 	opener string
+	// noAlwaysAllow is set for agents isolated from global Always allow
+	// exemptions: approvals never offer or save Always allow for them.
+	noAlwaysAllow bool
 }
 
 func takeSnapshot(s *screen.Screen, p *prep, v policy.Verdict) *snapshot {
 	snap := &snapshot{app: s.App.ID + "\x00" + s.App.Name, point: p.point, text: screenText(s),
 		asks: append([]string(nil), v.Asks...), grantApp: grantApp(p), launch: p.input.Op == policy.OpLaunch,
-		unblock: p.unblock}
+		unblock: p.unblock, noAlwaysAllow: p.input.NoExemptions}
 	if p.url {
 		snap.opener = p.launch.ID
 	}

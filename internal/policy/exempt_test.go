@@ -340,3 +340,16 @@ func TestExemptionsInTheRulesFile(t *testing.T) {
 		t.Fatal("the defaults always allow something")
 	}
 }
+
+func TestNoExemptions(t *testing.T) {
+	e := commitsEngine(t)
+	exemptPayment(t, e)
+	if v := e.Evaluate(tap(dinely, pay)); v.Decision != Allow {
+		t.Fatalf("normal tap: %+v", v)
+	}
+	in := tap(dinely, pay)
+	in.NoExemptions = true
+	if v := e.Evaluate(in); v.Decision != Ask || v.Rule != "Payments" || len(v.Exempted) != 0 {
+		t.Fatalf("NoExemptions tap: %+v", v)
+	}
+}

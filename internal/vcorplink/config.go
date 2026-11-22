@@ -32,11 +32,12 @@ import (
 // Config is what pairing leaves on this computer, in the config folder next
 // to the agent token, readable by this user only.
 type Config struct {
-	Origin   string `json:"origin"`   // https://maker.example.com
-	DeviceID string `json:"deviceId"` // the platform's id for this Pinky
-	Account  string `json:"account"`  // the account it is paired with, for display
-	Key      string `json:"key"`      // PKCS#8, base64
-	Name     string `json:"name"`     // shown on the platform
+	Origin   string `json:"origin"`            // https://maker.example.com
+	DeviceID string `json:"deviceId"`          // the platform's id for this Pinky
+	Account  string `json:"account"`           // the account it is paired with, for display
+	Key      string `json:"key"`               // PKCS#8, base64
+	Name     string `json:"name"`              // shown on the platform
+	GrantOK  bool   `json:"grantOk,omitempty"` // allow organization members to use shared phones
 }
 
 // File is where the config lives in a config folder.
