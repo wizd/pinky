@@ -427,6 +427,8 @@ func (a *app) checkWords(d gateway.DeviceView, v gateway.CheckupView, ck driver.
 			}
 		case driver.FixInstallCompanion:
 			w.text, w.detail = locales.CheckCompanionMissing(), false
+		case driver.FixNewerAndroid:
+			w.text, w.detail = locales.CheckCompanionOld(d.Info.OSVersion), false
 		case driver.FixTurnOnCompanion:
 			w.text, w.detail = locales.CheckCompanionOff(), false
 			switch b.id {

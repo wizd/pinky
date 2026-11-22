@@ -105,6 +105,9 @@ func (d *Device) checkCompanion(ctx context.Context) driver.Check {
 		c.Status, c.Fix = driver.CheckFail, driver.FixInstallCompanion
 	case driver.CompanionOutdated, driver.CompanionPublicKey:
 		c.Status, c.Fix = driver.CheckWarn, driver.FixUpdateCompanion
+	case driver.CompanionOldAndroid:
+		c.Status, c.Fix = driver.CheckSkip, driver.FixNewerAndroid
+		c.Detail = "the companion app needs Android 10 or later; this phone runs Android " + d.info.OSVersion
 	default: // this build of Pinky carries no companion app
 		c.Status, c.Detail = driver.CheckSkip, "this build of Pinky has no companion app to install"
 	}

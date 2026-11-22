@@ -378,7 +378,7 @@ func (a *app) companionCard(c *mg.Context, d gateway.DeviceView) {
 		extra = companionManualWhere(a.chk.family[id])
 	default:
 		if !busy {
-			return // on, ready, unknown, or no app to install
+			return // on, ready, unknown, or no app to install (or none this Android can take)
 		}
 		title = locales.CompanionInstallingTitle()
 	}
@@ -476,6 +476,8 @@ func companionLine(cs driver.CompanionState) string {
 		return locales.CompanionLinePublicKey()
 	case driver.CompanionNoAPK:
 		return locales.CompanionLineNoAPK()
+	case driver.CompanionOldAndroid:
+		return locales.CompanionLineOldAndroid()
 	}
 	return ""
 }

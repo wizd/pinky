@@ -936,6 +936,10 @@ const (
 	// Clients treat it as CompanionOutdated and say why.
 	CompanionPublicKey CompanionState = "public_key"
 	CompanionNoAPK     CompanionState = "no_apk" // Pinky has no APK to install (a build without it)
+	// CompanionOldAndroid: not installed, and the phone's Android is older
+	// than the app needs (Android 10), so it cannot be installed. Clients
+	// that do not know it treat it as CompanionNoAPK: nothing to install.
+	CompanionOldAndroid CompanionState = "old_android"
 	// CompanionManual: installed and current, its service is off, and the
 	// phone does not let Pinky turn it on over USB debugging: it took
 	// Pinky's change to its accessibility settings without an error and

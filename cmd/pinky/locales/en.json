@@ -2512,6 +2512,16 @@
   "@checkCompanionOffXiaomi": {
     "description": "The checkup, Pinky on the phone, on a Xiaomi phone whose app's service is off: Xiaomi's cleaners stop apps, which turns their service off. Autostart and Battery saver are Xiaomi's names: use those of its Simplified Chinese settings."
   },
+  "checkCompanionOld": "Needs Android 10 or later (this phone has Android {version}). Without it, Pinky reads the screen more slowly and types through the clipboard.",
+  "@checkCompanionOld": {
+    "description": "The checkup, Pinky on the phone: the phone's Android is too old for the app (below Android 10), so it cannot be installed.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "7.0"
+      }
+    }
+  },
   "checkCompanionOutdated": "An older version is installed; Pinky carries a newer one.",
   "@checkCompanionOutdated": {
     "description": "The checkup, Pinky on the phone: outdated; an Update button follows."
@@ -3195,6 +3205,10 @@
   "companionLineOff": "Couldn't turn on Pinky on the phone",
   "@companionLineOff": {
     "description": "Settings › Phones: a phone's line about Pinky on the phone when its service did not come on the last time Pinky tried."
+  },
+  "companionLineOldAndroid": "Pinky on the phone needs Android 10 or later",
+  "@companionLineOldAndroid": {
+    "description": "Settings › Phones: a phone's line about Pinky on the phone when the phone's Android is too old for the app (below Android 10), so it cannot be installed."
   },
   "companionLineOn": "Pinky on the phone is on",
   "@companionLineOn": {

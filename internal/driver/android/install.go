@@ -144,7 +144,8 @@ type CompanionInstall struct {
 }
 
 // CompanionState implements driver.CompanionInstaller: missing (or no_apk
-// when Pinky has no APK to install either); public_key when the installed
+// when Pinky has no APK to install either, or old_android when the phone's
+// Android is too old for it); public_key when the installed
 // build is signed with the public key of the builds until 2026-11-08 and
 // the bundled APK with another; outdated when the installed versionCode is
 // lower than the bundled APK's, or it is signed with another key; on when
@@ -166,6 +167,9 @@ func (d *Device) CompanionState(ctx context.Context) (driver.CompanionState, err
 	if !installed {
 		if apkErr != nil {
 			return driver.CompanionNoAPK, nil
+		}
+		if d.tooOldForCompanion() {
+			return driver.CompanionOldAndroid, nil
 		}
 		return driver.CompanionMissing, nil
 	}
@@ -260,11 +264,22 @@ func (d *Device) SetUpCompanion(ctx context.Context, force bool) (CompanionInsta
 		if apkErr != nil {
 			return res, fmt.Errorf("%w: %w", apkErr, driver.ErrUnsupported)
 		}
+		if !installed && d.tooOldForCompanion() {
+			return res, fmt.Errorf("android: Pinky on the phone needs Android 10 or later; this phone runs Android %s: %w",
+				d.info.OSVersion, driver.ErrUnsupported)
+		}
 		if err := d.installCompanionAPK(ctx, c, apk, res.Before, &res); err != nil {
 			return res, err
 		}
 	}
 	return res, d.tryCompanion(ctx)
+}
+
+// tooOldForCompanion says whether the phone's Android is older than the
+// companion app needs, so installing it would fail (INSTALL_FAILED_OLDER_SDK).
+// An unknown level (0) is not too old.
+func (d *Device) tooOldForCompanion() bool {
+	return d.props.SDK > 0 && d.props.SDK < companion.MinSDK
 }
 
 // tryCompanion turns the service on through the driver's own link, as a

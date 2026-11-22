@@ -111,6 +111,8 @@ func companionCheck(cs driver.CompanionState) driver.Check {
 		c.Status, c.Fix = driver.CheckFail, driver.FixInstallCompanion
 	case driver.CompanionOutdated, driver.CompanionPublicKey:
 		c.Status, c.Fix = driver.CheckWarn, driver.FixUpdateCompanion
+	case driver.CompanionOldAndroid:
+		c.Status, c.Fix = driver.CheckSkip, driver.FixNewerAndroid
 	default:
 		c.Status = driver.CheckSkip
 	}

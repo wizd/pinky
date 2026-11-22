@@ -133,7 +133,7 @@ commands:
                                   -person counts PersonWatcher signals meanwhile
   companion-install [-force]      install or update the companion app and turn
                                   its service on (setup only)
-  companion-state                 on, off, missing, outdated or no_apk
+  companion-state                 on, off, missing, outdated, no_apk or old_android
   bg [-app APP] [-seconds N] [-out FILE.h264] [-input scrcpy|companion] [STEP...]
                                   open a virtual display and run steps on it;
                                   -input says how taps and keys reach it

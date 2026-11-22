@@ -82,6 +82,11 @@ type Version struct {
 	Signer string
 }
 
+// MinSDK is the oldest Android API level the companion app installs on,
+// its minSdk in android/companion/app/build.gradle.kts (29, Android 10):
+// older phones refuse the APK (INSTALL_FAILED_OLDER_SDK).
+const MinSDK = 29
+
 // OldPublicSigner is the signing certificate of every build from 2026-11-07
 // to 2026-11-08, android/companion/pinky-companion-debug.keystore, whose
 // key and password are public since the repository is: anyone can sign an

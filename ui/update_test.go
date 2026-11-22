@@ -944,3 +944,41 @@ func TestAutomaticUpdateBacksOffAfterAFailure(t *testing.T) {
 		t.Errorf("failures %d after a good install", ut.upd.failures)
 	}
 }
+
+// TestCompanionOldAndroid: a phone older than Android 10 cannot take the
+// app, so its page offers no install, and the checkup and Settings › Phones
+// say it needs Android 10.
+func TestCompanionOldAndroid(t *testing.T) {
+	if got := companionLine(driver.CompanionOldAndroid); got != "Pinky on the phone needs Android 10 or later" {
+		t.Errorf("companionLine = %q", got)
+	}
+	ta := newTestApp(t, fakeapi.Companion)
+	ta.api.SetCompanion("pixel-9", driver.CompanionOldAndroid)
+	ta.sync()
+	tt := mg.NewTester(ta.view, 1280, 820)
+	ta.waitFor(t, "the companion state", func() bool { tt.Frame(); return ta.comp.state["pixel-9"] == driver.CompanionOldAndroid })
+	tt.Frame()
+	if hasText(tt, locales.CompanionInstallTitle()) {
+		t.Errorf("offers to install the app: %q", tt.Texts())
+	}
+	if err := tt.Click("More phone controls"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if err := tt.Click("Checkup"); err != nil {
+		t.Fatal(err)
+	}
+	ta.frameUntil(t, tt, "the checkup", func() bool { r := ta.checkupOf("pixel-9"); return r != nil && r.have })
+	found := false
+	for _, s := range tt.Texts() {
+		found = found || strings.HasPrefix(s, "Needs Android 10 or later (this phone has Android ")
+	}
+	if !found {
+		t.Errorf("the checkup does not say it needs Android 10: %q", tt.Texts())
+	}
+	ta.page, ta.set.sec = pageSettings, secPhones
+	tt.Frame()
+	if !hasText(tt, "Pinky on the phone needs Android 10 or later") {
+		t.Errorf("Settings › Phones: %q", tt.Texts())
+	}
+}

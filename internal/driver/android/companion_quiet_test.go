@@ -580,3 +580,39 @@ func TestUpdateCompanionRefusedOverUSB(t *testing.T) {
 		t.Errorf("UpdateCompanion after the install by hand = %+v, %v; want nothing to do", res, err)
 	}
 }
+
+// TestCompanionOldAndroid: a phone older than Android 10 (a Mate 9 on
+// Android 7.0, API 24) cannot take the app, which needs API 29: Pinky
+// offers no install, and setting up refuses before installing anything.
+func TestCompanionOldAndroid(t *testing.T) {
+	apk := companiontest.APK(t, companion.Release.Package, "2026.1108.9", 480, []byte("release"))
+	p := newQuietPhone(t)
+	p.installed = false
+	d, _ := quietDevice(t, p, apk)
+	d.props.SDK, d.info.OSVersion = 24, "7.0"
+	ctx := context.Background()
+	if st, err := d.CompanionState(ctx); err != nil || st != driver.CompanionOldAndroid {
+		t.Errorf("state = %q, %v; want old_android", st, err)
+	}
+	if ck := d.checkCompanion(ctx); ck.Status != driver.CheckSkip || ck.Fix != driver.FixNewerAndroid {
+		t.Errorf("checkup item = %+v", ck)
+	}
+	_, err := d.SetUpCompanion(ctx, false)
+	if !errors.Is(err, driver.ErrUnsupported) || !strings.Contains(err.Error(), "Android 7.0") {
+		t.Errorf("set up: %v", err)
+	}
+	p.mu.Lock()
+	installs := p.installs
+	p.mu.Unlock()
+	if installs != 0 {
+		t.Errorf("installed %d times on a phone too old for the app", installs)
+	}
+
+	// Android 10, and a phone whose level is unknown, are offered it.
+	for _, sdk := range []int{companion.MinSDK, 0} {
+		d.props.SDK = sdk
+		if st, err := d.CompanionState(ctx); err != nil || st != driver.CompanionMissing {
+			t.Errorf("SDK %d: state = %q, %v; want missing", sdk, st, err)
+		}
+	}
+}

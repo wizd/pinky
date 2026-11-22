@@ -7047,6 +7047,22 @@ func (msgs Messages) CheckCompanionOffXiaomi() string {
 	return Catalog.Format(msgs.locale, "checkCompanionOffXiaomi", nil)
 }
 
+// CheckCompanionOld says "Needs Android 10 or later (this phone has Android {version}). Without it, Pinky reads the screen more slowly and type…"
+// in the language the app shows.
+//
+// The checkup, Pinky on the phone: the phone's Android is too old for the
+// app (below Android 10), so it cannot be installed.
+func CheckCompanionOld(version string) string { return In(i18n.Locale()).CheckCompanionOld(version) }
+
+// CheckCompanionOld says "Needs Android 10 or later (this phone has Android {version}). Without it, Pinky reads the screen more slowly and type…"
+// in the language of msgs.
+//
+// The checkup, Pinky on the phone: the phone's Android is too old for the
+// app (below Android 10), so it cannot be installed.
+func (msgs Messages) CheckCompanionOld(version string) string {
+	return Catalog.Format(msgs.locale, "checkCompanionOld", map[string]any{"version": version})
+}
+
 // CheckCompanionOutdated says "An older version is installed; Pinky carries a newer one."
 // in the language the app shows.
 //
@@ -9345,6 +9361,24 @@ func CompanionLineOff() string { return In(i18n.Locale()).CompanionLineOff() }
 // service did not come on the last time Pinky tried.
 func (msgs Messages) CompanionLineOff() string {
 	return Catalog.Format(msgs.locale, "companionLineOff", nil)
+}
+
+// CompanionLineOldAndroid says "Pinky on the phone needs Android 10 or later"
+// in the language the app shows.
+//
+// Settings › Phones: a phone's line about Pinky on the phone when the
+// phone's Android is too old for the app (below Android 10), so it cannot
+// be installed.
+func CompanionLineOldAndroid() string { return In(i18n.Locale()).CompanionLineOldAndroid() }
+
+// CompanionLineOldAndroid says "Pinky on the phone needs Android 10 or later"
+// in the language of msgs.
+//
+// Settings › Phones: a phone's line about Pinky on the phone when the
+// phone's Android is too old for the app (below Android 10), so it cannot
+// be installed.
+func (msgs Messages) CompanionLineOldAndroid() string {
+	return Catalog.Format(msgs.locale, "companionLineOldAndroid", nil)
 }
 
 // CompanionLineOn says "Pinky on the phone is on"
