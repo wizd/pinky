@@ -394,6 +394,18 @@ func (s *Session) end(outcome string, keep bool) {
 
 // acquire finds the lease a call acts on and marks it busy.
 func (s *Session) acquire(ref string) (*lease, *Result) {
+	return s.acquireFor(ref, true)
+}
+
+// acquireRead is acquire for a call that only reads the screen
+// (phone_observe, phone_wait_for): it does not count in lease.calls.
+func (s *Session) acquireRead(ref string) (*lease, *Result) {
+	return s.acquireFor(ref, false)
+}
+
+// acquireFor is acquire. A call that may change the screen (input) counts
+// in lease.calls (appswitch.go).
+func (s *Session) acquireFor(ref string, input bool) (*lease, *Result) {
 	g := s.g
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -461,6 +473,9 @@ func (s *Session) acquire(ref string) (*lease, *Result) {
 		}
 	}
 	l.inflight++
+	if input {
+		l.calls++
+	}
 	l.lastUsed = time.Now()
 	return l, nil
 }
@@ -1336,7 +1351,7 @@ func (s *Session) Observe(ctx context.Context, req ObserveRequest) *Result {
 		}
 		save = name
 	}
-	l, res := s.acquire(req.Device)
+	l, res := s.acquireRead(req.Device)
 	if res != nil {
 		return res
 	}
@@ -1355,6 +1370,7 @@ func (s *Session) Observe(ctx context.Context, req ObserveRequest) *Result {
 	if req.OCR {
 		mode = ocrAll
 	}
+	readAt := time.Now()
 	cur, err := g.observeOCR(ctx, l.dev, mode)
 	if err != nil && errors.Is(err, driver.ErrOffline) && g.expectedBack(l.dev) {
 		// The phone dropped as it moves between its cable and Wi-Fi, or is
@@ -1367,8 +1383,12 @@ func (s *Session) Observe(ctx context.Context, req ObserveRequest) *Result {
 	if err != nil {
 		return g.finish(l, g.readError(l, err))
 	}
+	from, to, switched := g.switchedApp(l, cur, readAt, false)
 	res = g.screenResult(l, cur, true)
 	res.Status = StatusSettled
+	if switched {
+		res.Message = strings.TrimSpace(res.Message + " " + switchedNote(from, to))
+	}
 	if cur.Locked {
 		res.Status = StatusLocked
 		res.Message = "The phone is locked; call phone_handoff so the person can unlock it."
@@ -1480,7 +1500,7 @@ func (s *Session) WaitFor(ctx context.Context, req WaitForRequest) *Result {
 	case timeout == 0:
 		timeout = 10 * time.Second
 	}
-	l, res := s.acquire(req.Device)
+	l, res := s.acquireRead(req.Device)
 	if res != nil {
 		return res
 	}

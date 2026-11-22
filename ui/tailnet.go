@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"runtime"
 	"strconv"
 	"strings"
@@ -15,6 +17,7 @@ import (
 	"github.com/DIYgod/pinky/cmd/pinky/locales"
 	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/gateway"
+	"github.com/DIYgod/pinky/internal/tailnet"
 )
 
 // Phones away from this computer's network, through Tailscale: the Add
@@ -30,6 +33,7 @@ type tailnetter interface {
 	ConnectTailnet(ctx context.Context, addr string) (driver.Info, error)
 	Away(ctx context.Context, deviceID string) (driver.Away, error)
 	SetAway(ctx context.Context, deviceID string, on bool) (driver.Away, error)
+	SetAwayAt(ctx context.Context, deviceID, addr string) (driver.Away, error)
 }
 
 // tailscaleDownload is where Tailscale's apps are.
@@ -60,6 +64,16 @@ type tailnetState struct {
 	ask     string
 	askName string
 	askOpen bool
+
+	// The dialog that turns it on at a tailnet address entered by hand,
+	// for a computer that reaches the tailnet without Tailscale's app.
+	hand       string // the phone
+	handName   string
+	handOpen   bool
+	handAddr   string
+	handBusy   bool
+	handErr    string // what went wrong, in the person's words
+	handErrFor string // the address handErr is about
 }
 
 func (s *tailnetState) init() {
@@ -373,11 +387,17 @@ func (a *app) awayRow(c *mg.Context, d gateway.DeviceView) {
 			a.add.snapshot(a)
 		}
 	}
+	onDesc := locales.AwayOnDesc(name, aw.Addr)
+	if aw.Manual {
+		// Pinky cannot see the route, nor encrypt adb: say so for as
+		// long as it is on.
+		onDesc, note = locales.AwayOnByHandDesc(name, aw.Addr), locales.AwayByHandPrivacy()
+	}
 	switch {
 	case s.awayBusy[id]:
-		desc = locales.AwayBusy()
+		desc, note = locales.AwayBusy(), ""
 	case aw.On && (aw.Listening || d.Info.Via == driver.ViaTailscale):
-		desc = locales.AwayOnDesc(name, aw.Addr)
+		desc = onDesc
 		action = func() {
 			if button(c, locales.AwayTurnOff(), btnOpt{small: true}).Clicked() {
 				a.setAway(d, false)
@@ -391,11 +411,24 @@ func (a *app) awayRow(c *mg.Context, d gateway.DeviceView) {
 			}
 		}
 	case aw.On:
-		desc = locales.AwayOnDesc(name, aw.Addr)
+		desc = onDesc
 		action = func() {
 			if button(c, locales.AwayTurnOff(), btnOpt{small: true}).Clicked() {
 				a.setAway(d, false)
 			}
+		}
+	case aw.Missing == driver.AwayNoTailscaleHere && d.Status != gateway.DeviceOffline:
+		// Or this computer reaches the tailnet another way: the
+		// phone's address, entered by hand.
+		desc, note = locales.AwayNoTailscaleHere(), locales.AwayByHandOffer(name)
+		action = func() {
+			mg.Row(c).Gap(sp2).AlignItems(mg.Center).Children(func() {
+				setUp()
+				if button(c, locales.AwayByHandButton(), btnOpt{small: true}).Clicked() {
+					s.hand, s.handName, s.handOpen = id, name, true
+					s.handAddr, s.handErr, s.handErrFor = aw.Addr, "", ""
+				}
+			})
 		}
 	case aw.Missing == driver.AwayNoTailscaleHere:
 		desc, action = locales.AwayNoTailscaleHere(), setUp
@@ -502,6 +535,156 @@ func (a *app) awayDialog(c *mg.Context) {
 	})
 }
 
+// awayByHandDialog turns Use away from home on at a tailnet address the
+// person enters, for a computer that reaches the tailnet without
+// Tailscale's app (a proxy with a Tailscale outbound, say). It says
+// plainly what Pinky cannot vouch for: the route, and adb's own
+// connection, which is not encrypted.
+func (a *app) awayByHandDialog(c *mg.Context) {
+	s := &a.tn
+	if !s.handOpen {
+		return
+	}
+	d := a.device(s.hand)
+	if d == nil {
+		s.handOpen = false
+		return
+	}
+	p := pal(c)
+	name := s.handName
+	title := locales.AwayByHandTitle(name)
+	sheet(c.Key("away-hand-dialog"), &s.handOpen, func() {
+		mg.Column(c).Width(480).Gap(14).Label(title).Children(func() {
+			mg.Text(c, title).FontSize(fsTitle3).FontWeight(fwSemibold).Role(mg.RoleHeading)
+			mg.Text(c, locales.AwayByHandWhat(name)).FontSize(fsSmall).TextColor(p.ink2)
+			in := mg.TextInput(c.Key("away-hand-addr"), &s.handAddr).Placeholder("100.101.2.2").Label(locales.AwayByHandField()).AutoFocus()
+			typed := strings.TrimSpace(s.handAddr) != ""
+			problem := byHandProblem(s.handAddr)
+			switch {
+			case s.handErr != "" && s.handErrFor == s.handAddr:
+				mg.Text(c, s.handErr).FontSize(fsSmall).TextColor(p.red).Role(mg.RoleStatus)
+			case typed && problem != "":
+				mg.Text(c, problem).FontSize(fsSmall).TextColor(p.red).Role(mg.RoleStatus)
+			}
+			mg.Column(c).Gap(6).Padding(10, 12).Radius(8).Background(p.bg2).Border(1, p.line).Children(func() {
+				mg.Text(c, locales.AwayByHandPrivacy()).FontSize(fsSmall).FontWeight(fwMedium).TextColor(p.ink)
+				for _, note := range []string{locales.AwayByHandChecks(name), locales.AwayByHandExposure(), locales.AwayDialogUntil(), locales.AwayDialogDrop()} {
+					mg.Text(c, note).FontSize(fsSmall).TextColor(p.ink2)
+				}
+			})
+			mg.Row(c).Gap(8).Justify(mg.End).AlignItems(mg.Center).Children(func() {
+				if s.handBusy {
+					spinner(c)
+				}
+				if button(c, locales.AwayDialogCancel(), btnOpt{}).Clicked() {
+					s.handOpen = false
+				}
+				ok := typed && problem == "" && !s.handBusy
+				b := button(c, locales.AwayDialogConfirm(), btnOpt{kind: btnPrimary}).Disabled(!ok)
+				if (b.Clicked() || in.Submitted()) && ok {
+					a.setAwayAt(*d, s.handAddr)
+				}
+			})
+		})
+	})
+}
+
+// byHandProblem says what is wrong with a tailnet address as typed, ""
+// when nothing is: it must be an IP address in Tailscale's ranges (the
+// driver checks again, and more).
+func byHandProblem(addr string) string {
+	host := strings.TrimSpace(addr)
+	if h, port, err := net.SplitHostPort(host); err == nil && port == "5555" {
+		host = h
+	}
+	ip, err := netip.ParseAddr(strings.TrimSuffix(strings.TrimPrefix(host, "["), "]"))
+	if err != nil || ip.Zone() != "" {
+		return locales.AwayByHandNotAddr()
+	}
+	if !tailnet.Contains(ip) {
+		return locales.AwayByHandRange(ip.Unmap().String())
+	}
+	return ""
+}
+
+// byHandError says in plain words why turning Use away from home on at an
+// address entered by hand failed.
+func byHandError(err error, name, addr string) string {
+	switch {
+	case errors.Is(err, driver.ErrNotTailnetAddr):
+		return locales.AwayByHandRange(addr)
+	case errors.Is(err, driver.ErrAddrNotOnPhone):
+		return locales.AwayByHandNotOnPhone(name, addr)
+	case errors.Is(err, driver.ErrAddrUnreachable):
+		return locales.AwayByHandUnreachable(name, addr)
+	case errors.Is(err, driver.ErrNotThePhone):
+		return locales.AwayByHandNotThePhone(name, addr)
+	case errors.Is(err, driver.ErrNotListening):
+		return locales.AwayByHandNotListening(name, addr)
+	case errors.Is(err, driver.ErrOffline):
+		return locales.AwayNotConnected(name)
+	}
+	return locales.AwayFailed(name, err.Error())
+}
+
+// setAwayAt turns a phone's Use away from home on at a tailnet address
+// entered by hand.
+func (a *app) setAwayAt(d gateway.DeviceView, addr string) {
+	tn, ok := a.api.(tailnetter)
+	s := &a.tn
+	id, name := d.Info.ID, d.Info.Name
+	if !ok || s.awayBusy[id] {
+		return
+	}
+	s.init()
+	typed := addr
+	addr = strings.TrimSpace(addr)
+	s.awayBusy[id], s.awayErr[id], s.handBusy, s.handErr = true, "", true, ""
+	go func() {
+		ctx, cancel := context.WithTimeout(a.ctx, time.Minute)
+		defer cancel()
+		aw, err := tn.SetAwayAt(ctx, id, addr)
+		a.post(func() {
+			s.awayBusy[id], s.handBusy = false, false
+			s.awayAt[id] = time.Time{}
+			if err != nil {
+				msg := byHandError(err, name, addr)
+				if s.handOpen && s.hand == id {
+					s.handErr, s.handErrFor = msg, typed
+				} else {
+					s.awayErr[id] = msg
+				}
+				return
+			}
+			s.away[id] = aw
+			if s.hand == id {
+				s.handOpen = false
+			}
+			a.toasts = append(a.toasts, locales.AwayTurnedOn(name))
+		})
+	}()
+}
+
+// byHandAway returns the tailnet address a phone is set up at by hand, ""
+// when it is not.
+func (a *app) byHandAway(c *mg.Context, id string) string {
+	if aw, have := a.awayOf(c, id); have && aw.On && aw.Manual {
+		return aw.Addr
+	}
+	return ""
+}
+
+// anyByHand reports whether a phone is set up at a tailnet address entered
+// by hand, as far as Settings › Phones last read.
+func (a *app) anyByHand() bool {
+	for _, aw := range a.tn.away {
+		if aw.On && aw.Manual {
+			return true
+		}
+	}
+	return false
+}
+
 // anyAway reports whether a phone is connected through Tailscale, which
 // the driver uses only while the phone has no connection on this
 // computer's network: the phone is away.
@@ -528,7 +711,7 @@ func (a *app) setAwayAwake(on bool) {
 // computer awake for phones away: once Tailscale is on this computer.
 func (a *app) awayKeepAwakeShown(c *mg.Context) bool {
 	st, have := a.tailnetStatus(c)
-	return have && st.State != driver.TailnetNotInstalled
+	return have && st.State != driver.TailnetNotInstalled || a.anyByHand()
 }
 
 // awayKeepAwakeRow is Settings › Phones' Keep this computer awake for
@@ -600,6 +783,9 @@ func tailnetDiagnostics(ctx context.Context, tn tailnetter, phones []driver.Info
 		parts := []string{"off"}
 		if aw.On {
 			parts[0] = "on"
+		}
+		if aw.Manual {
+			parts = append(parts, "at a tailnet address entered by hand")
 		}
 		if aw.Listening {
 			parts = append(parts, "adb listens on the network")

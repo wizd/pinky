@@ -1,12 +1,14 @@
 package traffic
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -255,5 +257,92 @@ func TestLoadCARenews(t *testing.T) {
 	}
 	if bytes.Equal(ca.CertDER(), short.CertDER()) || !ca.Renewed || ca.NeedsRenewal(time.Now()) {
 		t.Fatalf("not renewed: renewed %v", ca.Renewed)
+	}
+}
+
+// Blocked connections to one host that follow each other closely are one
+// row with a count and the span they took; another host, another phone,
+// a gap past BlockedGap or a new task starts a new row.
+func TestStoreCoalescesBlockedRows(t *testing.T) {
+	s := NewStore(0, 0)
+	t0 := time.Date(2026, 11, 21, 14, 0, 0, 0, time.UTC)
+	blocked := func(dev, host string, at time.Time) string {
+		return s.Add(Request{Device: dev, Start: at, End: at, Method: http.MethodConnect, URL: "https://" + host, Host: host,
+			Blocked: true, Note: BlockedNote}, Bodies{})
+	}
+	first := blocked("pixel", "collect.alipay.com", t0)
+	for i := 1; i < 70; i++ {
+		if id := blocked("pixel", "collect.alipay.com", t0.Add(time.Duration(i)*3*time.Second)); id != first {
+			t.Fatalf("connection %d got its own row %s", i, id)
+		}
+	}
+	// A decrypted request in between does not split the run.
+	s.Add(Request{Device: "pixel", Start: t0.Add(10 * time.Second), Method: http.MethodGet, URL: "https://example.com/", Host: "example.com", Decrypted: true}, Bodies{})
+	other := blocked("pixel", "www.alipay.com", t0.Add(time.Second))
+	ipad := blocked("ipad", "collect.alipay.com", t0.Add(time.Second))
+	// One that comes in a little out of order joins too and moves Start.
+	if id := blocked("pixel", "collect.alipay.com", t0.Add(-time.Second)); id != first {
+		t.Fatalf("an earlier connection got its own row %s", id)
+	}
+	if other == first || ipad == first {
+		t.Fatal("another host or phone joined the row")
+	}
+	last := t0.Add(69 * 3 * time.Second)
+	rs := s.Requests(Query{Device: "pixel"})
+	if len(rs) != 3 {
+		t.Fatalf("%d rows: %+v", len(rs), rs)
+	}
+	r := rs[0]
+	if r.ID != first || r.Connections() != 71 || !r.Start.Equal(t0.Add(-time.Second)) || !r.Latest().Equal(last) || !r.End.Equal(last) {
+		t.Fatalf("row %+v", r)
+	}
+	if r.URL != "https://collect.alipay.com" || len(r.Headers) != 0 || r.Sent != 0 || r.Received != 0 || r.Note != BlockedNote {
+		t.Fatalf("the row holds more than the host: %+v", r)
+	}
+	// It matches a window that holds only its later connections.
+	if got := s.Requests(Query{Device: "pixel", From: last.Add(-time.Second), To: last.Add(time.Second)}); len(got) != 1 || got[0].ID != first {
+		t.Fatalf("window after its start: %+v", got)
+	}
+	if got := s.Requests(Query{Device: "pixel", From: last.Add(time.Second)}); len(got) != 0 {
+		t.Fatalf("window after its end: %+v", got)
+	}
+	// After a quiet gap past BlockedGap, a new row.
+	if id := blocked("pixel", "collect.alipay.com", last.Add(BlockedGap+time.Second)); id == first {
+		t.Fatal("a connection after a long gap joined the old row")
+	}
+	// A new task (the phone's requests dropped) starts afresh.
+	gen := s.Gen("pixel")
+	s.Drop("pixel")
+	if _, ok := s.AddSince(gen, Request{Device: "pixel", Start: last, Blocked: true, URL: "https://collect.alipay.com"}, Bodies{}); ok {
+		t.Fatal("kept a blocked connection from before the drop")
+	}
+	if id := blocked("pixel", "collect.alipay.com", last); id == first {
+		t.Fatal("a new task's connection joined the old task's row")
+	}
+}
+
+// A blocked tunnel shows as soon as it opens, before it closes: a page
+// can keep one open for minutes.
+func TestProxyKeepsBlockedTunnelWhenItOpens(t *testing.T) {
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer upstream.Close()
+	tp := newTestProxy(t, upstream)
+	c, err := net.Dial("tcp", tp.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if _, err := io.WriteString(c, "CONNECT www.paypal.com:443 HTTP/1.1\r\nHost: www.paypal.com:443\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(c), nil)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("CONNECT: %v %v", resp, err)
+	}
+	// The tunnel stays open: the phone has sent nothing yet.
+	waitFor(t, "the open tunnel", func() bool { return len(tp.store.Requests(Query{Device: "pixel"})) == 1 })
+	r := tp.store.Requests(Query{Device: "pixel"})[0]
+	if !r.Blocked || r.Host != "www.paypal.com" || r.End.IsZero() {
+		t.Fatalf("open tunnel %+v", r)
 	}
 }

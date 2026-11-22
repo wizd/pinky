@@ -138,6 +138,10 @@ const (
 	// lock screen, which reads the PIN pad several times: the service
 	// comes on for it and goes off a few seconds after.
 	forUnlock
+	// forRestless: an agent's read after uiautomator found the screen never
+	// still. The app reads the tree without waiting for that, so an
+	// installed app is tried again at once, as for forBackground.
+	forRestless
 )
 
 // companionClient returns the companion client with its service on, or nil
@@ -162,10 +166,11 @@ func (d *Device) companionClientFor(ctx context.Context, use companionUse) *comp
 		// The subscription ended: the service stopped or was turned off.
 		d.companionOffLocked("its event stream ended")
 	}
-	if use == forAgent && k.gated.Load() && !k.working.Load() {
+	if (use == forAgent || use == forRestless) && k.gated.Load() && !k.working.Load() {
 		return nil // no agent works on the phone: the service stays off
 	}
-	if time.Now().Before(k.retryAt) && !(use == forBackground && k.checked && k.have) {
+	again := (use == forBackground || use == forRestless) && k.checked && k.have
+	if time.Now().Before(k.retryAt) && !again {
 		return nil
 	}
 	if err := d.companionOnLocked(ctx); err != nil {

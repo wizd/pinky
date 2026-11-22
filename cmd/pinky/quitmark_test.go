@@ -81,6 +81,27 @@ func TestAfterQuit(t *testing.T) {
 	}
 }
 
+// A signal that came while the app was starting, before MyGo listened for
+// signals, quits it once the window is up, as a signal and not the person.
+func TestEarlySignalQuits(t *testing.T) {
+	var q quitIntent
+	quits := 0
+	signals := make(chan os.Signal, 1)
+	q.earlySignal(signals, func() { quits++ })
+	if quits != 0 {
+		t.Fatalf("quit %d times without a signal", quits)
+	}
+	signals <- os.Interrupt
+	q.earlySignal(signals, func() { quits++ })
+	q.before(false) // the quit it asked for starts
+	if quits != 1 {
+		t.Fatalf("quit %d times after a signal, want 1", quits)
+	}
+	if q.byPerson() {
+		t.Error("a signal's quit taken for the person's")
+	}
+}
+
 // Outside a quit Apple event (Cmd-Q, a Quit menu item, `pinky quit`), the
 // system does not end the session.
 func TestSessionEndingOutsideAQuitEvent(t *testing.T) {

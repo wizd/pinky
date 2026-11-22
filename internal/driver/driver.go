@@ -1205,7 +1205,38 @@ type Away struct {
 	Missing string
 	// Detail says the same in a sentence.
 	Detail string
+	// Manual reports whether the person entered the phone's tailnet
+	// address by hand (TailnetByHand): the provider then reaches it
+	// without reading Tailscale on this computer.
+	Manual bool
 }
+
+// TailnetByHand is a Tailnet provider that also reaches a phone at a
+// tailnet address the person enters, for a computer that reaches the
+// tailnet some other way than Tailscale's own app (a proxy with a
+// Tailscale outbound, say), so that the provider cannot read Tailscale's
+// status here. The provider cannot see how this computer routes the
+// traffic either: the connection is only as private as that route.
+type TailnetByHand interface {
+	// SetAwayAt sets a phone up as SetAway does, at addr, the phone's
+	// tailnet address. The phone must be connected by cable or Wi-Fi.
+	// The address must be in Tailscale's ranges (else ErrNotTailnetAddr)
+	// and the phone's own on its VPN (else ErrAddrNotOnPhone): on its VPN
+	// interface, or on none of its interfaces while a VPN that runs
+	// Tailscale in userspace is up; this
+	// computer must reach the phone there (else ErrAddrUnreachable, or
+	// ErrNotListening when something answers but not the phone's adb);
+	// and what answers there must be this phone (else ErrNotThePhone).
+	SetAwayAt(ctx context.Context, id, addr string) (Away, error)
+}
+
+// Errors of TailnetByHand.SetAwayAt.
+var (
+	ErrNotTailnetAddr  = errors.New("not a tailnet address: it must be in 100.64.0.0/10 or fd7a:115c:a1e0::/48")
+	ErrAddrNotOnPhone  = errors.New("the address is not the phone's own on its VPN")
+	ErrAddrUnreachable = errors.New("this computer does not reach the phone at that address")
+	ErrNotThePhone     = errors.New("the device that answers at that address is not this phone")
+)
 
 // What keeps a phone from being set up to be reached away from home, in
 // Away.Missing.

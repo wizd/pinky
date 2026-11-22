@@ -51,6 +51,7 @@ func (a *app) view(c *mg.Context) {
 	a.shotDialog(c)
 	a.removeDialog(c)
 	a.awayDialog(c)
+	a.awayByHandDialog(c)
 	a.phoneWiFiDialog(c)
 	a.schedDialog(c)
 	a.sweepMirrors()

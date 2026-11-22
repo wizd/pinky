@@ -3,7 +3,8 @@ package screen
 // Diff compares two screens of the same device, after refs were assigned to
 // both. It returns the lines to send after an action, or full=true when the
 // whole screen should be sent instead: a different app, size, orientation or
-// lock state, or a diff longer than the screen itself.
+// lock state, a partial read on either side (what one lacks would read as
+// removed or added), or a diff longer than the screen itself.
 //
 // Lines start with "+ " (added), "- " (removed) or "~ " (changed). Events
 // on next are always included, first, since they are new by definition.
@@ -12,7 +13,8 @@ func Diff(prev, next *Screen) (lines []string, full bool) {
 		return nil, true
 	}
 	if prev.App.ID != next.App.ID || prev.Width != next.Width || prev.Height != next.Height ||
-		prev.Orientation != next.Orientation || prev.Locked != next.Locked {
+		prev.Orientation != next.Orientation || prev.Locked != next.Locked ||
+		prev.Partial || next.Partial {
 		return nil, true
 	}
 	for _, ev := range next.Events {

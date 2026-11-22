@@ -563,7 +563,7 @@ func (p *Proxy) forward(w io.Writer, req *http.Request, cx conn, target string, 
 			if decrypted {
 				scheme = "https://"
 			}
-			defer p.keep(true, gen, blockedRequest(cx, start, scheme+host, host), Bodies{})
+			p.keep(true, gen, blockedRequest(cx, start, scheme+host, host), Bodies{})
 		}
 		keep = false
 	}
@@ -635,9 +635,13 @@ func (p *Proxy) blocked(device, host string) bool {
 // BlockedNote is the note of a blocked host's request.
 const BlockedNote = "blocked: Pinky never decrypts or records this host"
 
-// blockedRequest is all Pinky keeps of a request to a blocked host.
+// blockedRequest is all Pinky keeps of a request to a blocked host. It is
+// kept as the connection opens, not as it ends, so that it shows at once
+// and in order: a blocked tunnel can stay open for minutes. Its End is
+// that moment too; the store keeps repeated ones as one row
+// (Request.Count).
 func blockedRequest(cx conn, start time.Time, url, host string) Request {
-	return Request{Device: cx.device, Client: cx.client, Start: start, End: time.Now(), Method: http.MethodConnect,
+	return Request{Device: cx.device, Client: cx.client, Start: start, End: start, Method: http.MethodConnect,
 		URL: url, Host: host, Blocked: true, Note: BlockedNote}
 }
 
@@ -894,8 +898,8 @@ func (p *Proxy) connect(c *idleConn, br *bufio.Reader, req *http.Request, cx con
 	gen := p.gen(cx.device)
 	keep := p.Record == nil || p.Record(cx.device)
 	if name := p.blockedName(cx.device, host); name != "" {
-		p.tunnel(c, br, target, name, cx, start, false, "", gen)
 		p.keep(keep, gen, blockedRequest(cx, start, "https://"+name, name), Bodies{})
+		p.tunnel(c, br, target, name, cx, start, false, "", gen)
 		return
 	}
 	if p.isPinned(host) {
@@ -952,8 +956,8 @@ func (p *Proxy) connect(c *idleConn, br *bufio.Reader, req *http.Request, cx con
 		if hc.over {
 			return // too much to send on as it came
 		}
-		p.tunnel(c, io.MultiReader(bytes.NewReader(hc.kept), br), target, sni, cx, start, false, "", gen)
 		p.keep(keep, gen, blockedRequest(cx, start, "https://"+sni, sni), Bodies{})
+		p.tunnel(c, io.MultiReader(bytes.NewReader(hc.kept), br), target, sni, cx, start, false, "", gen)
 		return
 	case "mismatch":
 		p.keep(keep, gen, Request{Device: cx.device, Client: cx.client, Start: start, End: time.Now(), Method: http.MethodConnect,

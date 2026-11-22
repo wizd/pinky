@@ -60,6 +60,9 @@ type netPhone struct {
 	// used away from home (SetAway); "" when it is not.
 	Node    string `json:"node,omitempty"`
 	Tailnet string `json:"tailnet,omitempty"`
+	// Manual reports that the person entered the Tailnet address by hand
+	// (SetAwayAt): Pinky reaches it without reading Tailscale here.
+	Manual bool `json:"manual,omitempty"`
 }
 
 func (n netPhone) port() int {
@@ -471,9 +474,17 @@ func (p *Provider) connectWhenUp(ctx context.Context, serial string) error {
 // a while: the person may be away from it.
 func (p *Provider) waitConnected(ctx context.Context, serial string, trust bool) (driver.Info, error) {
 	var asking time.Time
+	gone := func() (driver.Info, error) {
+		return driver.Info{}, fmt.Errorf("android: adb connected to %s, but the phone did not come online: %w", serial, driver.ErrOffline)
+	}
 	for {
 		entries, err := p.cfg.Client.Devices(ctx)
 		if err != nil {
+			if ctx.Err() != nil {
+				// The time ran out during the listing rather than
+				// between two: the phone did not come online all the same.
+				return gone()
+			}
 			return driver.Info{}, wrapErr(err)
 		}
 		for _, e := range entries {
@@ -497,7 +508,7 @@ func (p *Provider) waitConnected(ctx context.Context, serial string, trust bool)
 			}
 		}
 		if err := sleepCtx(ctx, pairPoll); err != nil {
-			return driver.Info{}, fmt.Errorf("android: adb connected to %s, but the phone did not come online: %w", serial, driver.ErrOffline)
+			return gone()
 		}
 	}
 }
@@ -703,6 +714,14 @@ func (t *netLink) reconnect(ctx context.Context, phones []netPhone, entries []ad
 		if n.Tailnet == "" || serialInUse(entries, n.tailSerial()) {
 			continue
 		}
+		if n.Manual {
+			// Entered by hand: Tailscale here may be missing, so a probe
+			// says whether the phone is there.
+			if !t.byHand(ctx, n) {
+				missing = true
+			}
+			continue
+		}
 		if st == nil {
 			s, err := p.tailnetStatus(ctx)
 			if err != nil {
@@ -903,6 +922,9 @@ func (t *netLink) refused(n netPhone) bool {
 func (t *netLink) why(n netPhone) (setup, detail string) {
 	if t.refused(n) {
 		return driver.SetupNetworkOff, "Its adb stopped listening on the network, as it does when the phone restarts: plug it in once and turn its Wi-Fi connection on again"
+	}
+	if n.LAN == "" && n.Manual {
+		return driver.SetupNetworkAway, "Not reachable at the tailnet address entered by hand now; Pinky tries again by itself"
 	}
 	if n.LAN == "" {
 		return driver.SetupNetworkAway, "Not reachable through Tailscale now; Pinky connects again by itself once Tailscale says the phone is online"

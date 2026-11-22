@@ -2,6 +2,88 @@
 
 What changed for people in each release of Pinky, newest first. A version is the release's date in Asia/Shanghai and that day's count: 2026.1107.2 is the second release of 7 November 2026. Notes wait under "Unreleased" until the next release takes them; see [docs/RELEASING.md](docs/RELEASING.md).
 
+## 2026.1122.1 (2026-11-22)
+
+- Opening a background display on an Android phone reached over a slow network, such as Tailscale, no longer times out: Pinky now copies its screen helper to the phone once instead of every time. Thanks @garryforreg for reporting it.
+
+## 2026.1121.10 (2026-11-21)
+
+- Typing a tailnet address for an Android phone now works when the phone reaches the tailnet through a VPN app that runs Tailscale itself, such as sing-box, instead of saying the address isn't on the phone's VPN. Thanks @crown3 for reporting it.
+
+## 2026.1121.9 (2026-11-21)
+
+- Routing an Android phone over the cable now works when another app on the computer uses Pinky's proxy port, and Settings › Phones names the port when one is taken.
+- A page that keeps reconnecting to a banking or payment site now shows as one line in the phone's network traffic, with how many times it connected, and it shows up right away.
+
+## 2026.1121.8 (2026-11-21)
+
+- The Android steps for reading network traffic now include Encryption & credentials on the way to installing Pinky's certificate, and the steps to remove it now go to Trusted credentials › User: removing it from User credentials alone can leave the phone still trusting it.
+
+## 2026.1121.7 (2026-11-21)
+
+- When an Android phone connected by address never comes online, Pinky now says so every time, instead of sometimes showing a bare time-out error on a busy computer.
+
+## 2026.1121.6 (2026-11-21)
+
+- An agent that asks Pinky to run a task just as Pinky starts is no longer told that tasks run only while Pinky's window is open. Thanks @pseudoyu.
+
+## 2026.1121.5 (2026-11-21)
+
+- Typing a tailnet address by hand for an Android phone now says this computer can't reach the phone there when something answers at that address but the phone doesn't, instead of asking you to connect the phone. Thanks @pseudoyu.
+
+## 2026.1121.4 (2026-11-21)
+
+- Pinky now quits when it is told to stop (SIGTERM or Ctrl-C) just as it starts, instead of staying open until it is killed. Thanks @pseudoyu.
+
+## 2026.1121.3 (2026-11-21)
+
+- When another app comes to the front on the phone without the agent opening it (on an iPhone, for example, because you opened it yourself), the agent is now told, and its next tap or typing isn't sent into that app.
+- Use away from home on Android can now take a tailnet address you enter, for a computer that reaches your tailnet without the Tailscale app (such as a proxy with a Tailscale outbound): click Enter address… under Use away from home. Thanks @crown3 for the idea.
+
+## 2026.1121.2 (2026-11-21)
+
+- `pinky -help` now prints the help and exits successfully, like `pinky -h` and `pinky --help`. Thanks @6moran.
+
+## 2026.1121.1 (2026-11-21)
+
+- Unlocking an iPhone or iPad with Touch ID from the computer now taps "Use Passcode" on its Touch ID prompt, so the passcode can be typed. Thanks @1zyao for the report.
+
+## 2026.1120.1 (2026-11-20)
+
+- The web mirror in Safari no longer stays on "Connecting" while the phone's screen doesn't change. Thanks @pseudoyu.
+
+## 2026.1119.7 (2026-11-19)
+
+- On an iPhone, reading a screen while the phone is slow to answer (a long list in a mini-program or web page) no longer comes back with only a few elements: Pinky uses the screen the phone just sent or reads it again, and says "partial" when some elements may still be missing.
+- On an iPhone, text in a web page that has just scrolled into view is no longer left out of the screen read.
+- On an iPhone, a web page no longer jumps back to its top when Pinky reads it while the phone's accessibility service is not answering.
+- Unlocking an iPhone from the computer now finds the passcode keypad even when the phone's accessibility service is not answering.
+
+## 2026.1119.6 (2026-11-19)
+
+- A scheduled task set for a time the clocks skip when daylight saving time starts now runs just after they move forward, instead of an hour early, and no longer makes another time that day get skipped.
+
+## 2026.1119.5 (2026-11-19)
+
+- A phone you remove while it is plugged in, such as an iPhone charging from the computer, now stays off the list until you unplug it and plug it in again, instead of coming straight back.
+
+## 2026.1119.4 (2026-11-19)
+
+- An action you had allowed that was under way when Pinky crashed or was force-quit no longer shows "Waiting for you" in Activity for ever: the next start marks it as one that may have happened.
+
+## 2026.1119.3 (2026-11-19)
+
+- On Android, Pinky can now read a page that never stops changing, such as a rewards page with live counters: it says the screen is still changing, reads the text from a screenshot, and returns screenshots there, instead of failing.
+- On such pages, Back, Home and Recents work again, and Home works even when the screen cannot be read at all.
+
+## 2026.1119.2 (2026-11-19)
+
+- An approval that was waiting for you when Pinky crashed or was force-quit no longer shows "Waiting for you" in Activity for ever: the next start marks it withdrawn.
+
+## 2026.1119.1 (2026-11-19)
+
+- A task that was running when Pinky crashed or was force-quit no longer shows in Activity as running for ever: the next start ends it as failed at its last step, and Export all includes it.
+
 ## 2026.1118.5 (2026-11-18)
 
 - Add phone now names the iPad on the iPhone card, "iPhone / iPad", so it is clear where to add an iPad.

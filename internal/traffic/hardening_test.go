@@ -109,7 +109,11 @@ func TestProxyBlocksByServerName(t *testing.T) {
 			t.Fatalf("%s: body %q", target, body)
 		}
 	}
-	waitFor(t, "the requests", func() bool { return len(tp.store.Requests(Query{Device: "pixel"})) == 2 })
+	// Both connections are one row to the blocked host.
+	waitFor(t, "the requests", func() bool {
+		rs := tp.store.Requests(Query{Device: "pixel"})
+		return len(rs) == 1 && rs[0].Connections() == 2
+	})
 	for _, r := range tp.store.Requests(Query{Device: "pixel"}) {
 		if !r.Blocked || r.Decrypted || r.Host != "example.com" || r.URL != "https://example.com" || len(r.Headers) != 0 {
 			t.Fatalf("request %+v", r)
@@ -159,11 +163,15 @@ func TestProxyBlocksByHostInside(t *testing.T) {
 	if b, _ := tp.store.Bodies("pixel", r.ID, BodyMax); len(b.Response) != 0 {
 		t.Fatalf("kept a body: %q", b.Response)
 	}
-	// The next connection to the address is not decrypted.
+	// The next connection to the address is not decrypted; it is kept
+	// as the same blocked host, on the same row.
 	_, _ = tp.phone(tp.ca.Pool(), "").Get("https://192.0.2.10/")
-	waitFor(t, "the tunnel", func() bool { return len(tp.store.Requests(Query{Device: "pixel"})) == 2 })
-	r = tp.store.Requests(Query{Device: "pixel"})[1]
-	if !r.Blocked || r.Host != "example.com" || r.Method != http.MethodConnect {
+	waitFor(t, "the tunnel", func() bool {
+		rs := tp.store.Requests(Query{Device: "pixel"})
+		return len(rs) == 1 && rs[0].Connections() == 2
+	})
+	r = tp.store.Requests(Query{Device: "pixel"})[0]
+	if !r.Blocked || r.Host != "example.com" || r.Method != http.MethodConnect || len(r.Headers) != 0 {
 		t.Fatalf("next connection %+v", r)
 	}
 }

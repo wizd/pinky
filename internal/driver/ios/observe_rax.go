@@ -288,11 +288,18 @@ func (d *Device) observeRAX(ctx context.Context, opt driver.ObserveOptions, st *
 		Width: si.Width, Height: si.Height,
 		Orientation: orientationOf(si.Width, si.Height),
 		Locked:      locked,
+		Partial:     !st.Complete,
 		CapturedAt:  time.Now(),
 	}
 	s.App = d.screenApp(ctx, els, locked, func(format string, args ...any) {
 		st.Trace = append(st.Trace, fmt.Sprintf(format, args...))
 	})
+	if web := hasWeb(els); web || st.Complete {
+		// A read that ended early (the app's own two or three elements
+		// before the phone stopped answering) does not tell that a page
+		// is gone.
+		d.noteReadWeb(s.App, web)
+	}
 	if gate != nil {
 		use := gate.late(s)
 		pictured.Wait()
@@ -318,6 +325,10 @@ func (d *Device) observeRAX(ctx context.Context, opt driver.ObserveOptions, st *
 		} else if ok {
 			d.overlayEvents(ctx, nil, scale, si.Width, si.Height) // forget the ones gone
 		}
+	}
+	if shown, n := shownInPicture(els, scale, si.Width, si.Height, lines); n > 0 {
+		els = shown
+		st.Trace = append(st.Trace, fmt.Sprintf("%d elements the phone calls not visible are in the picture", n))
 	}
 	s.Elements, s.Keyboard, s.KeyboardFrame = raxScreenElements(els, scale, si.Width, si.Height, s.App.ID, covered...)
 	// Notifications over the app come first, as they are on top.
@@ -427,7 +438,27 @@ const (
 	// before it lists any element; a walk that finds none waits this long
 	// for the phone's push, then walks again.
 	raxEmptyWait = 1500 * time.Millisecond
+	// raxPushLate is how long after it arrived a push still answers for a
+	// walk that ended early (earlyWalk), whatever raxPushTrust says: a
+	// tree a few seconds old that has every element beats the start of
+	// one.
+	raxPushLate = 10 * time.Second
+	// raxRewalkWait is how long a walk that ended early, with no push to
+	// answer for it, waits before one more walk. Requests are slow while
+	// the phone builds a push, and quick again once it is done: on an
+	// iPhone 14 Pro a walk of about 100 elements took 0.9 s on a still
+	// screen and 3 to 4 s, the whole budget, while a push came.
+	raxRewalkWait = 1500 * time.Millisecond
 )
+
+// latePush reports whether the pushed tree t may answer for a walk of app
+// that ended early at now: it is of that app, its first tree came at least
+// raxPushAfter after the last input (so it does not show the screen before
+// that input), and it arrived within raxPushLate.
+func latePush(t *raxTree, app *axpObject, input, now time.Time) bool {
+	return t != nil && app != nil && len(t.els) > 0 && t.appPID == app.PID &&
+		t.start.After(input.Add(raxPushAfter)) && now.Sub(t.at) < raxPushLate
+}
 
 // raxTree returns the elements on screen: the tree the phone pushed after
 // Pinky's last input, while that is recent, else a walk. A walk right after
@@ -439,6 +470,16 @@ const (
 // the next input, and then describes the screen before it. onApp, when
 // set, learns the frontmost app as soon as the walk finds it, before the
 // tree.
+//
+// A walk that ends early (its budget ran out, or a request got no answer)
+// has only the first elements of the screen. That happens while the phone
+// builds a push: on a long list in a web view, an iPhone 14 Pro answered
+// each request in about 30 ms then, against 9 ms otherwise, and far slower
+// with the display stream and a recording running (2026-11-18: reads of 0
+// to 10 elements out of about 100 for half an hour). Then the latest push
+// answers when it may (latePush), which by then the trust rule above has
+// often given up on, since the slow first answer took the read past
+// raxPushTrust; else the walk is made once more after raxRewalkWait.
 func (d *Device) raxTree(ctx context.Context, rax *raxSession, trace *[]string, onApp func(*axpObject)) ([]raxElement, bool, bool, error) {
 	input := d.lastInputAt()
 	trusted := time.Since(input) < raxPushTrust
@@ -455,10 +496,58 @@ func (d *Device) raxTree(ctx context.Context, rax *raxSession, trace *[]string, 
 		}
 		apps <- app
 	})
+	// earlyWalk answers for a walk that has ended: as it is when it went
+	// through the whole screen, else from the latest push or one more walk.
+	earlyWalk := func(r walkResult, app *axpObject) ([]raxElement, bool, bool, error) {
+		if r.complete && r.err == nil {
+			return r.els, true, false, nil
+		}
+		if r.err == nil && len(r.els) >= d.walkLimits().MaxElements {
+			// Not early: the screen has more elements than a read takes.
+			return r.els, false, false, nil
+		}
+		usePush := func() []raxElement {
+			if t, _ := rax.pushed(); latePush(t, app, input, time.Now()) && len(t.els) > len(r.els) {
+				note("the walk ended early with %d elements; using the push of %d", len(r.els), len(t.els))
+				els, _ := rax.fill(t.els)
+				return els
+			}
+			return nil
+		}
+		if els := usePush(); els != nil {
+			return els, true, true, nil
+		}
+		if r.err != nil || !rax.alive() {
+			return r.els, false, false, r.err
+		}
+		note("the walk ended early with %d elements; walking again in %v", len(r.els), raxRewalkWait)
+		if err := sleepCtx(ctx, raxRewalkWait); err != nil {
+			return r.els, false, false, nil
+		}
+		if els := usePush(); els != nil {
+			return els, true, true, nil
+		}
+		select {
+		case r2 := <-walkDetached(ctx, rax, d.walkLimits(), &stop, nil):
+			note("second walk: %d elements, complete %v, err %v", len(r2.els), r2.complete, r2.err)
+			if r2.err == nil && (r2.complete || len(r2.els) > len(r.els)) {
+				return r2.els, r2.complete, false, nil
+			}
+		case <-ctx.Done():
+			stop.Store(true)
+		}
+		return r.els, false, false, nil
+	}
 	if !trusted {
 		select {
 		case r := <-walked:
-			return r.els, r.complete, false, r.err
+			var app *axpObject
+			select {
+			case app = <-apps:
+			default:
+			}
+			note("walk: %d elements, complete %v, err %v", len(r.els), r.complete, r.err)
+			return earlyWalk(r, app)
 		case <-ctx.Done():
 			stop.Store(true)
 			return nil, false, false, ctx.Err()
@@ -498,9 +587,15 @@ func (d *Device) raxTree(ctx context.Context, rax *raxSession, trace *[]string, 
 	for {
 		select {
 		case r := <-walked:
-			note("walk: %d elements, err %v", len(r.els), r.err)
+			note("walk: %d elements, complete %v, err %v", len(r.els), r.complete, r.err)
 			if r.err != nil || len(r.els) > 1 || rewalked {
-				return r.els, r.complete, false, r.err
+				if app == nil {
+					select {
+					case app = <-apps:
+					default:
+					}
+				}
+				return earlyWalk(r, app)
 			}
 			empty = time.After(raxEmptyWait)
 			walked = nil

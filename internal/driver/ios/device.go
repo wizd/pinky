@@ -80,6 +80,11 @@ type Device struct {
 
 	lastInput atomic.Int64 // unix nanos of the last input or launch Pinky sent
 
+	// The app of the last read remoteAXService answered, and whether it
+	// showed web content (observe.go, noteReadWeb). Under svcMu.
+	readApp screen.App
+	readWeb bool
+
 	lastFront   screen.App // the home screen app the last read found in front (appid.go)
 	lastFrontAt time.Time
 	closed      bool
@@ -97,6 +102,7 @@ type Device struct {
 	startFn func(ctx context.Context, l *link, id int) (*media, error)
 
 	raxDialMu   sync.Mutex // one remoteAXService dial at a time (raxReady)
+	padReadMu   sync.Mutex // one read of a screenshot for the passcode pad at a time (padshot.go)
 	svcMu       sync.Mutex
 	info2       *cdService // deviceinfo
 	shot        *cdService // screencapture

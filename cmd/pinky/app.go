@@ -135,17 +135,7 @@ func runApp(args []string) error {
 	defer tel.Close()
 	// `pinky quit` quits the app as its menu would.
 	rg.srv.Quit = func() { mygo.App.Quit() }
-	go func() {
-		if err := rg.Serve(ctx); err != nil && ctx.Err() == nil {
-			c.Log.Error("agent socket stopped", "err", err)
-		}
-	}()
-	// Cloud tasks of a paired VCorp account reach the phones (vcorp.go).
-	rg.StartVcorp(ctx)
 
-	// Agents' copies of Pinky's skill follow this version.
-	go refreshSkills(c.Log)
-	gatewaySettings(&settings, rg)
 	// Ask Pinky: Pinky's own agent, a client of the same MCP server as
 	// any agent. Its API keys stay in the keychain until a task starts;
 	// the notes the person keeps for it are this computer's own.
@@ -185,6 +175,19 @@ func runApp(args []string) error {
 		return s.PilotConfig(), s.AskPinky
 	}))
 	defer rg.MCP.SetTasks(nil)
+	// Agents come in only now: an agent that comes as Pinky starts would
+	// be told before SetTasks that tasks run only while the window is open.
+	go func() {
+		if err := rg.Serve(ctx); err != nil && ctx.Err() == nil {
+			c.Log.Error("agent socket stopped", "err", err)
+		}
+	}()
+	// Cloud tasks of a paired VCorp account reach the phones (vcorp.go).
+	rg.StartVcorp(ctx)
+
+	// Agents' copies of Pinky's skill follow this version.
+	go refreshSkills(c.Log)
+	gatewaySettings(&settings, rg)
 	// Ask Pinky's scheduled tasks; they run while the app runs.
 	schedules, err := schedule.Open(filepath.Join(dirs.Data, "schedules.json"))
 	if err != nil {
@@ -247,6 +250,7 @@ func runApp(args []string) error {
 			if err := swapped.Confirm(); err != nil {
 				c.Log.Warn("update: confirm", "err", err)
 			}
+			quit.earlySignal(signals, mygo.App.Quit)
 		},
 	})
 	if err != nil && *background && !ready {

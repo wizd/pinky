@@ -206,7 +206,7 @@ func TestRemovePhoneInTheApp(t *testing.T) {
 	app.pressLabel(t, win, "Remove iPhone 17 (fake)")
 	app.waitText(t, win, "Remove iPhone 17 (fake)?")
 	for _, want := range []string{"It leaves Pinky's list", "Its history stays in Activity.",
-		"It's connected with a cable, so it shows up again right away", "The phone keeps trusting this computer"} {
+		"It's connected with a cable. It stays off the list while it stays plugged in", "The phone keeps trusting this computer"} {
 		if !app.hasText(t, win, want) {
 			t.Errorf("the dialog lacks %q", want)
 		}

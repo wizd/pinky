@@ -189,6 +189,7 @@ let ws = null;
 let decoder = null;
 let config = null;      // the VideoDecoder configuration in use
 let needKey = true;
+let missed = false;     // a picture came while there was no decoder for it
 let turn = 0;
 let retry = null;
 let stopped = false;
@@ -343,6 +344,9 @@ function b64(s) {
 }
 
 async function configure(m) {
+  // The pictures for this configuration may come before the browser
+  // answers below; the old decoder cannot take them.
+  closeDecoder();
   const cfg = {
     codec: m.codec,
     description: b64(m.description),
@@ -369,7 +373,10 @@ function newDecoder() {
   if (!config) return;
   decoder = new VideoDecoder({ output: draw, error: onDecodeError });
   decoder.configure(config);
-  needKey = true;
+  // The pictures that came while the browser checked the configuration
+  // are gone, the key frame among them: ask for a new one.
+  if (missed) askKeyFrame();
+  else needKey = true;
 }
 
 function closeDecoder() {
@@ -381,6 +388,7 @@ function closeDecoder() {
 
 function askKeyFrame() {
   needKey = true;
+  missed = false;
   if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "keyframe" }));
 }
 
@@ -393,7 +401,10 @@ function onDecodeError() {
 // clockwise that put it upright), its time in microseconds (8 bytes, big
 // endian), then its NAL units, each after a four-byte length.
 function onPicture(buf) {
-  if (!decoder || decoder.state !== "configured") return;
+  if (!decoder || decoder.state !== "configured") {
+    missed = true;
+    return;
+  }
   const v = new DataView(buf);
   const flags = v.getUint8(0);
   const key = (flags & 1) === 1;

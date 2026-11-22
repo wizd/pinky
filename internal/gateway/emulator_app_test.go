@@ -148,7 +148,7 @@ func TestEmulatorApp(t *testing.T) {
 	n := waitAppNeed(t, g)
 	t.Logf("card: %s | %s", n.Title, n.Detail)
 	if n.Rule != policy.RuleInstall || !strings.HasPrefix(n.Title, "Install “Pinky Emulator Test” 1.0 (1) on ") ||
-		!strings.Contains(n.Detail, "app.pinky.testapp · signed by Pinky Test (") || n.AlwaysAllow || !n.AllowTask {
+		!strings.Contains(n.Detail, "app.pinky.testapp · signed by Pinky Test (") || !n.AlwaysAllow || !n.AllowTask {
 		t.Fatalf("card %+v", n)
 	}
 	if err := g.Decide(n.ID, AllowTask, ""); err != nil {

@@ -3,11 +3,14 @@ package fakeapi
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/netip"
 	"strings"
 	"time"
 
 	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/gateway"
+	"github.com/DIYgod/pinky/internal/tailnet"
 )
 
 // Tailscale (driver.Tailnet): this computer's Tailscale runs, signed in to
@@ -121,10 +124,11 @@ func (a *API) Away(ctx context.Context, deviceID string) (driver.Away, error) {
 	if aw, ok := tn.away[deviceID]; ok {
 		return aw, nil
 	}
-	aw := driver.Away{Port: 5555, Addr: "100.101.3.3"}
+	aw := driver.Away{Port: 5555, Addr: fakePhoneTailAddr}
 	switch {
 	case tn.st.State != driver.TailnetRunning:
-		aw.Addr, aw.Missing = "", driver.AwayNoTailscaleHere
+		// The phone's VPN address still shows, as the driver reads it.
+		aw.Missing = driver.AwayNoTailscaleHere
 	case d.info.State != driver.StateOnline:
 		aw.Missing = driver.AwayNotConnected
 	}
@@ -158,6 +162,49 @@ func (a *API) SetAway(ctx context.Context, deviceID string, on bool) (driver.Awa
 		aw = driver.Away{Port: 5555, Addr: aw.Addr}
 	}
 	a.mu.Unlock()
+	return aw, nil
+}
+
+// fakePhoneTailAddr is the fake Android phones' address on their VPN.
+const fakePhoneTailAddr = "100.101.3.3"
+
+// SetAwayAt implements the client's tailnetter: the phone's own tailnet
+// address sets it up without Tailscale here; 100.101.9.9 answers as
+// another device, and 100.101.8.8 is out of reach.
+func (a *API) SetAwayAt(ctx context.Context, deviceID, addr string) (driver.Away, error) {
+	aw, err := a.Away(ctx, deviceID)
+	if err != nil {
+		return aw, err
+	}
+	host := strings.TrimSpace(addr)
+	if h, port, err := net.SplitHostPort(host); err == nil && port == "5555" {
+		host = h
+	}
+	ip, err := netip.ParseAddr(strings.Trim(host, "[]"))
+	if err != nil || !tailnet.Contains(ip) {
+		return aw, fmt.Errorf("fakeapi: %q: %w", addr, driver.ErrNotTailnetAddr)
+	}
+	select {
+	case <-ctx.Done():
+		return driver.Away{}, ctx.Err()
+	case <-time.After(time.Duration(float64(1500*time.Millisecond) / a.opt.Speed)):
+	}
+	switch ip.String() {
+	case fakePhoneTailAddr:
+	case "100.101.9.9":
+		return aw, fmt.Errorf("fakeapi: %s: %w", ip, driver.ErrNotThePhone)
+	case "100.101.8.8":
+		return aw, fmt.Errorf("fakeapi: %s: %w", ip, driver.ErrAddrUnreachable)
+	default:
+		return aw, fmt.Errorf("fakeapi: %s: %w", ip, driver.ErrAddrNotOnPhone)
+	}
+	a.mu.Lock()
+	tn := a.tailnetLocked()
+	aw = driver.Away{On: true, Listening: true, Manual: true, Addr: ip.String(), Port: 5555}
+	tn.away[deviceID] = aw
+	tn.listening[aw.Addr+":5555"] = true
+	a.mu.Unlock()
+	a.emit(gateway.Event{Kind: gateway.EventDevices, DeviceID: deviceID})
 	return aw, nil
 }
 

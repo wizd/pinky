@@ -18,8 +18,13 @@ import (
 // (an Android phone the adb server reconnects) stays off the list. It
 // comes back when the person adds it again: pairs it (StartPairing,
 // PairWithCode) or connects it by address (ConnectWiFi), or plugs it in,
-// since a phone listed with a cable is the person's doing. A phone still
-// plugged in comes back at once, as a new phone.
+// since a phone listed with a cable is the person's doing. Only a new
+// plug-in counts: the cable listing must come after the phone was seen
+// away from its cable - unlisted, or listed over Wi-Fi (removedUnplugged,
+// as with pausing, pause.go). A phone removed while on its cable stays
+// off the list until it is unplugged and plugged in again, so removing an
+// iPhone that charges from the computer does not undo itself, and the
+// same holds after a restart, the mark being in memory only.
 
 // RemoveOptions say what removing a phone deletes besides the phone itself.
 type RemoveOptions struct {
@@ -57,6 +62,9 @@ func (g *Gateway) RemoveDevice(ctx context.Context, deviceID string, opt RemoveO
 		g.endLeaseLocked(l, OutcomeStopped, "")
 	}
 	d.removed = true
+	// Where the phone is now: away from its cable, the next plug-in adds
+	// it back, not this one (as with pausing, PauseDevice).
+	g.removedUnplugged[d.id] = !d.unlistedAt.IsZero() || !cabled(d.info) || d.info.Virtual
 	g.dropSettingsLocked(d.id)
 	forgetTaskWay(d)
 	g.removed[d.id] = true
@@ -215,6 +223,7 @@ func (g *Gateway) unremove(id string) {
 // so it keeps its order with RemoveDevice's Forget.
 func (g *Gateway) addedBackLocked(id string) {
 	delete(g.removed, id)
+	delete(g.removedUnplugged, id)
 	g.log.Info("removed device added back", "device", id)
 	if g.store != nil {
 		g.rec.do(func(ctx context.Context) error { return g.store.SetDeviceRemoved(ctx, id, false) })

@@ -78,11 +78,11 @@ func (s *Session) ReadList(ctx context.Context, req ReadListRequest) *Result {
 	// The agent sees none of the screens the read passes: its next result
 	// shows what changed since the screen it saw last.
 	g.mu.Lock()
-	seen := l.baseline
+	seen, mark := l.baseline, l.mark
 	g.mu.Unlock()
 	res = g.readList(ctx, l, req)
 	g.mu.Lock()
-	l.baseline = seen
+	l.baseline, l.mark = seen, mark
 	g.mu.Unlock()
 	res = g.finish(l, res)
 	if res.Status == StatusStopped || res.Status == StatusPaused || res.Status == StatusTookOver ||

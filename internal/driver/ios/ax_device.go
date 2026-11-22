@@ -75,7 +75,7 @@ func (a *AXDevice) Info() driver.Info { return a.d.info }
 
 // Observe implements driver.Device: the inspector's walk, placed by OCR.
 func (a *AXDevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*screen.Screen, error) {
-	s, _, err := a.d.observeInspector(ctx, opt, ObserveStats{})
+	s, _, err := a.d.observeInspector(ctx, opt, ObserveStats{}, true, screen.App{})
 	return s, err
 }
 

@@ -45,6 +45,26 @@ type Request struct {
 	Sent, Received  int64 // body bytes, or a tunnel's bytes each way
 	Failed          bool
 	Note            string // why it failed, or why it was not decrypted
+	// Count is how many connections a blocked row stands for: the store
+	// keeps blocked connections to one host that follow each other within
+	// BlockedGap as one row (an app that keeps reconnecting to a blocked
+	// host), from Start to Last. 0 and 1 both mean one.
+	Count int
+	// Last is when the latest of a blocked row's connections started;
+	// zero for a single one.
+	Last time.Time
+}
+
+// Connections returns how many connections or requests r stands for.
+func (r Request) Connections() int { return max(r.Count, 1) }
+
+// Latest returns when the latest of r's connections started: Last, or
+// Start for a single one.
+func (r Request) Latest() time.Time {
+	if r.Last.After(r.Start) {
+		return r.Last
+	}
+	return r.Start
 }
 
 // Bodies are one request's bodies as the store kept them: the first
@@ -68,12 +88,14 @@ type Query struct {
 	From, To time.Time
 }
 
-// Wanted reports whether r matches q.
+// Wanted reports whether r matches q. A blocked row that stands for
+// several connections matches when one of them may have started between
+// From and To: its span from Start to Last meets them.
 func (q Query) Wanted(r Request) bool {
 	if r.Device != q.Device {
 		return false
 	}
-	if !q.From.IsZero() && r.Start.Before(q.From) {
+	if !q.From.IsZero() && r.Latest().Before(q.From) {
 		return false
 	}
 	if !q.To.IsZero() && r.Start.After(q.To) {

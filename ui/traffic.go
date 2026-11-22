@@ -298,7 +298,7 @@ func (a *app) trafficSetupRows(c *mg.Context, d gateway.DeviceView, last bool) {
 		case !have:
 			mg.Text(c, locales.TrafficSetupReading()).FontSize(fsSmall).TextColor(p.ink2)
 		case st.Problem != "":
-			mg.Text(c, trafficProblem(st.Problem, d.Info.Name)).FontSize(fsSmall).LineHeight(1.4).TextColor(p.ink2)
+			mg.Text(c, trafficProblem(st, d.Info.Name)).FontSize(fsSmall).LineHeight(1.4).TextColor(p.ink2)
 		case st.PACURL == "" && !st.Routed:
 			mg.Text(c, locales.TrafficSetupWaiting()).FontSize(fsSmall).TextColor(p.ink2)
 		}
@@ -370,8 +370,12 @@ func (a *app) trafficBlockRows(c *mg.Context, d gateway.DeviceView, st gateway.T
 	})
 }
 
-// trafficPortOf is the port the proxy listens at, from its addresses.
+// trafficPortOf is the port the phone's proxy is set to over its cable,
+// or else the port the proxy listens at, from its addresses.
 func trafficPortOf(st gateway.TrafficSetup) int {
+	if st.Routed && st.RoutePort > 0 {
+		return st.RoutePort
+	}
 	for _, addr := range st.Proxies {
 		if _, port, err := net.SplitHostPort(addr); err == nil {
 			if n, err := strconv.Atoi(port); err == nil {
@@ -383,10 +387,16 @@ func trafficPortOf(st gateway.TrafficSetup) int {
 }
 
 // trafficProblem says a TrafficSetup.Problem in the person's words.
-func trafficProblem(problem, phone string) string {
-	switch problem {
+func trafficProblem(st gateway.TrafficSetup, phone string) string {
+	switch st.Problem {
 	case gateway.TrafficListenFailed:
-		return locales.TrafficProblemListenFailed()
+		host, port, err := net.SplitHostPort(st.ProblemAddr)
+		if err != nil {
+			host, port = st.ProblemAddr, strconv.Itoa(gateway.TrafficPort)
+		}
+		return locales.TrafficProblemListenFailed(port, host, phone)
+	case gateway.TrafficRouteListenFailed:
+		return locales.TrafficProblemRouteListenFailed(phone)
 	case gateway.TrafficNoCA:
 		return locales.TrafficProblemNoCA()
 	case gateway.TrafficRouteFailed:

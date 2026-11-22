@@ -124,6 +124,8 @@ func (a *app) phoneCenter(c *mg.Context, d gateway.DeviceView) {
 			stateTitle(c, locales.PhoneOffline(d.Info.Name))
 			detail := d.Info.Detail
 			switch {
+			case d.Info.Setup == driver.SetupNetworkAway && d.Info.Via == driver.ViaTailscale && a.byHandAway(c, d.Info.ID) != "":
+				detail = locales.PhoneByHandAway(d.Info.Name, a.byHandAway(c, d.Info.ID))
 			case networkOfflineText(d) != "":
 				detail = networkOfflineText(d)
 			case detail == "" && d.Info.Virtual:

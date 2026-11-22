@@ -20,6 +20,7 @@ type fakePhone struct {
 	sleepsOff  int  // the screen goes dark again after this many swipes (0: never)
 	faceID     bool // the swipe unlocks it
 	unlockAt   int  // Face ID unlocks it after this many keys (0: never)
+	touchID    bool // a swipe shows the Touch ID prompt, whose button brings the pad
 
 	home, swipes int
 	keys         []keyStroke
@@ -28,6 +29,9 @@ type fakePhone struct {
 	slept        time.Duration
 	fresh        int // accessibility sessions dropped
 	lookErrs     int // looks for the pad that fail before one works
+	axLooks      int // looks for the pad through accessibility
+	prompt       bool
+	presses      int // taps on the prompt's button
 }
 
 func (f *fakePhone) freshAX() { f.fresh++ }
@@ -53,6 +57,7 @@ func (f *fakePhone) swipeUp(context.Context) error {
 		return nil
 	}
 	f.pad = f.padOnSwipe
+	f.prompt = f.touchID
 	if f.padAt > 0 {
 		f.pad = f.swipes >= f.padAt
 	}
@@ -63,11 +68,21 @@ func (f *fakePhone) swipeUp(context.Context) error {
 }
 
 func (f *fakePhone) keypadShown(context.Context) (bool, error) {
+	f.axLooks++
 	if f.lookErrs > 0 {
 		f.lookErrs--
 		return false, errors.New("the accessibility session went away")
 	}
 	return f.pad, nil
+}
+
+func (f *fakePhone) pressPadButton(context.Context) (bool, error) {
+	if !f.isLocked || f.pad || !f.prompt {
+		return false, nil
+	}
+	f.presses++
+	f.prompt, f.pad = false, true
+	return true, nil
 }
 
 func (f *fakePhone) pressKey(_ context.Context, k keyStroke) error {
@@ -133,6 +148,22 @@ func TestUnlock(t *testing.T) {
 		}
 		if f.home != 1 || f.swipes != 1 || len(f.keys) != 6 {
 			t.Errorf("home %d, swipes %d, keys %d; want 1, 1, 6 (no Return)", f.home, f.swipes, len(f.keys))
+		}
+	})
+	t.Run("Touch ID prompt", func(t *testing.T) {
+		f := lockedPhone("123456")
+		f.padOnSwipe, f.touchID = false, true
+		if err := unlock(ctx, f, "123456"); err != nil {
+			t.Fatal(err)
+		}
+		if f.swipes != 1 || f.presses != 1 || len(f.keys) != 6 {
+			t.Errorf("swipes %d, presses %d, keys %d; want 1, 1, 6", f.swipes, f.presses, len(f.keys))
+		}
+	})
+	t.Run("pad without a prompt", func(t *testing.T) {
+		f := lockedPhone("123456")
+		if err := unlock(ctx, f, "123456"); err != nil || f.presses != 0 {
+			t.Errorf("err %v, presses %d; want the pad used as it is", err, f.presses)
 		}
 	})
 	t.Run("wrong passcode", func(t *testing.T) {
@@ -299,6 +330,39 @@ func TestPasscodePad(t *testing.T) {
 	}
 	if !passcodePad([]raxElement{{Type: xcSecureTextField}}) {
 		t.Error("the alphanumeric passcode field was not recognized")
+	}
+}
+
+func TestPadButton(t *testing.T) {
+	b := func(label string, x, y, w, h float64) raxElement {
+		return raxElement{Label: label, Type: xcButton, Visible: true, HasFrame: true, Frame: axpRect{X: x, Y: y, W: w, H: h}}
+	}
+	corners := []raxElement{b("Flashlight", 46, 750, 50, 50), b("Camera", 294, 750, 50, 50)}
+	prompt := append([]raxElement{{Label: "iPad 已锁定", Type: xcStaticText, Visible: true, HasFrame: true, Frame: axpRect{X: 300, Y: 400, W: 200, H: 30}}},
+		b("使用密码", 330, 560, 140, 44), b("取消", 330, 612, 140, 44))
+	if got, ok := padButton(prompt); !ok || got.Label != "使用密码" {
+		t.Errorf("prompt: %q, %v; want 使用密码", got.Label, ok)
+	}
+	if got, ok := padButton(append(append([]raxElement{}, corners...), prompt...)); !ok || got.Label != "使用密码" {
+		t.Errorf("prompt with the corner buttons: %q, %v; want 使用密码", got.Label, ok)
+	}
+	if got, ok := padButton(corners); ok {
+		t.Errorf("the lock screen's corner buttons gave %q", got.Label)
+	}
+	if got, ok := padButton([]raxElement{b("Use Passcode", 100, 500, 175, 44)}); !ok || got.Label != "Use Passcode" {
+		t.Errorf("the only button: %q, %v", got.Label, ok)
+	}
+	hidden := b("Use Passcode", 100, 500, 175, 44)
+	hidden.Visible = false
+	if _, ok := padButton([]raxElement{hidden}); ok {
+		t.Error("a button not on screen was taken")
+	}
+	var pad []raxElement
+	for i, l := range []string{"1", "2, ABC", "3, DEF", "4, GHI", "5, JKL", "6, MNO", "7, PQRS", "8, TUV", "9, WXYZ", "0"} {
+		pad = append(pad, b(l, float64(i%3)*100, 300+float64(i/3)*90, 80, 80))
+	}
+	if got, ok := padButton(append(pad, b("Cancel", 250, 700, 60, 30))); ok {
+		t.Errorf("on the pad, %q was taken", got.Label)
 	}
 }
 

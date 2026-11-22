@@ -15,9 +15,20 @@ import (
 type choosingProvider struct {
 	driver.Provider
 
-	mu    sync.Mutex
-	ways  map[string]string
-	opens int
+	mu        sync.Mutex
+	ways      map[string]string
+	opens     int
+	unplugged bool // List then lists nothing, as on a cable pull
+}
+
+func (p *choosingProvider) List(ctx context.Context) ([]driver.Info, error) {
+	infos, err := p.Provider.List(ctx)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.unplugged {
+		return nil, err
+	}
+	return infos, err
 }
 
 func (p *choosingProvider) Open(ctx context.Context, id string) (driver.Device, error) {

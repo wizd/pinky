@@ -1,11 +1,9 @@
 package scrcpy
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/DIYgod/pinky/internal/driver/android/adb"
 )
@@ -26,18 +24,17 @@ func ListApps(ctx context.Context, c *adb.Client, serial string) ([]App, error) 
 	if err != nil {
 		return nil, err
 	}
-	jar := fmt.Sprintf("/data/local/tmp/pinky-scrcpy-%08x.jar", scid)
-	if err := c.Push(ctx, serial, bytes.NewReader(serverJar), jar, 0o644, time.Now()); err != nil {
+	jar, err := runJar(ctx, c, serial, scid)
+	if err != nil {
 		return nil, fmt.Errorf("scrcpy: push server: %w", err)
 	}
-	// In list mode the server deletes its jar, prints the list and exits.
+	// In list mode the server deletes the jar it runs from, prints the
+	// list and exits.
 	cmd := "CLASSPATH=" + jar + " app_process / com.genymobile.scrcpy.Server " +
 		adb.Command(Version, "log_level=info", "list_apps=true")
 	out, err := c.Shell(ctx, serial, cmd)
 	if err != nil {
-		cctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		_, _ = c.Shell(cctx, serial, "rm -f "+jar)
+		removeFile(c, serial, jar)
 		return nil, fmt.Errorf("scrcpy: list apps: %w", err)
 	}
 	apps, ok := ParseAppList(string(out))

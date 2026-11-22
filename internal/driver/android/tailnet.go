@@ -98,7 +98,7 @@ func (p *Provider) ConnectTailnet(ctx context.Context, addr string) (driver.Info
 			node = d.ID
 		}
 		if err := p.net.update(info.ID, func(n *netPhone) {
-			n.Name, n.Port, n.Node, n.Tailnet = info.Name, port, node, host
+			n.Name, n.Port, n.Node, n.Tailnet, n.Manual = info.Name, port, node, host, false
 		}); err != nil {
 			p.cfg.logf("android: keeping %s as set up for away from home: %v", info.ID, err)
 		}
@@ -143,12 +143,12 @@ const oneVPN = "Android runs one VPN at a time, so another VPN or proxy app on t
 func (p *Provider) Away(ctx context.Context, id string) (driver.Away, error) {
 	n, kept := p.net.get(id)
 	on := kept && n.Tailnet != ""
-	out := driver.Away{On: on, Port: n.port()}
+	out := driver.Away{On: on, Port: n.port(), Manual: on && n.Manual}
 	if on {
 		out.Addr = n.Tailnet
 	}
 	st, err := p.tailnetStatus(ctx)
-	if err != nil {
+	if err != nil && !out.Manual {
 		return out, err
 	}
 	entries, err := p.devices(ctx)
@@ -170,6 +170,8 @@ func (p *Provider) Away(ctx context.Context, id string) (driver.Away, error) {
 		h, ps, _ := net.SplitHostPort(c.tail)
 		out.Addr = h
 		out.Port, _ = strconv.Atoi(ps)
+	case local != "" && out.Manual:
+		out.Listening = p.listenPort(ctx, local) == out.Port
 	case local != "":
 		if _, addrs, err := p.phoneAddrs(ctx, local); err == nil {
 			// The first address the tailnet knows, IPv4 first; else the
@@ -189,6 +191,8 @@ func (p *Provider) Away(ctx context.Context, id string) (driver.Away, error) {
 		out.Listening = p.listenPort(ctx, local) == out.Port
 	}
 	switch {
+	case out.Manual:
+		// Entered by hand: Pinky does not read Tailscale for it.
 	case !st.Running():
 		out.Missing = driver.AwayNoTailscaleHere
 		out.Detail = "Tailscale is not running on this computer"
@@ -236,6 +240,10 @@ func (p *Provider) SetAway(ctx context.Context, id string, on bool) (driver.Away
 			a.Missing, a.Detail = "", ""
 		}
 		return a, nil
+	}
+	if n, kept := p.net.get(id); kept && n.Manual && n.Tailnet != "" {
+		// Set up at an address entered by hand: on again there.
+		return p.SetAwayAt(ctx, id, n.Tailnet)
 	}
 	st, err := p.tailnetStatus(ctx)
 	if err != nil {
@@ -302,7 +310,7 @@ func (p *Provider) SetAway(ctx context.Context, id string, on bool) (driver.Away
 		}
 	}
 	if err := p.net.update(id, func(n *netPhone) {
-		n.Name, n.Port, n.Node, n.Tailnet = name, AwayPort, node, addr.String()
+		n.Name, n.Port, n.Node, n.Tailnet, n.Manual = name, AwayPort, node, addr.String(), false
 	}); err != nil {
 		return driver.Away{}, err
 	}
@@ -327,7 +335,7 @@ func (p *Provider) awayOff(ctx context.Context, id string) error {
 		}
 		return nil
 	}
-	if err := p.net.update(id, func(m *netPhone) { m.Node, m.Tailnet = "", "" }); err != nil {
+	if err := p.net.update(id, func(m *netPhone) { m.Node, m.Tailnet, m.Manual = "", "", false }); err != nil {
 		return err
 	}
 	if n.LAN != "" {

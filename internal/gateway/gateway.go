@@ -49,6 +49,11 @@ type Options struct {
 	SettleMax        time.Duration // default 3 s
 	PollInterval     time.Duration // default 250 ms, for settling and phone_wait_for
 	DiscoverEvery    time.Duration // default 2 s
+	// SwitchGrace is how long after input to the phone, or the read that
+	// ended an action, a change of the app in front still counts as the
+	// input's doing, as a link may open its app late (appswitch.go);
+	// default 5 s, and a negative value means none (tests).
+	SwitchGrace time.Duration
 	// RulesEvery is how often the policy's files are checked for hand
 	// edits (policy.Engine.Refresh); default 2 s.
 	RulesEvery time.Duration
@@ -108,6 +113,9 @@ func (o *Options) defaults() {
 	set(&o.SettleMax, 3*time.Second)
 	set(&o.PollInterval, 250*time.Millisecond)
 	set(&o.DiscoverEvery, 2*time.Second)
+	if o.SwitchGrace == 0 {
+		o.SwitchGrace = 5 * time.Second
+	}
 	set(&o.RulesEvery, 2*time.Second)
 	if o.DefaultScope.Mode == "" {
 		o.DefaultScope = Scope{Mode: ScopeEverything}
@@ -150,16 +158,17 @@ type Gateway struct {
 	hubsClosed bool
 
 	// Guarded by mu.
-	recordOn   bool                      // record the screen of new tasks
-	background map[string]bool           // the person's choice per phone: agents on a background display, or not
-	removed    map[string]bool           // phones the person removed, kept off the list while listed over the network (remove.go)
-	paused     map[string]bool           // phones the person paused: listed, but not opened (pause.go)
-	known      map[string]bool           // phones that are the person's, which providers may open over Wi-Fi (wifi.go)
-	names      map[string]history.Device // what the history store calls the phones Pinky has seen (wifi.go)
-	chosen     map[string]string         // the connection the person chose per phone, none for Automatic (connection.go)
-	started    map[string]bool           // virtual phones started with StartVirtual in this run, by platform and VirtualID (virtual.go)
-	wifiOn     bool                      // the providers use phones over Wi-Fi (SetWiFi)
-	keepDays   int                       // history retention; 0 keeps everything
+	recordOn         bool                      // record the screen of new tasks
+	background       map[string]bool           // the person's choice per phone: agents on a background display, or not
+	removed          map[string]bool           // phones the person removed, kept off the list while listed over the network (remove.go)
+	removedUnplugged map[string]bool           // of those, the ones seen away from their cable since the removal: unlisted, or listed over Wi-Fi; in memory only, false after a restart (remove.go)
+	paused           map[string]bool           // phones the person paused: listed, but not opened (pause.go)
+	known            map[string]bool           // phones that are the person's, which providers may open over Wi-Fi (wifi.go)
+	names            map[string]history.Device // what the history store calls the phones Pinky has seen (wifi.go)
+	chosen           map[string]string         // the connection the person chose per phone, none for Automatic (connection.go)
+	started          map[string]bool           // virtual phones started with StartVirtual in this run, by platform and VirtualID (virtual.go)
+	wifiOn           bool                      // the providers use phones over Wi-Fi (SetWiFi)
+	keepDays         int                       // history retention; 0 keeps everything
 	// trafficOn lists the phones whose network traffic agents may read
 	// (traffic.go), trafficRoute the Android phones Pinky routes through
 	// itself during tasks (capture.go).
@@ -187,25 +196,26 @@ var _ API = (*Gateway)(nil)
 func New(o Options) (*Gateway, error) {
 	o.defaults()
 	g := &Gateway{
-		opt:          o,
-		log:          o.Logger,
-		policy:       o.Policy,
-		devices:      map[string]*device{},
-		sessions:     map[string]*Session{},
-		agents:       map[string]*agentState{},
-		apSteps:      map[string]stepRef{},
-		subs:         map[chan Event]struct{}{},
-		hubs:         map[string]*hub{},
-		background:   map[string]bool{},
-		removed:      map[string]bool{},
-		paused:       map[string]bool{},
-		known:        map[string]bool{},
-		names:        map[string]history.Device{},
-		chosen:       map[string]string{},
-		started:      map[string]bool{},
-		prune:        make(chan struct{}, 1),
-		trafficOn:    map[string]bool{},
-		trafficRoute: map[string]bool{},
+		opt:              o,
+		log:              o.Logger,
+		policy:           o.Policy,
+		devices:          map[string]*device{},
+		sessions:         map[string]*Session{},
+		agents:           map[string]*agentState{},
+		apSteps:          map[string]stepRef{},
+		subs:             map[chan Event]struct{}{},
+		hubs:             map[string]*hub{},
+		background:       map[string]bool{},
+		removed:          map[string]bool{},
+		removedUnplugged: map[string]bool{},
+		paused:           map[string]bool{},
+		known:            map[string]bool{},
+		names:            map[string]history.Device{},
+		chosen:           map[string]string{},
+		started:          map[string]bool{},
+		prune:            make(chan struct{}, 1),
+		trafficOn:        map[string]bool{},
+		trafficRoute:     map[string]bool{},
 	}
 	if g.policy == nil {
 		g.policy = policy.Default()
@@ -216,6 +226,21 @@ func New(o Options) (*Gateway, error) {
 			return nil, fmt.Errorf("history: %w", err)
 		}
 		g.store = st
+		// What ran when the Pinky before this one crashed or was killed
+		// ended as when a gateway stops in order (Close), and the
+		// approvals it left open are taken back.
+		if n, err := st.EndUnfinished(context.Background(), string(stateForOutcome(outcomeGatewayStopped)),
+			outcomeGatewayStopped, OutcomeDisconnected, "withdrawn"); err != nil {
+			g.log.Warn("history: unfinished tasks", "err", err)
+		} else if n > 0 {
+			g.log.Info("history: ended the tasks a Pinky that did not stop in order left running", "tasks", n)
+		}
+		// An action the person had allowed and that was under way then
+		// may have happened or not.
+		if _, err := st.EndAllowedSteps(context.Background(), string(StatusPending), string(StatusUncertain),
+			string(approval.AllowOnce), string(approval.AllowTask), string(approval.AllowAlways)); err != nil {
+			g.log.Warn("history: allowed steps", "err", err)
+		}
 		if bg, err := st.BackgroundDevices(context.Background()); err == nil {
 			g.background = bg
 		} else {
@@ -273,10 +298,10 @@ func (g *Gateway) Close() error {
 	}
 	g.mu.Unlock()
 	for _, s := range sessions {
-		s.end("gateway stopped", false)
+		s.end(outcomeGatewayStopped, false)
 	}
 	g.mu.Lock()
-	g.endKeptLocked("gateway stopped", false)
+	g.endKeptLocked(outcomeGatewayStopped, false)
 	g.mu.Unlock()
 	// The proxy stops and the phones' proxy settings go back, while the
 	// providers still reach the phones.
@@ -380,15 +405,19 @@ func (g *Gateway) discover(ctx context.Context) {
 	// opens run outside the turn: a pass waits for another's listing, not
 	// for its opens.
 	g.listMu.Lock()
+	seenAll := map[string]bool{}
+	listFailed := false
 	for _, p := range g.opt.Providers {
 		infos, err := p.List(ctx)
 		if err != nil {
 			g.log.Warn("list devices", "platform", p.Platform(), "err", err)
+			listFailed = true
 			continue
 		}
 		seen := map[string]bool{}
 		for _, info := range infos {
 			seen[info.ID] = true
+			seenAll[info.ID] = true
 			if d := g.updateDevice(p, info); d != nil {
 				wg.Add(1)
 				go func() {
@@ -458,6 +487,20 @@ func (g *Gateway) discover(ctx context.Context) {
 			g.emit(Event{Kind: EventDevices, DeviceID: id})
 		}
 	}
+	// A removed phone no provider listed this pass has left its cable:
+	// its next plug-in is the person's doing (updateDevice). A pass with
+	// a failed listing says nothing about that provider's phones, so it
+	// marks nothing: one hiccup must not unplug a phone that never left
+	// its cable.
+	if !listFailed {
+		g.mu.Lock()
+		for id := range g.removed {
+			if !seenAll[id] {
+				g.removedUnplugged[id] = true
+			}
+		}
+		g.mu.Unlock()
+	}
 	g.listMu.Unlock()
 	wg.Wait()
 }
@@ -526,11 +569,21 @@ func (g *Gateway) updateDevice(p driver.Provider, info driver.Info) *device {
 			// The person removed it; the provider lists it over the
 			// network by itself, or it is a Simulator or an emulator
 			// they run for other work. It is back once they start or use
-			// it from Add phone (StartVirtual).
+			// it from Add phone (StartVirtual). Listed over Wi-Fi, it
+			// has left its cable: a later plug-in adds it back.
+			g.removedUnplugged[info.ID] = true
 			g.mu.Unlock()
 			return nil
 		}
-		// Plugged in: the person adds it back.
+		if !g.removedUnplugged[info.ID] {
+			// Still on the cable it was removed from: a phone kept
+			// plugged in, such as an iPhone charging from the computer,
+			// is not the person adding it back (pausedListedLocked).
+			g.mu.Unlock()
+			return nil
+		}
+		// Seen away from its cable since the removal: plugging it in is
+		// the person adding it back.
 		g.addedBackLocked(info.ID)
 	}
 	d, ok := g.devices[info.ID]

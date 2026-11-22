@@ -524,6 +524,10 @@ func (g *Gateway) HandBack(deviceID, note string) error {
 	}
 	g.mu.Lock()
 	d.person, d.personInput = false, false
+	// The person may have used the phone itself, which an iPhone does not
+	// report: what they left in front is not an app that came by itself
+	// (appswitch.go).
+	g.inputLocked(d)
 	g.quietLocked(d, quietPerson|quietHandoff, false)
 	g.noteWorkLocked(d)
 	l := d.lease

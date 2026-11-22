@@ -5,6 +5,7 @@ package scrcpy
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -98,9 +99,12 @@ func TestDeviceListApps(t *testing.T) {
 	if !settings {
 		t.Error("com.android.settings not listed")
 	}
-	// The server deletes its jar in list mode.
+	// The server deletes the jar it ran from in list mode; only the shared
+	// one stays.
 	out, _ := c.Shell(ctx, serial, "ls /data/local/tmp/ | grep pinky-scrcpy || true")
-	if len(out) > 0 {
-		t.Errorf("leftover server jars: %s", out)
+	for _, name := range strings.Fields(string(out)) {
+		if jarDir+"/"+name != sharedJarPath() {
+			t.Errorf("leftover server jar: %s", name)
+		}
 	}
 }

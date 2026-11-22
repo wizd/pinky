@@ -398,19 +398,26 @@ func TestTrafficBlocklist(t *testing.T) {
 	if strings.Join(setup.Blocklist, ",") != "127.0.0.1,bank.example" {
 		t.Fatalf("setup blocklist %q", setup.Blocklist)
 	}
-	resp, err := phoneClient(setup.Proxies[0]).Get(upstream.URL + "/balance?account=1")
-	if err != nil {
-		t.Fatal(err)
+	// An app that keeps calling the blocked host leaves one line.
+	for range 3 {
+		resp, err := phoneClient(setup.Proxies[0]).Get(upstream.URL + "/balance?account=1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
 	}
-	resp.Body.Close()
-	waitUntil(t, "the request", func() bool { n, _ := g.cap.store.Len(); return n == 1 })
+	waitUntil(t, "the requests", func() bool {
+		rs := g.cap.store.Requests(traffic.Query{Device: "pixel"})
+		return len(rs) == 1 && rs[0].Connections() == 3
+	})
 	res := waitApproved(t, g, s, TrafficRequest{})
-	if !strings.Contains(res.Log, " · not decrypted (blocked)") || strings.Contains(res.Log, "balance") ||
-		!strings.Contains(res.Message, "Blocked: 1 request") {
+	if !strings.Contains(res.Log, " · not decrypted (blocked) · 3 connections, the last at ") || strings.Contains(res.Log, "balance") ||
+		strings.Contains(res.Log, "↑") || strings.Count(res.Log, "\n") != 0 || !strings.Contains(res.Message, "Blocked: 3 connections") {
 		t.Fatalf("list: %+v", res)
 	}
 	res = s.Traffic(ctx, TrafficRequest{ID: "1"})
-	if res.Status != StatusSettled || !strings.Contains(res.Message, "only its host") || strings.Contains(res.Log, "headers") {
+	if res.Status != StatusSettled || !strings.Contains(res.Message, "only its host") || !strings.Contains(res.Message, "3 connections") ||
+		strings.Contains(res.Log, "headers") {
 		t.Fatalf("detail: %+v", res)
 	}
 	g.Close()
@@ -766,5 +773,97 @@ func TestTrafficPathFilterIsRedacted(t *testing.T) {
 		if got := strings.Contains(res.Log, "api.example"); got != want {
 			t.Errorf("path %q matched %v: %+v", path, got, res)
 		}
+	}
+}
+
+// Another program holding the proxy's port on this computer's loopback
+// (Warp does) does not stop the cable route: it takes another free port,
+// sets the phone's proxy to that one, and puts the setting back from it.
+func TestTrafficRoutePortTaken(t *testing.T) {
+	ctx := context.Background()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
+	defer upstream.Close()
+	g, rp := newRouteGateway(t, t.TempDir())
+	defer g.Close()
+	port := g.trafficPort()
+	other, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	if err := g.SetTraffic("pixel", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.SetTrafficRoute("pixel", true); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := connect(t, g, "Look at requests")
+	var st TrafficSetup
+	waitUntil(t, "the route", func() bool { st, _ = g.TrafficSetup("pixel"); return st.Routed })
+	if st.RoutePort == 0 || st.RoutePort == port || st.Problem != "" || rp.now() != "127.0.0.1:"+strconv.Itoa(st.RoutePort) {
+		t.Fatalf("setup %+v, phone %q", st, rp.now())
+	}
+	if rs, _ := g.store.TrafficRoutes(ctx); len(rs) != 1 || rs[0].Port != st.RoutePort {
+		t.Fatalf("saved routes %+v", rs)
+	}
+	// The phone's requests arrive at that port and are kept.
+	resp, err := phoneClient(net.JoinHostPort("127.0.0.1", strconv.Itoa(st.RoutePort))).Get(upstream.URL + "/a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	waitUntil(t, "the request", func() bool { n, _ := g.cap.store.Len(); return n == 1 })
+	// It stays on that port for the task.
+	g.captureSoon()
+	time.Sleep(50 * time.Millisecond)
+	rp.mu.Lock()
+	routes := rp.routes
+	rp.mu.Unlock()
+	if again, _ := g.TrafficSetup("pixel"); again.RoutePort != st.RoutePort || routes != 1 {
+		t.Fatalf("routed again: %+v, %d routes", again, routes)
+	}
+	mustStatus(t, s.Release(ctx, ReleaseRequest{Outcome: "done"}), StatusSettled)
+	waitUntil(t, "the setting back", func() bool { return rp.now() == "10.0.0.8:3128" })
+	waitUntil(t, "the listener gone", func() bool {
+		c, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(st.RoutePort)), time.Second)
+		if err == nil {
+			c.Close()
+		}
+		return err != nil
+	})
+}
+
+// A port another program holds at the address the phone reaches is named,
+// in the setup and in phone_traffic's answer, as the Wi-Fi proxy's.
+func TestTrafficListenFailedNamesThePort(t *testing.T) {
+	ctx := context.Background()
+	g, np := newTrafficGateway(t)
+	at := net.JoinHostPort("127.0.0.1", strconv.Itoa(g.trafficSetupPort()))
+	other, err := net.Listen("tcp", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer other.Close()
+	np.setAddrs(loopback)
+	if err := g.SetTraffic("pixel", true); err != nil {
+		t.Fatal(err)
+	}
+	var st TrafficSetup
+	waitUntil(t, "the problem", func() bool { st, _ = g.TrafficSetup("pixel"); return st.Problem == TrafficListenFailed })
+	if st.ProblemAddr != at || st.PACURL != "" {
+		t.Fatalf("setup %+v", st)
+	}
+	s, _ := connect(t, g, "Look at requests")
+	res := s.Traffic(ctx, TrafficRequest{})
+	if res.Error != ErrUnsupported || !strings.Contains(res.Message, "uses "+at) || !strings.Contains(res.Message, "Wi-Fi proxy") ||
+		!strings.Contains(res.Message, "cable route") {
+		t.Fatalf("result %+v", res)
+	}
+	// Once the program lets go, Pinky listens there by itself.
+	other.Close()
+	g.captureSoon()
+	waitUntil(t, "the setup listener", func() bool { st, _ = g.TrafficSetup("pixel"); return st.PACURL != "" })
+	if st.Problem != "" || st.ProblemAddr != "" {
+		t.Fatalf("setup after %+v", st)
 	}
 }

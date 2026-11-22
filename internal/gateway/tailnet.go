@@ -95,6 +95,25 @@ func (g *Gateway) SetAway(ctx context.Context, deviceID string, on bool) (driver
 	return a, err
 }
 
+// SetAwayAt sets a phone up to be reached at a tailnet address the person
+// entered (driver.TailnetByHand), for a computer that reaches the tailnet
+// without Tailscale's own app. It restarts the phone's adb as SetAway
+// does.
+func (g *Gateway) SetAwayAt(ctx context.Context, deviceID, addr string) (driver.Away, error) {
+	d, t, err := g.tailnetOf(deviceID)
+	if err != nil {
+		return driver.Away{}, err
+	}
+	m, ok := t.(driver.TailnetByHand)
+	if !ok {
+		return driver.Away{}, fmt.Errorf("%s cannot be reached at an address entered by hand: %w", d.name(), driver.ErrUnsupported)
+	}
+	a, err := m.SetAwayAt(ctx, d.id, addr)
+	g.discover(ctx)
+	g.emit(Event{Kind: EventDevices, DeviceID: d.id})
+	return a, err
+}
+
 // wifiSwitchOf returns a phone and its provider, which must move phones to
 // Wi-Fi without Wireless debugging.
 func (g *Gateway) wifiSwitchOf(deviceID string) (*device, driver.WiFiSwitch, error) {

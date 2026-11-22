@@ -216,6 +216,7 @@ func (p *bgShot) stopExpiry() {
 // kept is dropped, since the input may change what it shows.
 func (g *Gateway) inputLocked(d *device) {
 	d.inputs++
+	d.inputAt = time.Now()
 	if p := d.shot; p != nil {
 		g.dropShotLocked(d, p)
 	}

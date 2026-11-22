@@ -4,6 +4,7 @@ package ios
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -31,6 +32,35 @@ func TestDeviceLockScreenPad(t *testing.T) {
 		w := probeOut(t, "lock-screen.txt")
 		fmt.Fprintf(w, "walk err %v\n", err)
 		dumpRAX(w, "lock screen", els)
+	}
+	start := time.Now()
+	unlocked, err := reachPad(ctx, p)
+	t.Logf("reachPad: unlocked %v, err %v (%v)", unlocked, err, time.Since(start).Round(time.Millisecond))
+	if err != nil {
+		t.Errorf("no passcode pad: %v", err)
+	}
+	locked, err = p.locked(ctx)
+	t.Logf("still locked: %v (%v)", locked, err)
+}
+
+// axDeadPower is a phone whose remoteAXService does not answer.
+type axDeadPower struct{ devicePower }
+
+func (axDeadPower) keypadShown(context.Context) (bool, error) {
+	return false, errors.New("accessibility made to fail by the test")
+}
+
+// TestDeviceLockScreenPadInScreenshot is TestDeviceLockScreenPad with
+// remoteAXService made to fail, so that the pad must be found in a
+// screenshot (padshot.go). It types nothing: lock the phone first.
+func TestDeviceLockScreenPadInScreenshot(t *testing.T) {
+	d := testDevice(t)
+	ctx := context.Background()
+	p := axDeadPower{devicePower{d}}
+	locked, err := p.locked(ctx)
+	t.Logf("locked: %v (%v)", locked, err)
+	if !locked {
+		t.Skip("lock the phone first")
 	}
 	start := time.Now()
 	unlocked, err := reachPad(ctx, p)

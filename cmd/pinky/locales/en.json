@@ -1646,6 +1646,146 @@
   "@awayBusy": {
     "description": "Under awayTitle while it changes."
   },
+  "awayByHandButton": "Enter address…",
+  "@awayByHandButton": {
+    "description": "Button by awayNoTailscaleHere: opens the dialog to enter the phone's tailnet address by hand."
+  },
+  "awayByHandOffer": "If this computer reaches your tailnet another way, such as a proxy with a Tailscale outbound, you can enter {name}'s tailnet address instead.",
+  "@awayByHandOffer": {
+    "description": "Under awayNoTailscaleHere for a connected phone: the alternative to Tailscale on this computer. A Tailscale outbound is a proxy's (sing-box) way to join a tailnet.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "awayByHandTitle": "Reach {name} at its tailnet address?",
+  "@awayByHandTitle": {
+    "description": "The dialog that turns Use away from home on at a tailnet address entered by hand: its title.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "awayByHandWhat": "Pinky has {name}'s adb listen on the network at port 5555, as adb tcpip does, and connects to it at the address you enter, through this computer's own route to your tailnet. You'll find the address in Tailscale on the phone.",
+  "@awayByHandWhat": {
+    "description": "The address dialog: what turning it on does. adb tcpip is a command; keep it.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "awayByHandField": "Tailnet address",
+  "@awayByHandField": {
+    "description": "The address dialog: the label of the field for the phone's tailnet address."
+  },
+  "awayByHandPrivacy": "Pinky can't see how this computer routes traffic to that address, and adb's own connection isn't encrypted. The connection is only as private as your own route to the tailnet.",
+  "@awayByHandPrivacy": {
+    "description": "The address dialog, and under awayOnByHandDesc while it is on: what Pinky cannot vouch for. Say it plainly."
+  },
+  "awayByHandChecks": "Before it turns on, Pinky checks over the cable or Wi-Fi that the address is on {name}'s own VPN, then that this computer reaches it there and that what answers is {name}.",
+  "@awayByHandChecks": {
+    "description": "The address dialog: what Pinky checks before it turns on.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "awayByHandExposure": "The phone listens on every network it joins: on a café's Wi-Fi, another device there could ask to debug it. The phone then asks you; tap Cancel. Only computers it already trusts get in without asking.",
+  "@awayByHandExposure": {
+    "description": "The address dialog: what it exposes (awayDialogExposure without the promise of Tailscale's encryption)."
+  },
+  "awayByHandNotAddr": "Enter an IP address, such as 100.101.2.2.",
+  "@awayByHandNotAddr": {
+    "description": "The address dialog: what was typed is not an IP address."
+  },
+  "awayByHandRange": "{addr} isn't a tailnet address. Tailscale's addresses are in 100.64.0.0/10 or fd7a:115c:a1e0::/48.",
+  "@awayByHandRange": {
+    "description": "The address dialog: the address is outside Tailscale's ranges; keep the ranges as they are.",
+    "placeholders": {
+      "addr": {
+        "type": "String",
+        "example": "100.101.2.2"
+      }
+    }
+  },
+  "awayByHandNotOnPhone": "{addr} isn't on {name}'s VPN. Check the address in Tailscale on the phone, and that Tailscale is connected there.",
+  "@awayByHandNotOnPhone": {
+    "description": "The address dialog: the phone does not have the address on its VPN interface.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "addr": {
+        "type": "String",
+        "example": "100.101.2.2"
+      }
+    }
+  },
+  "awayByHandUnreachable": "This computer can't reach {name} at {addr}. Check that your route to the tailnet is on, then try again.",
+  "@awayByHandUnreachable": {
+    "description": "The address dialog: nothing answered at the address from this computer.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "addr": {
+        "type": "String",
+        "example": "100.101.2.2"
+      }
+    }
+  },
+  "awayByHandNotThePhone": "Something other than {name} answered at {addr}, so Pinky didn't use it.",
+  "@awayByHandNotThePhone": {
+    "description": "The address dialog: another device answered at the address (it lacks the mark Pinky left on the phone).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "addr": {
+        "type": "String",
+        "example": "100.101.2.2"
+      }
+    }
+  },
+  "awayByHandNotListening": "Something answered at {addr}, but not {name}'s adb. Try again in a moment.",
+  "@awayByHandNotListening": {
+    "description": "The address dialog: something answered at the address, but did not take adb's connection.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "addr": {
+        "type": "String",
+        "example": "100.101.2.2"
+      }
+    }
+  },
+  "awayOnByHandDesc": "On, at {addr}, the address you entered. When {name} is away from this computer's network, Pinky reaches it through this computer's own route to your tailnet.",
+  "@awayOnByHandDesc": {
+    "description": "Use away from home, on at a tailnet address entered by hand (awayOnDesc for Tailscale on this computer).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "addr": {
+        "type": "String",
+        "example": "100.101.2.2"
+      }
+    }
+  },
   "awayDialogCancel": "Cancel",
   "@awayDialogCancel": {
     "description": "The dialog's cancel button."
@@ -1934,7 +2074,7 @@
   "@trafficRemoveIOS": {
     "description": "How to take Pinky's certificate off an iPhone. Use the names iOS gives these settings in the language."
   },
-  "trafficRemoveAndroid": "To remove Pinky's certificate from the phone: Settings › Security & privacy › More security settings › Encryption & credentials › User credentials, tap Pinky's certificate, then Remove. Set the Wi-Fi proxy back to None too.",
+  "trafficRemoveAndroid": "To remove Pinky's certificate from the phone: Settings › Security & privacy › More security settings › Encryption & credentials › Trusted credentials › User, tap Pinky's certificate, then Remove. Set the Wi-Fi proxy back to None too.",
   "@trafficRemoveAndroid": {
     "description": "How to take Pinky's certificate off an Android phone. Use the names stock Android gives these settings in the language."
   },
@@ -2006,7 +2146,7 @@
   "@trafficStepsIOS": {
     "description": "The steps on an iPhone to send its traffic through Pinky's proxy (an automatic proxy with the proxy setup link) and trust Pinky's certificate. Use the names iOS gives these settings in the language."
   },
-  "trafficStepsAndroid": "On the phone:\n1. Settings › Network & internet › Internet, tap the gear next to the Wi-Fi network, edit it, set Proxy to Proxy Auto-Config and enter the proxy setup link as the PAC URL. Or turn on Route over the cable during tasks below instead.\n2. In the browser, open the certificate link.\n3. Settings › Security & privacy › More security settings › Install a certificate › CA certificate, and pick the file you downloaded.",
+  "trafficStepsAndroid": "On the phone:\n1. Settings › Network & internet › Internet, tap the gear next to the Wi-Fi network, edit it, set Proxy to Proxy Auto-Config and enter the proxy setup link as the PAC URL. Or turn on Route over the cable during tasks below instead.\n2. In the browser, open the certificate link.\n3. Settings › Security & privacy › More security settings › Encryption & credentials › Install a certificate › CA certificate, and pick the file you downloaded.",
   "@trafficStepsAndroid": {
     "description": "The steps on an Android phone to send its traffic through Pinky's proxy (Proxy Auto-Config with the proxy setup link) and install Pinky's certificate. Menu names differ between makers; use the names stock Android gives them in the language. Route over the cable during tasks is trafficRouteTitle."
   },
@@ -2060,9 +2200,33 @@
       }
     }
   },
-  "trafficProblemListenFailed": "Another program on this computer uses the proxy's port, so Pinky can't listen.",
+  "trafficProblemListenFailed": "Another program on this computer uses port {port} at {address}, so {phone}'s Wi-Fi proxy can't reach Pinky. Quit that program, and Pinky tries again by itself.",
   "@trafficProblemListenFailed": {
-    "description": "Why Pinky's proxy does not listen: its port is taken."
+    "description": "Why Pinky's proxy does not listen for the phone's Wi-Fi proxy: another program holds the port of the proxy or of its setup link at this computer's address on the phone's network. The cable route (trafficRouteTitle) is not affected. port is the port, address this computer's address, phone the phone's name.",
+    "placeholders": {
+      "port": {
+        "type": "String",
+        "example": "9278"
+      },
+      "address": {
+        "type": "String",
+        "example": "192.168.1.5"
+      },
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
+  },
+  "trafficProblemRouteListenFailed": "Pinky couldn't listen on this computer's loopback (127.0.0.1), so {phone} isn't routed over its cable. The Wi-Fi proxy isn't affected.",
+  "@trafficProblemRouteListenFailed": {
+    "description": "Why the cable route (trafficRouteTitle) does not start: Pinky could not listen on this computer's loopback address at any port. The Wi-Fi proxy still works. phone is the phone's name.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "Pixel 9"
+      }
+    }
   },
   "trafficProblemNoCA": "Pinky couldn't read or make its certificate.",
   "@trafficProblemNoCA": {
@@ -8060,6 +8224,20 @@
       }
     }
   },
+  "phoneByHandAway": "Pinky can't reach {name} at {addr} now. It tries again by itself; check that this computer's route to your tailnet is on.",
+  "@phoneByHandAway": {
+    "description": "An offline phone's page, for a phone used away from home at a tailnet address entered by hand that does not answer there (phoneTailnetAway for Tailscale on this computer).",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Pixel 9"
+      },
+      "addr": {
+        "type": "String",
+        "example": "100.101.2.2"
+      }
+    }
+  },
   "phoneTakeOver": "Take over",
   "@phoneTakeOver": {
     "description": "Button or menu item that gives the person control of the phone in the mirror and pauses the agent: on handoff cards, in an approval's More options (card and floating panel), on the task card and on All phones tiles."
@@ -8474,7 +8652,7 @@
       }
     }
   },
-  "removePhoneCable": "It's connected with a cable, so it shows up again right away, as a new phone. Unplug it first to keep it off the list.",
+  "removePhoneCable": "It's connected with a cable. It stays off the list while it stays plugged in; unplug it and plug it in again to add it back.",
   "@removePhoneCable": {
     "description": "In the Remove phone dialog, for a phone connected with a USB cable now: removing it does not keep it away."
   },

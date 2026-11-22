@@ -308,3 +308,82 @@ func TestWiFiRow(t *testing.T) {
 		t.Fatalf("still on: %+v", st)
 	}
 }
+
+// TestAwayByHand: without Tailscale on this computer, Use away from home
+// offers to enter the phone's tailnet address. The dialog says what Pinky
+// cannot vouch for, refuses an address outside Tailscale's ranges as it is
+// typed, says why an address failed, and turns it on at the phone's own.
+func TestAwayByHand(t *testing.T) {
+	ta := newTestApp(t, fakeapi.OnePhone)
+	ta.api.SetTailnet(driver.TailnetStatus{State: driver.TailnetNotInstalled})
+	ta.sync()
+	ta.page, ta.set.sec = pageSettings, secPhones
+	tt := mg.NewTester(ta.view, 1280, 1000)
+	ta.waitFor(t, "the offer", func() bool { tt.Frame(); return hasText(tt, "Enter address…") })
+	if !hasText(tt, "Needs Tailscale on this computer, signed in.") || !hasText(tt, "you can enter Pixel 9's tailnet address instead") {
+		t.Fatalf("row: %q", tt.Texts())
+	}
+	if err := tt.Click("Enter address…"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	privacy := "Pinky can't see how this computer routes traffic to that address, and adb's own connection isn't encrypted. The connection is only as private as your own route to the tailnet."
+	if !ta.tn.handOpen || ta.tn.handAddr != "100.101.3.3" || !hasText(tt, "Reach Pixel 9 at its tailnet address?") || !hasText(tt, privacy) {
+		t.Fatalf("dialog (%q): %q", ta.tn.handAddr, tt.Texts())
+	}
+	// Checked as typed.
+	for addr, want := range map[string]string{
+		"192.168.1.42": "192.168.1.42 isn't a tailnet address. Tailscale's addresses are in 100.64.0.0/10 or fd7a:115c:a1e0::/48.",
+		"pixel-9":      "Enter an IP address, such as 100.101.2.2.",
+	} {
+		ta.tn.handAddr = addr
+		tt.Frame()
+		if !hasText(tt, want) {
+			t.Errorf("%s: %q", addr, tt.Texts())
+		}
+		if err := tt.Click("Turn on"); err == nil {
+			tt.Frame()
+			if ta.tn.handBusy {
+				t.Errorf("%s: turning on", addr)
+			}
+		}
+	}
+	// Refused by the phone's checks.
+	for addr, want := range map[string]string{
+		"100.101.9.9": "Something other than Pixel 9 answered at 100.101.9.9, so Pinky didn't use it.",
+		"100.101.8.8": "This computer can't reach Pixel 9 at 100.101.8.8.",
+		"100.101.4.4": "100.101.4.4 isn't on Pixel 9's VPN.",
+	} {
+		ta.tn.handAddr = addr
+		tt.Frame()
+		if err := tt.Click("Turn on"); err != nil {
+			t.Fatalf("%s: %v", addr, err)
+		}
+		ta.waitFor(t, addr, func() bool { tt.Frame(); return hasText(tt, want) })
+		if !ta.tn.handOpen {
+			t.Fatalf("%s: the dialog closed", addr)
+		}
+	}
+	ta.tn.handAddr = "100.101.3.3"
+	tt.Frame()
+	if err := tt.Click("Turn on"); err != nil {
+		t.Fatal(err)
+	}
+	ta.waitFor(t, "on", func() bool { tt.Frame(); return hasText(tt, "On, at 100.101.3.3, the address you entered.") })
+	if ta.tn.handOpen || !hasText(tt, privacy) {
+		t.Fatalf("on: %q", tt.Texts())
+	}
+}
+
+func TestByHandProblem(t *testing.T) {
+	for _, ok := range []string{"100.101.2.2", " 100.101.2.2:5555 ", "fd7a:115c:a1e0::2", "[fd7a:115c:a1e0::2]:5555"} {
+		if p := byHandProblem(ok); p != "" {
+			t.Errorf("%q: %s", ok, p)
+		}
+	}
+	for _, bad := range []string{"", "10.0.0.2", "100.128.0.1", "fd00::1", "fe80::1%tun0", "pixel-9", "100.101.2.2:41000"} {
+		if byHandProblem(bad) == "" {
+			t.Errorf("%q passed", bad)
+		}
+	}
+}

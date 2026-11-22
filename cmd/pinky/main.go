@@ -32,52 +32,13 @@ var version = "0.0.0-dev"
 
 func main() {
 	ios.PinkyVersion = version // the iPhone app kit of this release
-	cmd := "app"
-	args := os.Args[1:]
-	if len(args) > 0 && (!strings.HasPrefix(args[0], "-") || isCommandFlag(args[0])) {
-		cmd, args = args[0], args[1:]
-	}
-	var err error
-	switch cmd {
-	case "version", "--version", "-v":
-		fmt.Println("pinky", version)
-	case "help", "--help", "-h":
-		usage()
-	case "app":
-		err = runApp(args)
-	case "daemon":
-		err = runDaemon(args)
-	case "mcp":
-		err = runMCP(args)
-	case "devices":
-		err = runDevices(args)
-	case "task":
-		err = runTask(args)
-	case "companion":
-		err = runCompanion(args)
-	case "helper":
-		err = runHelper(args)
-	case "needs":
-		err = runNeeds(args)
-	case "decide":
-		err = runDecide(args)
-	case "token":
-		err = runToken(args)
-	case "vcorp":
-		err = runVcorp(args)
-	case "quit":
-		err = runQuit(args)
-	case "update":
-		err = runUpdate(args)
-	case "update-helper":
-		// Not for people: the app starts it from a copy of itself to
-		// install an update on Windows.
-		err = runUpdateHelper(args)
-	default:
-		usage()
-		os.Exit(2)
-	}
+	cmd, args := commandOf(os.Args[1:])
+	err := dispatch(cmd, args)
 	if err != nil {
+		if errors.Is(err, errUnknownCommand) {
+			usage()
+			os.Exit(2)
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(2)
 		}
@@ -93,8 +54,68 @@ func main() {
 	}
 }
 
+// errUnknownCommand says the command line named a command Pinky does not
+// know: main prints the usage and quits 2.
+var errUnknownCommand = errors.New("unknown command")
+
+// dispatch runs the command the command line names, with its flags.
+func dispatch(cmd string, args []string) error {
+	switch cmd {
+	case "version", "--version", "-v":
+		fmt.Println("pinky", version)
+		return nil
+	case "help", "--help", "-h", "-help":
+		usage()
+		return nil
+	case "app":
+		return runApp(args)
+	case "daemon":
+		return runDaemon(args)
+	case "mcp":
+		return runMCP(args)
+	case "devices":
+		return runDevices(args)
+	case "task":
+		return runTask(args)
+	case "companion":
+		return runCompanion(args)
+	case "helper":
+		return runHelper(args)
+	case "needs":
+		return runNeeds(args)
+	case "decide":
+		return runDecide(args)
+	case "token":
+		return runToken(args)
+	case "vcorp":
+		return runVcorp(args)
+	case "quit":
+		return runQuit(args)
+	case "update":
+		return runUpdate(args)
+	case "update-helper":
+		// Not for people: the app starts it from a copy of itself to
+		// install an update on Windows.
+		return runUpdateHelper(args)
+	}
+	return errUnknownCommand
+}
+
+// commandOf splits the command line into the command and its flags. The
+// first argument names the command unless it is a flag, which belongs to
+// the app; the commands spelled as one (--version, -help) are the
+// exception.
+func commandOf(args []string) (cmd string, rest []string) {
+	if len(args) > 0 && (!strings.HasPrefix(args[0], "-") || isCommandFlag(args[0])) {
+		return args[0], args[1:]
+	}
+	return "app", args
+}
+
 // isCommandFlag reports whether a first argument that looks like a flag is
-// really a command, such as --version.
+// really a command, such as --version. dispatch has a case for every one
+// of them; one it lacks would print the usage and quit 2, as an unknown
+// command does.
 func isCommandFlag(arg string) bool {
 	switch arg {
 	case "--version", "-v", "help", "--help", "-h", "-help":

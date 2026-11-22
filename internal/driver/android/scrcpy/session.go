@@ -2,7 +2,6 @@ package scrcpy
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -62,8 +61,8 @@ type Session struct {
 	jarDone chan struct{} // closed once the jar is removed after the end
 }
 
-// Start pushes the bundled server to the phone, runs it with opt and
-// connects its sockets. ctx bounds the setup only.
+// Start puts the bundled server on the phone (see jar.go), runs it with
+// opt and connects its sockets. ctx bounds the setup only.
 func Start(ctx context.Context, c *adb.Client, serial string, opt Options) (*Session, error) {
 	if opt.NoVideo && opt.NoControl {
 		return nil, errors.New("scrcpy: a session needs video or control")
@@ -74,13 +73,12 @@ func Start(ctx context.Context, c *adb.Client, serial string, opt Options) (*Ses
 	}
 	s := &Session{
 		client: c, serial: serial, scid: scid, opt: opt,
-		jar:     fmt.Sprintf("/data/local/tmp/pinky-scrcpy-%08x.jar", scid),
 		exited:  make(chan struct{}),
 		done:    make(chan struct{}),
 		jarDone: make(chan struct{}),
 		acks:    map[uint64]chan struct{}{},
 	}
-	if err := c.Push(ctx, serial, bytes.NewReader(serverJar), s.jar, 0o644, time.Now()); err != nil {
+	if s.jar, err = runJar(ctx, c, serial, scid); err != nil {
 		return nil, fmt.Errorf("scrcpy: push server: %w", err)
 	}
 	cmd := "CLASSPATH=" + s.jar + " app_process / com.genymobile.scrcpy.Server " + adb.Command(opt.Args(scid)...)
@@ -93,8 +91,8 @@ func Start(ctx context.Context, c *adb.Client, serial string, opt Options) (*Ses
 
 	if err := s.connect(ctx); err != nil {
 		s.Close()
-		// The server deletes its jar once it runs; this covers the case
-		// where it never got that far.
+		// The server deletes the jar it runs from once it starts; this
+		// covers the case where it never got that far.
 		s.removeJar()
 		return nil, err
 	}
@@ -112,11 +110,9 @@ func randomSCID() (uint32, error) {
 	return binary.BigEndian.Uint32(b[:]) & 0x7fffffff, nil
 }
 
-func (s *Session) removeJar() {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	_, _ = s.client.Shell(ctx, s.serial, "rm -f "+s.jar)
-}
+// removeJar removes the run's own name for the jar; the shared copy
+// stays for the next run.
+func (s *Session) removeJar() { removeFile(s.client, s.serial, s.jar) }
 
 // connect opens the video and control sockets in the order the server
 // accepts them and reads the stream headers.
@@ -529,9 +525,9 @@ func (s *Session) fail(err error) {
 		s.err = err
 		close(s.done)
 		s.closeConns()
-		// The server deletes its jar when it starts, but not always when
-		// it crashes early (a failing encoder on Android 10): make sure
-		// nothing stays on the phone.
+		// The server deletes the jar it runs from when it starts, but not
+		// always when it crashes early (a failing encoder on Android 10):
+		// make sure the run's name for it does not stay on the phone.
 		go s.cleanJar()
 	})
 }

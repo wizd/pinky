@@ -126,6 +126,20 @@ func (q *quitIntent) signalled() {
 	q.system = true
 }
 
+// earlySignal quits for a SIGINT or SIGTERM that came while the app was
+// starting. signals hears them from before ui.Run, but MyGo only once its
+// event loop starts: one in between reached signals alone, and Pinky went
+// on running as if it had not come. Call it once the window is up; should
+// MyGo have heard the signal too, the second quit does nothing.
+func (q *quitIntent) earlySignal(signals <-chan os.Signal, quit func()) {
+	select {
+	case <-signals:
+		q.signalled()
+		quit()
+	default:
+	}
+}
+
 // byPerson reports whether the person quit Pinky.
 func (q *quitIntent) byPerson() bool {
 	q.mu.Lock()

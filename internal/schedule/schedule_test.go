@@ -93,6 +93,46 @@ func TestNextTimeZone(t *testing.T) {
 	}
 }
 
+// A time the clocks skip, as they move forward, is due when they have moved
+// past it, not an hour before it.
+func TestNextSkippedByTheClocks(t *testing.T) {
+	ny := mustZone("America/New_York")
+	// 2027-03-14 is the start of daylight saving time in New York: 2:00
+	// becomes 3:00.
+	cases := []struct {
+		name string
+		s    Schedule
+		from string
+		want []string
+	}{
+		{"daily", Schedule{Repeat: Daily, Times: []string{"02:30"}}, "2027-03-13 12:00",
+			[]string{"2027-03-14 03:30 EDT", "2027-03-15 02:30 EDT"}},
+		{"once", Schedule{Repeat: Once, Date: "2027-03-14", Times: []string{"02:30"}}, "2027-03-13 12:00",
+			[]string{"2027-03-14 03:30 EDT"}},
+		{"skipped before a later time", Schedule{Repeat: Daily, Times: []string{"02:30", "03:15"}}, "2027-03-13 12:00",
+			[]string{"2027-03-14 03:15 EDT", "2027-03-14 03:30 EDT", "2027-03-15 02:30 EDT"}},
+		{"every hour", Schedule{Repeat: Interval, Every: 1, Times: []string{"00:00"}}, "2027-03-14 00:30",
+			[]string{"2027-03-14 01:00 EST", "2027-03-14 03:00 EDT", "2027-03-14 04:00 EDT"}},
+	}
+	for _, c := range cases {
+		var got []string
+		for _, g := range c.s.Upcoming(at(ny, c.from), ny, len(c.want)) {
+			got = append(got, g.In(ny).Format("2006-01-02 15:04 MST"))
+		}
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%s: Upcoming = %v, want %v", c.name, got, c.want)
+		}
+	}
+	// Where the clocks skip midnight, a weekly time stays on its day.
+	santiago := mustZone("America/Santiago")
+	s := Schedule{Repeat: Weekly, Days: []int{0}, Times: []string{"00:30"}}
+	// 2026-09-06, a Sunday, starts at 1:00 in Santiago.
+	n, _ := s.Next(at(santiago, "2026-09-05 12:00"), santiago)
+	if got := n.In(santiago).Format("Mon 2006-01-02 15:04"); got != "Sun 2026-09-06 01:30" {
+		t.Errorf("Sunday 00:30 in Santiago due %s, want Sun 2026-09-06 01:30", got)
+	}
+}
+
 func TestValidate(t *testing.T) {
 	now := at(shanghai, "2026-11-13 09:00")
 	ok := Schedule{Task: "Check the weather", Repeat: Daily, Times: []string{"08:00"}}

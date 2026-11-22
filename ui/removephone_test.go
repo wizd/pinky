@@ -50,7 +50,7 @@ func TestRemovePhoneFromMenu(t *testing.T) {
 	mustHave(t, tt, "Remove Pixel 9?", "It leaves Pinky's list, and agents can no longer use it.",
 		"Its saved PIN and its settings in Pinky are deleted.", "Claude Code's task on it stops: Reorder last week's lunch.",
 		"Also delete its history: tasks, screenshots and recordings", "Its history stays in Activity.",
-		"It's connected with a cable, so it shows up again right away", "The phone keeps trusting this computer")
+		"It's connected with a cable. It stays off the list while it stays plugged in", "The phone keeps trusting this computer")
 	if err := tt.Click("Remove"); err != nil {
 		t.Fatal(err)
 	}

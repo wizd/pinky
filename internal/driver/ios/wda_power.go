@@ -141,6 +141,19 @@ func (p *wdaPower) keypadShown(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// pressPadButton implements powerPhone.
+func (p *wdaPower) pressPadButton(ctx context.Context) (bool, error) {
+	root, err := p.d.source(ctx)
+	if err != nil {
+		return false, err
+	}
+	b, ok := padButton(flattenWDA(root))
+	if !ok {
+		return false, nil
+	}
+	return true, p.d.Tap(ctx, frameCenter(b.Frame, p.d.scale), driver.TapOptions{})
+}
+
 // flattenWDA lists every visible node of WDA's tree as the remoteAX path
 // describes elements, for passcodePad.
 func flattenWDA(root *wdaNode) []raxElement {

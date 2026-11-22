@@ -45,6 +45,10 @@ type Device struct {
 
 	dumpMu   sync.Mutex // uiautomator allows one dump at a time
 	dumpFile bool       // this phone cannot dump to /dev/tty
+	// restlessAt is when uiautomator last found the screen never still,
+	// with restlessWin in front then (observe.go); under stateMu.
+	restlessAt  time.Time
+	restlessWin string
 
 	capDisp capDisplay // the physical display screencap captures (capture.go)
 

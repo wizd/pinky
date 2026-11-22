@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Bounds of what a Store keeps, all phones together.
@@ -17,6 +18,9 @@ const (
 	MaxBytes    = 32 << 20
 	// BodyMax is how much of each body a Store keeps.
 	BodyMax = 16 << 10
+	// BlockedGap is how close blocked connections to one host follow each
+	// other for the store to keep them as one row (Request.Count).
+	BlockedGap = time.Minute
 )
 
 // Store keeps captured requests in memory only, oldest dropped first once
@@ -89,6 +93,24 @@ func (s *Store) add(gen *int, r Request, b Bodies) (string, bool) {
 	if gen != nil && *gen != s.gens[r.Device] {
 		return "", false
 	}
+	if r.Blocked {
+		if e := s.repeatLocked(r); e != nil {
+			e.r.Count = e.r.Connections() + r.Connections()
+			// Connections are kept as they open, nearly in order.
+			last := e.r.Latest()
+			if l := r.Latest(); l.After(last) {
+				last = l
+			}
+			if r.Start.Before(e.r.Start) {
+				e.r.Start = r.Start
+			}
+			e.r.Last = last
+			if last.After(e.r.End) {
+				e.r.End = last
+			}
+			return e.r.ID, true
+		}
+	}
 	s.next++
 	r.ID = strconv.Itoa(s.next)
 	s.list = append(s.list, &entry{r: r, bodies: b, size: size})
@@ -105,6 +127,23 @@ func (s *Store) add(gen *int, r Request, b Bodies) (string, bool) {
 		s.list = slices.Delete(s.list, 0, n)
 	}
 	return r.ID, true
+}
+
+// repeatLocked returns the phone's blocked row that a blocked connection
+// r repeats: the newest one to the same URL whose span reaches within
+// BlockedGap of r's start. The caller holds s.mu.
+func (s *Store) repeatLocked(r Request) *entry {
+	for i := len(s.list) - 1; i >= 0; i-- {
+		e := s.list[i]
+		if e.r.Device != r.Device || !e.r.Blocked || e.r.URL != r.URL || e.r.Method != r.Method {
+			continue
+		}
+		if r.Start.Sub(e.r.Latest()) <= BlockedGap && e.r.Start.Sub(r.Latest()) <= BlockedGap {
+			return e
+		}
+		return nil
+	}
+	return nil
 }
 
 func cutBody(b []byte, cut bool) ([]byte, bool) {

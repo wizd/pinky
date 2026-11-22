@@ -4849,6 +4849,252 @@ func (msgs Messages) AwayBusy() string {
 	return Catalog.Format(msgs.locale, "awayBusy", nil)
 }
 
+// AwayByHandButton says "Enter address…"
+// in the language the app shows.
+//
+// Button by awayNoTailscaleHere: opens the dialog to enter the phone's
+// tailnet address by hand.
+func AwayByHandButton() string { return In(i18n.Locale()).AwayByHandButton() }
+
+// AwayByHandButton says "Enter address…"
+// in the language of msgs.
+//
+// Button by awayNoTailscaleHere: opens the dialog to enter the phone's
+// tailnet address by hand.
+func (msgs Messages) AwayByHandButton() string {
+	return Catalog.Format(msgs.locale, "awayByHandButton", nil)
+}
+
+// AwayByHandOffer says "If this computer reaches your tailnet another way, such as a proxy with a Tailscale outbound, you can enter {name}'s …"
+// in the language the app shows.
+//
+// Under awayNoTailscaleHere for a connected phone: the alternative to
+// Tailscale on this computer. A Tailscale outbound is a proxy's (sing-box)
+// way to join a tailnet.
+func AwayByHandOffer(name string) string { return In(i18n.Locale()).AwayByHandOffer(name) }
+
+// AwayByHandOffer says "If this computer reaches your tailnet another way, such as a proxy with a Tailscale outbound, you can enter {name}'s …"
+// in the language of msgs.
+//
+// Under awayNoTailscaleHere for a connected phone: the alternative to
+// Tailscale on this computer. A Tailscale outbound is a proxy's (sing-box)
+// way to join a tailnet.
+func (msgs Messages) AwayByHandOffer(name string) string {
+	return Catalog.Format(msgs.locale, "awayByHandOffer", map[string]any{"name": name})
+}
+
+// AwayByHandTitle says "Reach {name} at its tailnet address?"
+// in the language the app shows.
+//
+// The dialog that turns Use away from home on at a tailnet address entered
+// by hand: its title.
+func AwayByHandTitle(name string) string { return In(i18n.Locale()).AwayByHandTitle(name) }
+
+// AwayByHandTitle says "Reach {name} at its tailnet address?"
+// in the language of msgs.
+//
+// The dialog that turns Use away from home on at a tailnet address entered
+// by hand: its title.
+func (msgs Messages) AwayByHandTitle(name string) string {
+	return Catalog.Format(msgs.locale, "awayByHandTitle", map[string]any{"name": name})
+}
+
+// AwayByHandWhat says "Pinky has {name}'s adb listen on the network at port 5555, as adb tcpip does, and connects to it at the address you e…"
+// in the language the app shows.
+//
+// The address dialog: what turning it on does. adb tcpip is a command; keep
+// it.
+func AwayByHandWhat(name string) string { return In(i18n.Locale()).AwayByHandWhat(name) }
+
+// AwayByHandWhat says "Pinky has {name}'s adb listen on the network at port 5555, as adb tcpip does, and connects to it at the address you e…"
+// in the language of msgs.
+//
+// The address dialog: what turning it on does. adb tcpip is a command; keep
+// it.
+func (msgs Messages) AwayByHandWhat(name string) string {
+	return Catalog.Format(msgs.locale, "awayByHandWhat", map[string]any{"name": name})
+}
+
+// AwayByHandField says "Tailnet address"
+// in the language the app shows.
+//
+// The address dialog: the label of the field for the phone's tailnet
+// address.
+func AwayByHandField() string { return In(i18n.Locale()).AwayByHandField() }
+
+// AwayByHandField says "Tailnet address"
+// in the language of msgs.
+//
+// The address dialog: the label of the field for the phone's tailnet
+// address.
+func (msgs Messages) AwayByHandField() string {
+	return Catalog.Format(msgs.locale, "awayByHandField", nil)
+}
+
+// AwayByHandPrivacy says "Pinky can't see how this computer routes traffic to that address, and adb's own connection isn't encrypted. The conne…"
+// in the language the app shows.
+//
+// The address dialog, and under awayOnByHandDesc while it is on: what Pinky
+// cannot vouch for. Say it plainly.
+func AwayByHandPrivacy() string { return In(i18n.Locale()).AwayByHandPrivacy() }
+
+// AwayByHandPrivacy says "Pinky can't see how this computer routes traffic to that address, and adb's own connection isn't encrypted. The conne…"
+// in the language of msgs.
+//
+// The address dialog, and under awayOnByHandDesc while it is on: what Pinky
+// cannot vouch for. Say it plainly.
+func (msgs Messages) AwayByHandPrivacy() string {
+	return Catalog.Format(msgs.locale, "awayByHandPrivacy", nil)
+}
+
+// AwayByHandChecks says "Before it turns on, Pinky checks over the cable or Wi-Fi that the address is on {name}'s own VPN, then that this comp…"
+// in the language the app shows.
+//
+// The address dialog: what Pinky checks before it turns on.
+func AwayByHandChecks(name string) string { return In(i18n.Locale()).AwayByHandChecks(name) }
+
+// AwayByHandChecks says "Before it turns on, Pinky checks over the cable or Wi-Fi that the address is on {name}'s own VPN, then that this comp…"
+// in the language of msgs.
+//
+// The address dialog: what Pinky checks before it turns on.
+func (msgs Messages) AwayByHandChecks(name string) string {
+	return Catalog.Format(msgs.locale, "awayByHandChecks", map[string]any{"name": name})
+}
+
+// AwayByHandExposure says "The phone listens on every network it joins: on a café's Wi-Fi, another device there could ask to debug it. The phon…"
+// in the language the app shows.
+//
+// The address dialog: what it exposes (awayDialogExposure without the
+// promise of Tailscale's encryption).
+func AwayByHandExposure() string { return In(i18n.Locale()).AwayByHandExposure() }
+
+// AwayByHandExposure says "The phone listens on every network it joins: on a café's Wi-Fi, another device there could ask to debug it. The phon…"
+// in the language of msgs.
+//
+// The address dialog: what it exposes (awayDialogExposure without the
+// promise of Tailscale's encryption).
+func (msgs Messages) AwayByHandExposure() string {
+	return Catalog.Format(msgs.locale, "awayByHandExposure", nil)
+}
+
+// AwayByHandNotAddr says "Enter an IP address, such as 100.101.2.2."
+// in the language the app shows.
+//
+// The address dialog: what was typed is not an IP address.
+func AwayByHandNotAddr() string { return In(i18n.Locale()).AwayByHandNotAddr() }
+
+// AwayByHandNotAddr says "Enter an IP address, such as 100.101.2.2."
+// in the language of msgs.
+//
+// The address dialog: what was typed is not an IP address.
+func (msgs Messages) AwayByHandNotAddr() string {
+	return Catalog.Format(msgs.locale, "awayByHandNotAddr", nil)
+}
+
+// AwayByHandRange says "{addr} isn't a tailnet address. Tailscale's addresses are in 100.64.0.0/10 or fd7a:115c:a1e0::/48."
+// in the language the app shows.
+//
+// The address dialog: the address is outside Tailscale's ranges; keep the
+// ranges as they are.
+func AwayByHandRange(addr string) string { return In(i18n.Locale()).AwayByHandRange(addr) }
+
+// AwayByHandRange says "{addr} isn't a tailnet address. Tailscale's addresses are in 100.64.0.0/10 or fd7a:115c:a1e0::/48."
+// in the language of msgs.
+//
+// The address dialog: the address is outside Tailscale's ranges; keep the
+// ranges as they are.
+func (msgs Messages) AwayByHandRange(addr string) string {
+	return Catalog.Format(msgs.locale, "awayByHandRange", map[string]any{"addr": addr})
+}
+
+// AwayByHandNotOnPhone says "{addr} isn't on {name}'s VPN. Check the address in Tailscale on the phone, and that Tailscale is connected there."
+// in the language the app shows.
+//
+// The address dialog: the phone does not have the address on its VPN
+// interface.
+func AwayByHandNotOnPhone(name string, addr string) string {
+	return In(i18n.Locale()).AwayByHandNotOnPhone(name, addr)
+}
+
+// AwayByHandNotOnPhone says "{addr} isn't on {name}'s VPN. Check the address in Tailscale on the phone, and that Tailscale is connected there."
+// in the language of msgs.
+//
+// The address dialog: the phone does not have the address on its VPN
+// interface.
+func (msgs Messages) AwayByHandNotOnPhone(name string, addr string) string {
+	return Catalog.Format(msgs.locale, "awayByHandNotOnPhone", map[string]any{"name": name, "addr": addr})
+}
+
+// AwayByHandUnreachable says "This computer can't reach {name} at {addr}. Check that your route to the tailnet is on, then try again."
+// in the language the app shows.
+//
+// The address dialog: nothing answered at the address from this computer.
+func AwayByHandUnreachable(name string, addr string) string {
+	return In(i18n.Locale()).AwayByHandUnreachable(name, addr)
+}
+
+// AwayByHandUnreachable says "This computer can't reach {name} at {addr}. Check that your route to the tailnet is on, then try again."
+// in the language of msgs.
+//
+// The address dialog: nothing answered at the address from this computer.
+func (msgs Messages) AwayByHandUnreachable(name string, addr string) string {
+	return Catalog.Format(msgs.locale, "awayByHandUnreachable", map[string]any{"name": name, "addr": addr})
+}
+
+// AwayByHandNotThePhone says "Something other than {name} answered at {addr}, so Pinky didn't use it."
+// in the language the app shows.
+//
+// The address dialog: another device answered at the address (it lacks the
+// mark Pinky left on the phone).
+func AwayByHandNotThePhone(name string, addr string) string {
+	return In(i18n.Locale()).AwayByHandNotThePhone(name, addr)
+}
+
+// AwayByHandNotThePhone says "Something other than {name} answered at {addr}, so Pinky didn't use it."
+// in the language of msgs.
+//
+// The address dialog: another device answered at the address (it lacks the
+// mark Pinky left on the phone).
+func (msgs Messages) AwayByHandNotThePhone(name string, addr string) string {
+	return Catalog.Format(msgs.locale, "awayByHandNotThePhone", map[string]any{"name": name, "addr": addr})
+}
+
+// AwayByHandNotListening says "Something answered at {addr}, but not {name}'s adb. Try again in a moment."
+// in the language the app shows.
+//
+// The address dialog: something answered at the address, but did not take
+// adb's connection.
+func AwayByHandNotListening(name string, addr string) string {
+	return In(i18n.Locale()).AwayByHandNotListening(name, addr)
+}
+
+// AwayByHandNotListening says "Something answered at {addr}, but not {name}'s adb. Try again in a moment."
+// in the language of msgs.
+//
+// The address dialog: something answered at the address, but did not take
+// adb's connection.
+func (msgs Messages) AwayByHandNotListening(name string, addr string) string {
+	return Catalog.Format(msgs.locale, "awayByHandNotListening", map[string]any{"name": name, "addr": addr})
+}
+
+// AwayOnByHandDesc says "On, at {addr}, the address you entered. When {name} is away from this computer's network, Pinky reaches it through th…"
+// in the language the app shows.
+//
+// Use away from home, on at a tailnet address entered by hand (awayOnDesc
+// for Tailscale on this computer).
+func AwayOnByHandDesc(name string, addr string) string {
+	return In(i18n.Locale()).AwayOnByHandDesc(name, addr)
+}
+
+// AwayOnByHandDesc says "On, at {addr}, the address you entered. When {name} is away from this computer's network, Pinky reaches it through th…"
+// in the language of msgs.
+//
+// Use away from home, on at a tailnet address entered by hand (awayOnDesc
+// for Tailscale on this computer).
+func (msgs Messages) AwayOnByHandDesc(name string, addr string) string {
+	return Catalog.Format(msgs.locale, "awayOnByHandDesc", map[string]any{"name": name, "addr": addr})
+}
+
 // AwayDialogCancel says "Cancel"
 // in the language the app shows.
 //
@@ -5855,18 +6101,48 @@ func (msgs Messages) TrafficProblemNoAddress(phone string) string {
 	return Catalog.Format(msgs.locale, "trafficProblemNoAddress", map[string]any{"phone": phone})
 }
 
-// TrafficProblemListenFailed says "Another program on this computer uses the proxy's port, so Pinky can't listen."
+// TrafficProblemListenFailed says "Another program on this computer uses port {port} at {address}, so {phone}'s Wi-Fi proxy can't reach Pinky. Quit that…"
 // in the language the app shows.
 //
-// Why Pinky's proxy does not listen: its port is taken.
-func TrafficProblemListenFailed() string { return In(i18n.Locale()).TrafficProblemListenFailed() }
+// Why Pinky's proxy does not listen for the phone's Wi-Fi proxy: another
+// program holds the port of the proxy or of its setup link at this
+// computer's address on the phone's network. The cable route
+// (trafficRouteTitle) is not affected. port is the port, address this
+// computer's address, phone the phone's name.
+func TrafficProblemListenFailed(port string, address string, phone string) string {
+	return In(i18n.Locale()).TrafficProblemListenFailed(port, address, phone)
+}
 
-// TrafficProblemListenFailed says "Another program on this computer uses the proxy's port, so Pinky can't listen."
+// TrafficProblemListenFailed says "Another program on this computer uses port {port} at {address}, so {phone}'s Wi-Fi proxy can't reach Pinky. Quit that…"
 // in the language of msgs.
 //
-// Why Pinky's proxy does not listen: its port is taken.
-func (msgs Messages) TrafficProblemListenFailed() string {
-	return Catalog.Format(msgs.locale, "trafficProblemListenFailed", nil)
+// Why Pinky's proxy does not listen for the phone's Wi-Fi proxy: another
+// program holds the port of the proxy or of its setup link at this
+// computer's address on the phone's network. The cable route
+// (trafficRouteTitle) is not affected. port is the port, address this
+// computer's address, phone the phone's name.
+func (msgs Messages) TrafficProblemListenFailed(port string, address string, phone string) string {
+	return Catalog.Format(msgs.locale, "trafficProblemListenFailed", map[string]any{"port": port, "address": address, "phone": phone})
+}
+
+// TrafficProblemRouteListenFailed says "Pinky couldn't listen on this computer's loopback (127.0.0.1), so {phone} isn't routed over its cable. The Wi-Fi prox…"
+// in the language the app shows.
+//
+// Why the cable route (trafficRouteTitle) does not start: Pinky could not
+// listen on this computer's loopback address at any port. The Wi-Fi proxy
+// still works. phone is the phone's name.
+func TrafficProblemRouteListenFailed(phone string) string {
+	return In(i18n.Locale()).TrafficProblemRouteListenFailed(phone)
+}
+
+// TrafficProblemRouteListenFailed says "Pinky couldn't listen on this computer's loopback (127.0.0.1), so {phone} isn't routed over its cable. The Wi-Fi prox…"
+// in the language of msgs.
+//
+// Why the cable route (trafficRouteTitle) does not start: Pinky could not
+// listen on this computer's loopback address at any port. The Wi-Fi proxy
+// still works. phone is the phone's name.
+func (msgs Messages) TrafficProblemRouteListenFailed(phone string) string {
+	return Catalog.Format(msgs.locale, "trafficProblemRouteListenFailed", map[string]any{"phone": phone})
 }
 
 // TrafficProblemNoCA says "Pinky couldn't read or make its certificate."
@@ -21257,6 +21533,26 @@ func (msgs Messages) PhoneTailnetAway(name string) string {
 	return Catalog.Format(msgs.locale, "phoneTailnetAway", map[string]any{"name": name})
 }
 
+// PhoneByHandAway says "Pinky can't reach {name} at {addr} now. It tries again by itself; check that this computer's route to your tailnet is…"
+// in the language the app shows.
+//
+// An offline phone's page, for a phone used away from home at a tailnet
+// address entered by hand that does not answer there (phoneTailnetAway for
+// Tailscale on this computer).
+func PhoneByHandAway(name string, addr string) string {
+	return In(i18n.Locale()).PhoneByHandAway(name, addr)
+}
+
+// PhoneByHandAway says "Pinky can't reach {name} at {addr} now. It tries again by itself; check that this computer's route to your tailnet is…"
+// in the language of msgs.
+//
+// An offline phone's page, for a phone used away from home at a tailnet
+// address entered by hand that does not answer there (phoneTailnetAway for
+// Tailscale on this computer).
+func (msgs Messages) PhoneByHandAway(name string, addr string) string {
+	return Catalog.Format(msgs.locale, "phoneByHandAway", map[string]any{"name": name, "addr": addr})
+}
+
 // PhoneTakeOver says "Take over"
 // in the language the app shows.
 //
@@ -22545,14 +22841,14 @@ func (msgs Messages) RemovePhoneButtonLabel(name string) string {
 	return Catalog.Format(msgs.locale, "removePhoneButtonLabel", map[string]any{"name": name})
 }
 
-// RemovePhoneCable says "It's connected with a cable, so it shows up again right away, as a new phone. Unplug it first to keep it off the list."
+// RemovePhoneCable says "It's connected with a cable. It stays off the list while it stays plugged in; unplug it and plug it in again to add i…"
 // in the language the app shows.
 //
 // In the Remove phone dialog, for a phone connected with a USB cable now:
 // removing it does not keep it away.
 func RemovePhoneCable() string { return In(i18n.Locale()).RemovePhoneCable() }
 
-// RemovePhoneCable says "It's connected with a cable, so it shows up again right away, as a new phone. Unplug it first to keep it off the list."
+// RemovePhoneCable says "It's connected with a cable. It stays off the list while it stays plugged in; unplug it and plug it in again to add i…"
 // in the language of msgs.
 //
 // In the Remove phone dialog, for a phone connected with a USB cable now:

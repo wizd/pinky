@@ -42,7 +42,9 @@ import (
 //   - Android only, when the person turns on Route through Pinky during
 //     tasks: Pinky has the phone's 127.0.0.1:port reach the computer over
 //     adb (adb reverse) and sets the phone's global HTTP proxy to it for
-//     the task (driver.ProxyRouter). It notes the setting it found first
+//     the task (driver.ProxyRouter). The port is the proxy's, or any free
+//     one on this computer's loopback when another program holds that
+//     there. It notes the setting it found first
 //     (history traffic_routes) and puts it back when the task ends, the
 //     switch goes off, the phone is removed, Pinky stops, and at the next
 //     start after a crash. Never through an agent tool.
@@ -57,8 +59,15 @@ const (
 	// this computer is on (an iPhone on its cable only, a phone on mobile
 	// data), and the phone is not routed over its cable.
 	TrafficNoAddress = "no_address"
-	// TrafficListenFailed: the port is taken on this computer.
+	// TrafficListenFailed: another program holds the setup or proxy port
+	// at the address the phone reaches (TrafficSetup.ProblemAddr), so the
+	// phone's Wi-Fi proxy cannot reach Pinky. The cable route is not
+	// affected.
 	TrafficListenFailed = "listen_failed"
+	// TrafficRouteListenFailed: Pinky could not listen on this computer's
+	// loopback for the cable route, at its port or any other. The Wi-Fi
+	// proxy is not affected.
+	TrafficRouteListenFailed = "route_listen_failed"
 	// TrafficNoCA: the certificate authority could not be read or made.
 	TrafficNoCA = "no_ca"
 	// TrafficRouteFailed: setting the Android phone's proxy failed.
@@ -86,6 +95,7 @@ type captureState struct {
 	listen  map[string][]string   // by phone: the proxy's addresses it uses during tasks
 	setupAt map[string][]string   // by phone: the setup listeners' addresses
 	problem map[string]string     // by phone: why nothing listens for it
+	failAt  map[string]string     // by phone: the address it could not listen at, for TrafficListenFailed
 	hidden  map[string]int        // by phone: requests left out while the person held it
 	blocked map[string][]string   // by phone: the hosts the person blocked
 	routes  map[string]liveRoute  // routes made in this run
@@ -114,6 +124,7 @@ func (g *Gateway) initCapture() {
 	g.cap.listen = map[string][]string{}
 	g.cap.setupAt = map[string][]string{}
 	g.cap.problem = map[string]string{}
+	g.cap.failAt = map[string]string{}
 	g.cap.hidden = map[string]int{}
 	g.cap.blocked = map[string][]string{}
 	g.cap.routes = map[string]liveRoute{}
@@ -323,6 +334,7 @@ func (g *Gateway) syncCapture(ctx context.Context) {
 		clear(g.cap.listen)
 		clear(g.cap.setupAt)
 		clear(g.cap.problem)
+		clear(g.cap.failAt)
 		g.cap.routed = ""
 		g.cap.mu.Unlock()
 		return
@@ -351,6 +363,7 @@ func (g *Gateway) syncCapture(ctx context.Context) {
 	peers := g.tailnetPeers(ctx, locals)
 	setupAt := map[string][]string{}
 	problem := map[string]string{}
+	failAt := map[string]string{}
 	keep := map[string]bool{}
 	for _, w := range want {
 		for _, a := range g.phoneAddrs(ctx, w) {
@@ -362,7 +375,7 @@ func (g *Gateway) syncCapture(ctx context.Context) {
 			sat := net.JoinHostPort(ip.String(), strconv.Itoa(setupPort))
 			if _, err := p.ListenSetup(sat, at); err != nil {
 				g.log.Warn("traffic: listen", "addr", sat, "err", err)
-				problem[w.id] = TrafficListenFailed
+				problem[w.id], failAt[w.id] = TrafficListenFailed, sat
 				continue
 			}
 			keep[sat] = true
@@ -375,7 +388,7 @@ func (g *Gateway) syncCapture(ctx context.Context) {
 			}
 			if _, err := p.Listen(at); err != nil {
 				g.log.Warn("traffic: listen", "addr", at, "err", err)
-				problem[w.id] = TrafficListenFailed
+				problem[w.id], failAt[w.id] = TrafficListenFailed, at
 				continue
 			}
 			tasks[a] = w.id
@@ -385,10 +398,11 @@ func (g *Gateway) syncCapture(ctx context.Context) {
 			}
 		}
 		if w.route {
-			if why := g.route(ctx, p, w, port); why != "" {
+			if at, why := g.route(ctx, p, w, port); why != "" {
 				problem[w.id] = why
+				delete(failAt, w.id)
 			} else {
-				keep[net.JoinHostPort("127.0.0.1", strconv.Itoa(port))] = true
+				keep[at] = true
 			}
 		}
 		if len(setupAt[w.id]) == 0 && problem[w.id] == "" && !w.route {
@@ -401,7 +415,7 @@ func (g *Gateway) syncCapture(ctx context.Context) {
 		}
 	}
 	g.cap.mu.Lock()
-	g.cap.clients, g.cap.tasks, g.cap.listen, g.cap.setupAt, g.cap.problem = clients, tasks, listen, setupAt, problem
+	g.cap.clients, g.cap.tasks, g.cap.listen, g.cap.setupAt, g.cap.problem, g.cap.failAt = clients, tasks, listen, setupAt, problem, failAt
 	g.cap.mu.Unlock()
 }
 
@@ -428,53 +442,67 @@ func (g *Gateway) phoneAddrs(ctx context.Context, w captureWant) []netip.Addr {
 }
 
 // route points an Android phone's proxy at Pinky over its cable, once
-// per task. It returns why it could not.
-func (g *Gateway) route(ctx context.Context, p *traffic.Proxy, w captureWant, port int) string {
+// per task. It returns the loopback address the proxy listens at for it,
+// or why it could not.
+//
+// The port is the proxy's when it is free on this computer's loopback.
+// When another program holds it there (Warp does, at 127.0.0.1:9277), any
+// free port serves: adb reverse maps the same port on the phone to it, and
+// the phone's proxy is set to that port. The route notes the port, so
+// putting the setting back looks for that one.
+func (g *Gateway) route(ctx context.Context, p *traffic.Proxy, w captureWant, port int) (string, string) {
 	pr, ok := w.provider.(driver.ProxyRouter)
 	if !ok {
-		return TrafficRouteFailed
+		return "", TrafficRouteFailed
 	}
 	g.cap.mu.Lock()
-	_, done := g.cap.routes[w.id]
+	r, done := g.cap.routes[w.id]
 	other := g.cap.routed != "" && g.cap.routed != w.id
 	g.cap.mu.Unlock()
 	if done {
-		return ""
+		return net.JoinHostPort("127.0.0.1", strconv.Itoa(r.Port)), ""
 	}
 	if other {
-		return TrafficRouteBusy
+		return "", TrafficRouteBusy
 	}
-	at := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
-	if _, err := p.Listen(at); err != nil {
-		g.log.Warn("traffic: listen", "addr", at, "err", err)
-		return TrafficListenFailed
+	want := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	at, err := p.Listen(want)
+	if err != nil {
+		g.log.Info("traffic: the proxy's port is taken on this computer's loopback; the cable route takes another", "addr", want, "err", err)
+		if at, err = p.Listen("127.0.0.1:0"); err != nil {
+			g.log.Warn("traffic: listen", "addr", "127.0.0.1:0", "err", err)
+			return "", TrafficRouteListenFailed
+		}
+	}
+	if _, ps, err := net.SplitHostPort(at); err == nil {
+		port, _ = strconv.Atoi(ps)
 	}
 	prev, err := pr.ProxySetting(ctx, w.id)
 	if err != nil {
 		g.log.Warn("traffic: read the phone's proxy", "device", w.id, "err", err)
-		return TrafficRouteFailed
+		return "", TrafficRouteFailed
 	}
 	prev = g.settingToRestore(w.id, prev)
-	r := history.TrafficRoute{DeviceID: w.id, Prev: prev, Port: port}
+	tr := history.TrafficRoute{DeviceID: w.id, Prev: prev, Port: port}
 	// Noted before the phone changes, so that a crash in between still
 	// puts it back.
 	if g.store != nil {
-		if err := g.store.SaveTrafficRoute(ctx, r); err != nil {
+		if err := g.store.SaveTrafficRoute(ctx, tr); err != nil {
 			g.log.Warn("history: traffic route", "err", err)
-			return TrafficRouteFailed
+			return "", TrafficRouteFailed
 		}
 	}
 	if err := pr.RouteProxy(ctx, w.id, port); err != nil {
 		g.log.Warn("traffic: route the phone", "device", w.id, "err", err)
-		g.unroute(ctx, liveRoute{TrafficRoute: r, router: pr})
-		return TrafficRouteFailed
+		g.unroute(ctx, liveRoute{TrafficRoute: tr, router: pr})
+		return "", TrafficRouteFailed
 	}
 	g.log.Info("traffic: routed the phone through Pinky", "device", w.id, "port", port)
 	g.cap.mu.Lock()
-	g.cap.routes[w.id] = liveRoute{TrafficRoute: r, router: pr}
+	g.cap.routes[w.id] = liveRoute{TrafficRoute: tr, router: pr}
 	g.cap.routed = w.id
 	g.cap.mu.Unlock()
-	return ""
+	return at, ""
 }
 
 // settingToRestore is the proxy setting to put back on a phone that has
@@ -693,9 +721,16 @@ type TrafficSetup struct {
 	// Route is the person's switch, Routed whether the phone's proxy is set
 	// to Pinky now.
 	Route, Routed bool
+	// RoutePort is the port the phone's proxy is set to while Routed: the
+	// proxy's, or another when that one is taken on this computer's
+	// loopback.
+	RoutePort int
 	// Problem is why nothing listens for it, one of the Traffic*
 	// constants; "" when all is well or nothing should listen.
 	Problem string
+	// ProblemAddr is the address another program holds, for
+	// TrafficListenFailed: "192.168.1.5:9278".
+	ProblemAddr string
 }
 
 // TrafficSetup returns how a phone reaches Pinky's proxy now.
@@ -711,8 +746,10 @@ func (g *Gateway) TrafficSetup(deviceID string) (TrafficSetup, error) {
 	g.cap.mu.Lock()
 	defer g.cap.mu.Unlock()
 	s.Proxies = slices.Clone(g.cap.listen[d.id])
-	s.Problem = g.cap.problem[d.id]
-	_, s.Routed = g.cap.routes[d.id]
+	s.Problem, s.ProblemAddr = g.cap.problem[d.id], g.cap.failAt[d.id]
+	if r, ok := g.cap.routes[d.id]; ok {
+		s.Routed, s.RoutePort = true, r.Port
+	}
 	s.Blocklist = slices.Clone(g.cap.blocked[d.id])
 	if s.Problem == "" && g.cap.caErr != nil {
 		s.Problem = TrafficNoCA
@@ -805,10 +842,12 @@ func (g *Gateway) TrafficRoute(deviceID string) bool {
 	return g.trafficRoute[deviceID]
 }
 
-// trafficListening says where the proxy listens for a phone, and why not.
-func (g *Gateway) trafficListening(id string) (addrs []string, routed bool, problem string) {
+// trafficListening says where the proxy listens for a phone, and why not:
+// the problem and, for TrafficListenFailed, the address it could not
+// listen at.
+func (g *Gateway) trafficListening(id string) (addrs []string, routed bool, problem, failAt string) {
 	g.cap.mu.Lock()
 	defer g.cap.mu.Unlock()
 	_, routed = g.cap.routes[id]
-	return slices.Clone(g.cap.listen[id]), routed, g.cap.problem[id]
+	return slices.Clone(g.cap.listen[id]), routed, g.cap.problem[id], g.cap.failAt[id]
 }

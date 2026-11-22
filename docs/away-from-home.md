@@ -21,6 +21,12 @@ That's all. Pinky now keeps a connection to the phone through Tailscale and uses
 
 **Add phone › Android › Phone not on this network? Use Tailscale** shows the same steps, says what is missing on the computer, and lists the Android phones on your tailnet with a **Connect** button each. A phone that is not set up yet can also be connected there at the port its Wireless debugging screen shows, while it is on a Wi-Fi network with Wireless debugging on.
 
+### Without Tailscale on the computer
+
+If the computer reaches your tailnet another way, such as a proxy with a Tailscale outbound, it needs no Tailscale app of its own. The phone still runs Tailscale. Under the phone in **Settings › Phones**, **Use away from home** says it needs Tailscale on this computer; click **Enter address…** and type the phone's tailnet address, which Tailscale on the phone shows (such as 100.101.2.2).
+
+Before it turns on, Pinky checks over the cable or Wi-Fi that the address is in Tailscale's ranges (100.64.0.0/10 or fd7a:115c:a1e0::/48) and on the phone's own VPN, then that this computer reaches the phone there and that what answers is that phone (it carries the mark Pinky leaves on it). Pinky can't see how this computer routes traffic to the address, and adb's own connection is not encrypted: the connection is only as private as your own route to the tailnet.
+
 ## What it opens, and how to turn it off
 
 - **adb on the network.** After `adb tcpip`, the phone's adb accepts connections on port 5555 on every network the phone joins, not only through Tailscale: home Wi-Fi, a café's Wi-Fi, mobile data, IPv4 and IPv6. It lets in only the computers the phone already trusts (the ones you tapped **Allow** for); any other computer makes the phone ask, and you tap **Cancel**. The connection itself is not encrypted, except through Tailscale, which encrypts everything between your devices.
@@ -105,4 +111,5 @@ For developers; the code is in `internal/tailnet` and `internal/driver/android/n
 - `Away` says what keeps a phone from being set up (`driver.Away.Missing`): `tailscale_phone` when the phone has none of those addresses, or only one in 100.64.0.0/10 that the tailnet does not know, which another VPN may hold (Cloudflare WARP's are there); `tailscale_other` when one of them is in Tailscale's own IPv6 range (fd7a:115c:a1e0::/48) and the tailnet does not know it, so the phone's Tailscale is on another tailnet.
 - A phone with several connections is listed once, by the best (USB, then the local network, then Tailscale), so it moves to the next when one goes; `driver.Info.Via` is `tailscale` when Tailscale is the one.
 - Turning either on runs `tcpip:5555` over a connection the phone has (adbd restarts; the connection comes back in about 2 s; on Android 17 over Wireless debugging its reply may not get through, so the connection at the new address confirms it) and connects at the new address; off runs `usb:`. Removing the phone from Pinky turns both off.
+- An address entered by hand (`driver.TailnetByHand`, `tailnetmanual.go`) is kept with `manual` set: without `tailscale status`, a TCP probe alone says whether the phone is reachable, and what answers must serve the mark Pinky left on the phone (`identity.go`). [notes/tailnet.md](notes/tailnet.md) has the checks.
 - A phone reached through Tailscale streams at 1 Mbit/s and 15 frames a second (`tailnetBitRate`), unless Pinky's configuration sets a rate; the settle threshold (about 300 bytes a packet) and screenshots (`screencap`) do not depend on it.
