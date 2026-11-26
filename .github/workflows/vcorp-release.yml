@@ -270,23 +270,27 @@ jobs:
               f.write(out)
           EOF
           grep '"version"' cmd/pinky/mygo.json
-      - name: Build macOS apps and disk images
-        env:
-          COMPANION_APK: ${{ runner.temp }}/companion/pinky-android.apk
-          GH_TOKEN: ${{ github.token }}
-          MYGO_LDFLAGS: "-X github.com/DIYgod/pinky/internal/telemetry.Endpoint= -X github.com/DIYgod/pinky/internal/driver/ios.KitRepo=${{ github.repository }} -X github.com/DIYgod/pinky/internal/driver/ios.KitTagPrefix="
-        run: scripts/dist.sh darwin "$RUNNER_TEMP/dist"
       - name: Pack the iPhone app kit
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           command -v xcodegen >/dev/null || brew install --quiet xcodegen
+          mkdir -p "$RUNNER_TEMP/dist"
           ios/build.sh kit "$RUNNER_TEMP/dist/pinky-iphone-${VERSION}.tar.gz" "${VERSION}"
+      - name: Build macOS apps and disk images
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          COMPANION_APK: ${{ runner.temp }}/companion/pinky-android.apk
+          GH_TOKEN: ${{ github.token }}
+          MYGO_LDFLAGS: "-X github.com/DIYgod/pinky/internal/telemetry.Endpoint= -X github.com/DIYgod/pinky/internal/driver/ios.KitRepo=${{ github.repository }} -X github.com/DIYgod/pinky/internal/driver/ios.KitTagPrefix="
+        run: IPHONE_KIT="$RUNNER_TEMP/dist/pinky-iphone-${VERSION}.tar.gz" scripts/dist.sh darwin "$RUNNER_TEMP/dist"
       - name: Verify packaged macOS bundles and adb
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
+          kit_sum=$(shasum -a 256 "$RUNNER_TEMP/dist/pinky-iphone-${VERSION}.tar.gz" | cut -d' ' -f1)
+          case $kit_sum in *[!0-9a-f]* | '') echo "::error::no SHA-256 for the iPhone app kit"; exit 1 ;; esac
           for arch in arm64 amd64; do
             zip="$RUNNER_TEMP/dist/pinky-${VERSION}-darwin-${arch}.zip"
             dmg="$RUNNER_TEMP/dist/pinky-${VERSION}-${arch}.dmg"
@@ -299,6 +303,13 @@ jobs:
             test -f "$app/Contents/Resources/pinky-android.apk"
             test -f "$app/Contents/Frameworks/libavcodec.63.dylib"
             test -f "$app/Contents/Helpers/adb"
+            bin="$app/Contents/MacOS/Pinky"
+            all=$( { grep -a -o "$kit_sum" "$bin" || true; } | wc -l )
+            flags=$( { grep -a -o "=$kit_sum" "$bin" || true; } | wc -l )
+            if [ "$all" -le "$flags" ]; then
+              echo "::error::Pinky.app for $arch doesn't carry the iPhone app kit's SHA-256 ($kit_sum) in main.iphoneKitSHA256"
+              exit 1
+            fi
             if [ "$arch" = amd64 ] && ! arch -x86_64 /usr/bin/true 2>/dev/null; then
               echo "No Rosetta on this runner: skipping runtime checks for Intel app"
               continue
