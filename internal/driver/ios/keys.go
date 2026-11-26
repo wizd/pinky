@@ -100,6 +100,7 @@ func (d *Device) Key(ctx context.Context, k driver.Key) error {
 
 // key is Key without marking a dropped connection (gone).
 func (d *Device) key(ctx context.Context, k driver.Key) error {
+	d.clearLastTap()
 	switch k {
 	case driver.KeyHome:
 		if d.multi() {
@@ -157,7 +158,7 @@ func (d *Device) pressKeys(ctx context.Context, strokes []keyStroke) error {
 	if err != nil {
 		return err
 	}
-	id, err := h.ensureKeyboard(ctx)
+	id, _, err := h.ensureKeyboard(ctx)
 	if err != nil {
 		return err
 	}

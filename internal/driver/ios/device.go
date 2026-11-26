@@ -133,6 +133,7 @@ type Device struct {
 	inputNote   string    // for the agent, about the last Type (TakeInputNote); guarded by mu
 	keysOnly    bool      // Type skips the pasteboard (TypeByKeys); guarded by mu
 	framesAfter time.Time // no frames of the video for pictures until then (capture.go); guarded by mu
+	lastTap     tapRecord // most recent non-long-press Tap, for refocusing after ensureKeyboard; guarded by mu
 
 	// preferCapture is set when the screen capture service answered and the
 	// instruments one did not.
@@ -893,7 +894,15 @@ func (d *Device) Tap(ctx context.Context, p screen.Point, opt driver.TapOptions)
 	if opt.LongPress {
 		hold = 800 * time.Millisecond
 	}
-	return d.gesture(ctx, []screen.Point{p}, hold)
+	err := d.gesture(ctx, []screen.Point{p}, hold)
+	if err == nil {
+		if opt.LongPress {
+			d.clearLastTap()
+		} else {
+			d.recordTap(p)
+		}
+	}
+	return err
 }
 
 // swipeRest is how long a swipe's finger rests at its end before it lifts.
@@ -912,6 +921,7 @@ const swipeRest = 150 * time.Millisecond
 // Notification Center from the top), which iOS takes only at speed, so
 // it is lifted still moving, as fling does.
 func (d *Device) Swipe(ctx context.Context, from, to screen.Point, dur time.Duration) error {
+	d.clearLastTap()
 	s := d.freshDisplay(ctx).upright()
 	return d.gestureSteps(ctx, swipeSteps(from, to, dur, s.Width, s.Height), nil)
 }
@@ -996,7 +1006,26 @@ func (d *Device) gestureHook(ctx context.Context, path []screen.Point, gap time.
 // Drag implements driver.Dragger: the finger moves in reports 10 ms apart
 // and rests without reporting.
 func (d *Device) Drag(ctx context.Context, g driver.Drag) error {
+	d.clearLastTap()
 	return d.gestureSteps(ctx, g.Steps(10*time.Millisecond), nil)
+}
+
+// tapLocked sends a short tap while the caller already holds inputMu (for
+// example, to re-focus a field after attaching the virtual keyboard).
+func (d *Device) tapLocked(ctx context.Context, p screen.Point) error {
+	return d.gestureStepsLocked(ctx, []driver.DragStep{
+		{P: p},
+		{Wait: 60 * time.Millisecond, P: p},
+	}, nil)
+}
+
+// longPressLocked holds a finger at p for hold while inputMu is held (used by
+// callout-paste recovery to open the iOS edit menu).
+func (d *Device) longPressLocked(ctx context.Context, p screen.Point, hold time.Duration) error {
+	return d.gestureStepsLocked(ctx, []driver.DragStep{
+		{P: p},
+		{Wait: hold, P: p},
+	}, nil)
 }
 
 // gestureSteps puts a finger down at steps[0], then waits each step's Wait
@@ -1006,6 +1035,11 @@ func (d *Device) Drag(ctx context.Context, g driver.Drag) error {
 func (d *Device) gestureSteps(ctx context.Context, steps []driver.DragStep, onDown func()) error {
 	d.inputMu.Lock()
 	defer d.inputMu.Unlock()
+	return d.gestureStepsLocked(ctx, steps, onDown)
+}
+
+// gestureStepsLocked is gestureSteps with inputMu already held by the caller.
+func (d *Device) gestureStepsLocked(ctx context.Context, steps []driver.DragStep, onDown func()) error {
 	// The whole gesture maps through one description of the screen, read
 	// fresh: the person may have turned the device since the last one, or
 	// folded it, which waitInput then follows to the display in use.
@@ -1109,6 +1143,7 @@ func (d *Device) Touch(ctx context.Context, a driver.TouchAction, p screen.Point
 	x, y := panelPoint(turnPoint(native, s.Width, s.Height, s.turn()), s)
 	switch a {
 	case driver.TouchDown:
+		d.clearLastTap()
 		return h.touchAt(true, x, y)
 	case driver.TouchMove:
 		h.mu.Lock()

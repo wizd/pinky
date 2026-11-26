@@ -46,9 +46,12 @@ func TestFor(t *testing.T) {
 	for _, c := range []struct{ id, name, want string }{
 		{"com.tencent.mm", "", "wechat"},
 		{"com.tencent.xin", "WeChat", "wechat"},
+		{"com.taobao.idlefish", "", "xianyu"},
+		{"com.taobao.fleamarket", "闲鱼", "xianyu"},
 		{"com.apple.mobiletimer", "", "clock"},
 		{"com.google.android.apps.maps", "Maps", "google-maps"},
 		{"", "微信", "wechat"},
+		{"", "闲鱼", "xianyu"},
 		{"", "maps", "apple-maps"},
 		// An id Pinky has no guide for: no guess from the name, which an
 		// app of another maker may share.

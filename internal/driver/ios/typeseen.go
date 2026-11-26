@@ -53,8 +53,12 @@ func (d *Device) readShown(ctx context.Context) (shownText, bool) {
 // pasteboard does.
 func shownFrom(els []raxElement, complete bool) shownText {
 	s := shownText{items: map[string]int{}, complete: complete}
+	if len(els) == 0 || els[0].Object == nil {
+		return s
+	}
 	appPID := els[0].Object.PID
 	inKeyboard := make([]bool, len(els))
+	kbShown, kbPts := softwareKeyboardPointsRect(els)
 	for i, e := range els {
 		if p := e.Parent; p > 0 && p < i {
 			inKeyboard[i] = inKeyboard[p]
@@ -62,7 +66,11 @@ func shownFrom(els []raxElement, complete bool) shownText {
 		if e.Type == xcKeyboard {
 			inKeyboard[i] = true
 		}
-		if i == 0 || inKeyboard[i] || e.Object.PID != appPID || !e.IsElement || !e.Visible {
+		if i == 0 || inKeyboard[i] || e.Type == xcKey || e.Traits&traitKeyboardKey != 0 ||
+			e.Object.PID != appPID || !e.IsElement || !e.Visible {
+			continue
+		}
+		if kbShown && e.HasFrame && rectInPointsRect(e.Frame, kbPts) {
 			continue
 		}
 		if e.Label == "" && e.Value == "" && e.Placeholder == "" {
@@ -73,17 +81,45 @@ func shownFrom(els []raxElement, complete bool) shownText {
 	return s
 }
 
+// stripInvisible removes zero-width formatting runes that custom engines
+// (such as Flutter on Xianyu) sometimes insert between CJK characters in
+// accessibility labels.
+func stripInvisible(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case 0x200b, 0x200c, 0x200d, 0xfeff:
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // showing counts the elements whose label or value holds text.
 func (s shownText) showing(text string) int {
-	text = strings.TrimSpace(text)
-	if text == "" {
+	needle := stripInvisible(strings.TrimSpace(text))
+	if needle == "" {
 		return 0
+	}
+	var firstLine string
+	if strings.Contains(needle, "\n") {
+		for _, line := range strings.Split(needle, "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				if len([]rune(line)) >= 4 {
+					firstLine = line
+				}
+				break
+			}
+		}
 	}
 	n := 0
 	for k, c := range s.items {
 		label, rest, _ := strings.Cut(k, "\x00")
 		value, _, _ := strings.Cut(rest, "\x00")
-		if strings.Contains(label, text) || strings.Contains(value, text) {
+		label = stripInvisible(label)
+		value = stripInvisible(value)
+		if strings.Contains(label, needle) || strings.Contains(value, needle) ||
+			(firstLine != "" && (strings.Contains(label, firstLine) || strings.Contains(value, firstLine))) {
 			n += c
 		}
 	}

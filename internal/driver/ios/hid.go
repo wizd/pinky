@@ -472,18 +472,19 @@ func buttonEvent(page, usage, state uint64) map[string]any {
 }
 
 // ensureKeyboard registers a virtual keyboard with the device, unless one
-// is registered already. While it is attached iOS treats the phone as
-// having a hardware keyboard and hides the on-screen one, for the person
-// too (GitHub issue #65), so callers drop it again once their keys are done
-// (dropKeyboard). Nothing removes a registered service but closing the
+// is registered already, and reports whether this call registered it (which
+// makes iOS hide the on-screen keyboard). While it is attached iOS treats the
+// phone as having a hardware keyboard and hides the on-screen one, for the
+// person too (GitHub issue #65), so callers drop it again once their keys are
+// done (dropKeyboard). Nothing removes a registered service but closing the
 // connection that registered it, so the keyboard gets a connection of its
 // own, apart from touches: the touch connection when a second one cannot
 // be dialed.
-func (h *hidSession) ensureKeyboard(ctx context.Context) (uint64, error) {
+func (h *hidSession) ensureKeyboard(ctx context.Context) (uint64, bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.keyboard != 0 && h.kb != nil && h.kb.alive() {
-		return h.keyboard, nil
+		return h.keyboard, false, nil
 	}
 	h.forgetKeyboardLocked()
 	l := h.spare
@@ -535,11 +536,11 @@ func (h *hidSession) ensureKeyboard(ctx context.Context) (uint64, error) {
 			},
 		},
 	}
-	fail := func(err error) (uint64, error) {
+	fail := func(err error) (uint64, bool, error) {
 		if l != h.touch {
 			l.Close()
 		}
-		return 0, err
+		return 0, false, err
 	}
 	rctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	resp, err := l.request(rctx, req)
@@ -558,7 +559,7 @@ func (h *hidSession) ensureKeyboard(ctx context.Context) (uint64, error) {
 	// is done; a Shift sent too early stays latched.
 	time.Sleep(300 * time.Millisecond)
 	h.keyboard, h.kb = id, l
-	return id, nil
+	return id, true, nil
 }
 
 // forgetKeyboardLocked lets go of a keyboard whose connection dropped (iOS

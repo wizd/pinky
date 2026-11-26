@@ -37,6 +37,7 @@ type TypeStats struct {
 	Total     time.Duration
 	Trace     []string // the keys path: what the keyboard probes found, with times
 	Checked   string   // the field read back: "same", "different", "hidden", "unchanged", "unfocused", "unreadable"; or, when it could not be read, the app: "shown" (it shows the text), "unchanged"
+	Refocused bool     // attaching the virtual keyboard dropped focus and Pinky re-tapped the field to restore it
 }
 
 // LastTypeStats returns how the last Type call went.
@@ -145,6 +146,13 @@ func (d *Device) typeText(ctx context.Context, text string, opt driver.TypeOptio
 		return d.pressKeys(ctx, []keyStroke{{usage: keyA, mod: keyLeftGUI}, {usage: keyBackspace}})
 	}
 	if text == "" {
+		if !opt.Append {
+			pfield, _, perr := d.focusedField(ctx)
+			snap := d.captureFocusSnap(ctx, pfield, perr)
+			if _, _, err := d.ensureKeyboardWithFocus(ctx, snap, &st); err != nil {
+				return err
+			}
+		}
 		if err := clear(); err != nil {
 			return err
 		}
@@ -157,36 +165,74 @@ func (d *Device) typeText(ctx context.Context, text string, opt driver.TypeOptio
 			cancel()
 		}
 		pfield, value, perr := d.focusedField(ctx)
+		snap := d.captureFocusSnap(ctx, pfield, perr)
+		// Attach the virtual keyboard up front so that if iOS hiding the
+		// software keyboard knocks focus out of the active editor, Pinky can
+		// re-tap it while the virtual keyboard stays attached.
+		refocused, triedRefocus, err := d.ensureKeyboardWithFocus(ctx, snap, &st)
+		if err != nil {
+			return err
+		}
+		if refocused {
+			pfield, value, perr = d.focusedField(ctx)
+		}
 		var prior *string // nil when it could not be read
 		if pfield != nil {
 			prior = &value
 		}
-		// A focused field that cannot be read is checked by what the app
-		// shows instead (checkUnread), so remember that now.
+		// A focused field that cannot be read (or one that blurs right after
+		// pasting, as on Xianyu) is checked by what the app shows instead
+		// (checkUnread), so remember that now.
 		var shown *shownText
 		look := func() {
-			if perr != nil {
+			if perr != nil || method == "paste" || snap != nil {
 				if s, ok := d.readShown(ctx); ok {
 					shown = &s
 				}
 			}
 		}
-		var err error
+		refresh := func() {
+			pfield, value, perr = d.focusedField(ctx)
+			if pfield != nil {
+				prior = &value
+			} else {
+				prior = nil
+			}
+			shown = nil
+			look()
+		}
 		if method == "paste" {
 			if err = clear(); err == nil {
 				look()
-				err = d.paste(ctx, pb, saved, text, &st)
+				err = d.paste(ctx, pb, saved, text, snap, &triedRefocus, clear, refresh, &st)
 			}
 		} else {
 			// Keys go only where the keyboard turns them into this text,
 			// which typeKeys checks first, clearing the field after that.
 			look()
-			err = d.typeKeys(ctx, keys, clear, pbErr, &st)
+			err = d.typeKeys(ctx, keys, snap, &triedRefocus, clear, refresh, pbErr, &st)
 		}
 		if err != nil {
 			return err
 		}
-		if note, err = d.checkTyped(ctx, text, opt.Append, prior, shown, method, pbErr, &st); err != nil {
+		hadEditor := pfield != nil || snap != nil || st.Refocused
+		kbOnly := snap != nil && snap.KeyboardOnly
+		note, err = d.checkTyped(ctx, text, opt.Append, prior, shown, method, pbErr, hadEditor, kbOnly, &st)
+		if err != nil && method == "paste" && kbOnly && st.Checked == "unchanged" {
+			d.log.Info("iphone: stage 1 paste unchanged on keyboard-only editor, trying callout paste",
+				"device", d.info.ID, "refocused", st.Refocused)
+			if note2, err2 := d.pasteViaCallout(ctx, pb, saved, text, &st); err2 == nil {
+				note, err = note2, nil
+			} else {
+				err = err2
+			}
+		}
+		if err != nil {
+			if errors.Is(err, errUnfocused) || errors.Is(err, errNotTaken) {
+				d.log.Info("iphone: type did not confirm text", "device", d.info.ID,
+					"method", method, "had_snap", snap != nil, "keyboard_only", kbOnly,
+					"refocused", st.Refocused, "tried_refocus", triedRefocus, "checked", st.Checked)
+			}
 			if opt.Submit {
 				err = fmt.Errorf("%w; Return was not pressed", err)
 			}
@@ -194,6 +240,7 @@ func (d *Device) typeText(ctx context.Context, text string, opt driver.TypeOptio
 		}
 	}
 	if opt.Submit {
+		d.clearLastTap()
 		return d.pressKeys(ctx, []keyStroke{{usage: keyEnter}})
 	}
 	return nil
@@ -217,7 +264,7 @@ const raxDialWait = 8 * time.Second
 // (checkUnread; shown is what it showed before typing, nil when unknown).
 // prior is the field's value before, for appended text, nil when it could
 // not be read. Callers hold inputMu.
-func (d *Device) checkTyped(ctx context.Context, text string, appended bool, prior *string, shown *shownText, method string, pbErr error, st *TypeStats) (string, error) {
+func (d *Device) checkTyped(ctx context.Context, text string, appended bool, prior *string, shown *shownText, method string, pbErr error, hadEditor, keyboardOnly bool, st *TypeStats) (string, error) {
 	unread := func() (string, error) { return d.checkUnread(ctx, text, shown, method, st) }
 	field, v, ferr := d.focusedField(ctx)
 	rax, err := d.raxNow()
@@ -227,7 +274,13 @@ func (d *Device) checkTyped(ctx context.Context, text string, appended bool, pri
 	// The app in front may read as the on-screen keyboard's process (a
 	// keyboard extension, seen with Doubao Input) for a moment while it
 	// goes away, with nothing focused: read again before concluding.
-	for deadline := time.Now().Add(pasteConfirm); field == nil && ferr == nil && time.Now().Before(deadline); {
+	// Custom editors that never expose focusedElement (keyboardOnly) need
+	// only a short check before falling back to checkUnread.
+	wait := pasteConfirm
+	if keyboardOnly {
+		wait = 300 * time.Millisecond
+	}
+	for deadline := time.Now().Add(wait); field == nil && ferr == nil && time.Now().Before(deadline); {
 		if err := sleepCtx(ctx, 100*time.Millisecond); err != nil {
 			return "", err
 		}
@@ -237,6 +290,9 @@ func (d *Device) checkTyped(ctx context.Context, text string, appended bool, pri
 		return unread()
 	}
 	if field == nil {
+		if hadEditor && shown != nil {
+			return unread()
+		}
 		st.Checked = "unfocused"
 		return "", errUnfocused
 	}
@@ -364,8 +420,30 @@ func (d *Device) pasteboard() *pbConn {
 
 // paste types text through the pasteboard, whose old contents savePasteboard
 // read into saved, and puts them back. Callers hold inputMu.
-func (d *Device) paste(ctx context.Context, pb *pbConn, saved *pbSnapshot, text string, st *TypeStats) error {
+func (d *Device) paste(ctx context.Context, pb *pbConn, saved *pbSnapshot, text string, snap *focusSnap, triedRefocus *bool, clear func() error, onRefocus func(), st *TypeStats) error {
 	field, before := d.focusedValue(ctx)
+	if field == nil && snap != nil && (triedRefocus == nil || !*triedRefocus) {
+		// Some apps resign first responder on UIKeyboardDidHideNotification
+		// slightly after ensureKeyboard's settle wait (e.g. during clear).
+		refocused, tried, err := d.refocusIfLost(ctx, snap, st)
+		if triedRefocus != nil && tried {
+			*triedRefocus = true
+		}
+		if err != nil {
+			return err
+		}
+		if refocused {
+			if clear != nil {
+				if err := clear(); err != nil {
+					return err
+				}
+			}
+			if onRefocus != nil {
+				onRefocus()
+			}
+			field, before = d.focusedValue(ctx)
+		}
+	}
 
 	t1 := time.Now()
 	sctx, cancel := context.WithTimeout(ctx, pbStalled)
@@ -386,6 +464,28 @@ func (d *Device) paste(ctx context.Context, pb *pbConn, saved *pbSnapshot, text 
 		st.Restore = restorePasteboard(pb, saved, mine)
 		st.Restored = time.Since(t2)
 	}()
+	if snap != nil && (triedRefocus == nil || !*triedRefocus) {
+		// Re-check right before Command-V in case UIKeyboardDidHide fired
+		// during pb.set and resigned first responder.
+		refocused, tried, err := d.refocusIfLost(ctx, snap, st)
+		if triedRefocus != nil && tried {
+			*triedRefocus = true
+		}
+		if err != nil {
+			return err
+		}
+		if refocused {
+			if clear != nil {
+				if err := clear(); err != nil {
+					return err
+				}
+			}
+			if onRefocus != nil {
+				onRefocus()
+			}
+			field, before = d.focusedValue(ctx)
+		}
+	}
 	if err := d.pressKeys(ctx, []keyStroke{{usage: keyV, mod: keyLeftGUI}}); err != nil {
 		return err
 	}
@@ -581,7 +681,7 @@ func asciiStrokes(text string) ([]keyStroke, error) {
 // error, unless the other keyboard has the U.S. layout. Then clear empties
 // the field, unless the text is appended, and the strokes go. pbErr is why
 // the pasteboard did not do, for the error. Callers hold inputMu.
-func (d *Device) typeKeys(ctx context.Context, strokes []keyStroke, clear func() error, pbErr error, st *TypeStats) error {
+func (d *Device) typeKeys(ctx context.Context, strokes []keyStroke, snap *focusSnap, triedRefocus *bool, clear func() error, onRefocus func(), pbErr error, st *TypeStats) error {
 	rax, err := d.raxNow()
 	if err != nil {
 		// The keyboard cannot be checked.
@@ -589,6 +689,19 @@ func (d *Device) typeKeys(ctx context.Context, strokes []keyStroke, clear func()
 			return err
 		}
 		return d.pressKeys(ctx, strokes)
+	}
+	if snap != nil && (triedRefocus == nil || !*triedRefocus) {
+		// Catch a delayed UIKeyboardDidHide blur before probing the keyboard.
+		refocused, tried, err := d.refocusIfLost(ctx, snap, st)
+		if triedRefocus != nil && tried {
+			*triedRefocus = true
+		}
+		if err != nil {
+			return err
+		}
+		if refocused && onRefocus != nil {
+			onRefocus()
+		}
 	}
 	t0 := time.Now()
 	note := func(format string, args ...any) {

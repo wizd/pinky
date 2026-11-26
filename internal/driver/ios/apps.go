@@ -385,6 +385,7 @@ func (d *Device) launch(ctx context.Context, app string) error {
 
 // startApp launches an app, with a link for it to open when link is not "".
 func (d *Device) startApp(ctx context.Context, id, link string) error {
+	d.clearLastTap()
 	d.markInput()
 	input, err := launchInput(id, link)
 	if err != nil {

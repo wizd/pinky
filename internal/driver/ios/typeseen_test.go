@@ -50,6 +50,27 @@ func TestCompareShown(t *testing.T) {
 		{"changed otherwise", empty, shownFrom(walk(el(app, 0, "热门", "")), true), "奥特曼", shownUnknown},
 		{"incomplete walk", empty, shownFrom(walk(), false), "奥特曼", shownUnknown},
 		{"the same text again", typed, typed, "奥特曼", shownUnknown},
+		{
+			"zero-width spaces in flutter label",
+			empty,
+			shownFrom(walk(el(app, 0, "远​程​AI​开​发", "")), true),
+			"远程AI开发",
+			shownSeen,
+		},
+		{
+			"multiline matches first non-empty line",
+			empty,
+			shownFrom(walk(el(app, 0, "全国远程兼职接单，先聊需求再报价。", "")), true),
+			"全国远程兼职接单，先聊需求再报价。\n第二行内容",
+			shownSeen,
+		},
+		{
+			"in-process xcKey ignored as keyboard",
+			empty,
+			shownFrom(walk(raxElement{Object: &axpObject{PID: app}, Parent: 0, Type: xcKey, Label: "q", IsElement: true, Visible: true}), true),
+			"奥特曼",
+			shownUnchanged,
+		},
 	} {
 		if got := compareShown(tc.before, tc.after, tc.text); got != tc.want {
 			t.Errorf("%s: %v, want %v", tc.name, got, tc.want)
