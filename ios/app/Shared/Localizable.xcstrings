@@ -1050,6 +1050,23 @@
         }
       }
     },
+    "Device IP" : {
+      "comment" : "A setting in LocalDevVPN, named as LocalDevVPN names it",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デバイス IP"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Device IP"
+          }
+        }
+      }
+    },
     "Dismiss" : {
       "localizations" : {
         "ja" : {
@@ -1214,6 +1231,39 @@
         }
       }
     },
+    "Get LocalDevVPN in the App Store" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App Store で LocalDevVPN を入手"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 App Store 获取 LocalDevVPN"
+          }
+        }
+      }
+    },
+    "In LocalDevVPN, open Settings › Network Configuration and set:" : {
+      "comment" : "Settings › Network Configuration is LocalDevVPN's screen, named as LocalDevVPN names it",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LocalDevVPN で「設定 › ネットワーク設定」を開き、次のように設定します："
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 LocalDevVPN 中打开「Settings › Network Configuration」，填写："
+          }
+        }
+      }
+    },
     "International" : {
       "comment" : "A service's international address, after its name in Settings",
       "localizations" : {
@@ -1325,6 +1375,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上限"
+          }
+        }
+      }
+    },
+    "LocalDevVPN is off. Turn it on in LocalDevVPN to let Pinky reach this iPhone." : {
+      "comment" : "Phone not ready, in the build that relies on the App Store app LocalDevVPN",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LocalDevVPN がオフです。Pinky がこの iPhone に接続できるよう、LocalDevVPN でオンにしてください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LocalDevVPN 没有打开。请在 LocalDevVPN 中打开它，Pinky 才能连接这台 iPhone。"
+          }
+        }
+      }
+    },
+    "LocalDevVPN is on, but its Tunnel IP is %@. Set it to %@, save, then connect again." : {
+      "comment" : "Setting up LocalDevVPN: its tunnel is up with another address; Tunnel IP is LocalDevVPN's setting, the arguments addresses",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "LocalDevVPN is on, but its Tunnel IP is %1$@. Set it to %2$@, save, then connect again."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LocalDevVPN はオンですが、トンネル IP が %1$@ です。%2$@ に変更して保存し、もう一度接続してください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LocalDevVPN 已打开，但它的 Tunnel IP 是 %1$@。请改为 %2$@，保存后重新连接。"
           }
         }
       }
@@ -1902,6 +1992,23 @@
         }
       }
     },
+    "Pinky cannot reach this iPhone. Check that LocalDevVPN is connected, with Tunnel IP %@." : {
+      "comment" : "Phone not ready, in the build that relies on LocalDevVPN; Tunnel IP is LocalDevVPN's setting, the argument an address",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinky がこの iPhone に接続できません。LocalDevVPN が接続中で、トンネル IP が %@ になっているか確認してください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinky 连不上这台 iPhone。请检查 LocalDevVPN 是否已连接，且 Tunnel IP 为 %@。"
+          }
+        }
+      }
+    },
     "Pinky could not start pairing. Check that Wi-Fi is on and Pinky may use the local network." : {
       "comment" : "Pairing on the phone could not start",
       "localizations" : {
@@ -2130,6 +2237,45 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "电脑上的 Pinky 正在使用这台 iPhone。等它用完，或者在电脑上为这台 iPhone 选择「暂停连接」后，再开始任务。"
+          }
+        }
+      }
+    },
+    "Pinky reaches this iPhone through LocalDevVPN, a free app from the App Store. Its VPN never leaves the phone." : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinky は、App Store の無料アプリ LocalDevVPN を通じてこの iPhone に接続します。その VPN はスマホの外に出ません。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinky 通过 App Store 上的免费 App LocalDevVPN 连接这台 iPhone。它的 VPN 不离开手机。"
+          }
+        }
+      }
+    },
+    "Pinky reaches this iPhone through LocalDevVPN, with Tunnel IP %@ and Device IP %@ in its Settings › Network Configuration." : {
+      "comment" : "Settings, lite build: Tunnel IP, Device IP and Settings › Network Configuration are LocalDevVPN's names; the arguments addresses",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pinky reaches this iPhone through LocalDevVPN, with Tunnel IP %1$@ and Device IP %2$@ in its Settings › Network Configuration."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinky は LocalDevVPN を通じてこの iPhone に接続します。LocalDevVPN の「設定 › ネットワーク設定」で、トンネル IP を %1$@、デバイス IP を %2$@ にしてください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinky 通过 LocalDevVPN 连接这台 iPhone，需在它的「Settings › Network Configuration」中把 Tunnel IP 设为 %1$@，Device IP 设为 %2$@。"
           }
         }
       }
@@ -2523,6 +2669,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存"
+          }
+        }
+      }
+    },
+    "Save, tap Connect, then come back." : {
+      "comment" : "Setting up LocalDevVPN; Connect is its button, named as LocalDevVPN names it",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存して「接続」をタップしてから、戻ってきてください。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存后点按「Connect」，然后回到这里。"
           }
         }
       }
@@ -3442,6 +3605,23 @@
         }
       }
     },
+    "Tunnel IP" : {
+      "comment" : "A setting in LocalDevVPN, named as LocalDevVPN names it",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "トンネル IP"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tunnel IP"
+          }
+        }
+      }
+    },
     "Turn off" : {
       "localizations" : {
         "ja" : {
@@ -3474,18 +3654,35 @@
         }
       }
     },
-    "Turn on LocalDevVPN, then come back." : {
+    "Turn on LocalDevVPN" : {
+      "comment" : "Setup step, in the build that relies on the App Store app LocalDevVPN",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "LocalDevVPN をオンにしてから、戻ってきてください。"
+            "value" : "LocalDevVPN をオンにする"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请打开 LocalDevVPN，然后回到这里。"
+            "value" : "打开 LocalDevVPN"
+          }
+        }
+      }
+    },
+    "Turn on LocalDevVPN to change this." : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LocalDevVPN をオンにすると変更できます。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 LocalDevVPN 后才能更改。"
           }
         }
       }
@@ -3667,6 +3864,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "版本"
+          }
+        }
+      }
+    },
+    "Waiting for LocalDevVPN…" : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LocalDevVPN を待っています…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待 LocalDevVPN…"
           }
         }
       }

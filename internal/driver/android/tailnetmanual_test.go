@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"net"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -384,5 +387,24 @@ func TestByHandReconnect(t *testing.T) {
 	a, err := p.Away(ctx, piHW)
 	if err != nil || !a.On || !a.Manual || !a.Listening || a.Missing != "" {
 		t.Fatalf("away: %+v, %v", a, err)
+	}
+}
+
+// TestTimeUp: a dial that times out on ctx's deadline counts as the time
+// running out, even before ctx itself says so.
+func TestTimeUp(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+	dial := fmt.Errorf("adb: connect to 127.0.0.1:5037: %w", &net.OpError{Op: "dial", Net: "tcp", Err: os.ErrDeadlineExceeded})
+	if !timeUp(ctx, fmt.Errorf("wrapped: %w", context.DeadlineExceeded)) {
+		t.Error("a deadline error is not the time running out")
+	}
+	if timeUp(ctx, errors.New("connection refused")) {
+		t.Error("a refusal with time left counts as the time running out")
+	}
+	past, cancel2 := context.WithDeadline(context.WithoutCancel(ctx), time.Now().Add(-time.Second))
+	defer cancel2()
+	if !timeUp(past, dial) {
+		t.Error("a dial past the deadline is not the time running out")
 	}
 }

@@ -355,7 +355,7 @@ struct SettingsView: View {
         } header: {
             Text("When should Pinky ask you?")
         } footer: {
-            if m.state == nil { Text("Turn on Pinky's VPN to change this.") }
+            if m.state == nil { Text(m.inApp ? LocalizedStringKey("Turn on LocalDevVPN to change this.") : "Turn on Pinky's VPN to change this.") }
         }
     }
 
@@ -365,8 +365,15 @@ struct SettingsView: View {
 
     private var phoneSection: some View {
         Section {
-            LabeledContent("VPN", value: vpnText)
+            if m.inApp {
+                LabeledContent { Text(vpnText) } label: { Text(verbatim: "LocalDevVPN") }
+            } else {
+                LabeledContent("VPN", value: vpnText)
+            }
             LabeledContent("Pinky's core runs in", value: m.inApp ? String(localized: "This app") : String(localized: "The VPN"))
+            if m.inApp && m.vpn == .off {
+                Link("Get LocalDevVPN in the App Store", destination: LocalDevVPN.store)
+            }
             if !m.inApp {
                 if m.vpn == .off {
                     Button("Turn on") { Task { await m.connect() } }
@@ -377,7 +384,11 @@ struct SettingsView: View {
         } header: {
             Text("This iPhone")
         } footer: {
-            Text("Pinky reaches this iPhone through a VPN that never leaves the phone.")
+            if m.inApp {
+                Text("Pinky reaches this iPhone through LocalDevVPN, with Tunnel IP \(LocalDevVPN.tunnelIP) and Device IP \(LocalDevVPN.deviceIP) in its Settings › Network Configuration.")
+            } else {
+                Text("Pinky reaches this iPhone through a VPN that never leaves the phone.")
+            }
         }
     }
 

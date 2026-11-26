@@ -1,11 +1,48 @@
 package main
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/gateway"
 )
+
+// TestDevicesJSONEmpty: no phone listed is an empty array, not `null`, so
+// a script that reads `pinky devices --json` gets an array whether a
+// gateway ran (which decodes an empty list as `[]`) or not (nil here).
+func TestDevicesJSONEmpty(t *testing.T) {
+	for _, devs := range [][]gateway.DeviceView{nil, {}} {
+		var b strings.Builder
+		if err := devicesJSON(&b, devs); err != nil {
+			t.Fatalf("encode: %v", err)
+		}
+		if got := b.String(); got != "[]\n" {
+			t.Errorf("no phones encoded as %q, want %q", got, "[]\n")
+		}
+	}
+}
+
+// TestDevicesJSONPhones: a listed phone keeps the shape the command had:
+// the array of views, indented by two spaces.
+func TestDevicesJSONPhones(t *testing.T) {
+	devs := []gateway.DeviceView{listedView(driver.Info{ID: "pixel", Name: "Pixel 9", Platform: "android", State: driver.StateOnline})}
+	var b strings.Builder
+	if err := devicesJSON(&b, devs); err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	var out []gateway.DeviceView
+	if err := json.Unmarshal([]byte(b.String()), &out); err != nil {
+		t.Fatalf("decode %q: %v", b.String(), err)
+	}
+	if len(out) != 1 || out[0].Info.ID != "pixel" {
+		t.Errorf("decoded %+v, want the one phone", out)
+	}
+	if !strings.HasPrefix(b.String(), "[\n  {\n") {
+		t.Errorf("not indented by two spaces: %q", b.String())
+	}
+}
 
 // TestDevicesStatus: without a gateway, a phone that waits for a step
 // needs setup, as the gateway lists it; the STATUS column says the

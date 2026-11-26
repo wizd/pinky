@@ -148,6 +148,9 @@ type Background struct {
 	launchPkg  string
 	launchedAt time.Time
 	nudges     int
+	// readOnce: accessibility read the display's windows once, so it can see
+	// the display (see untracked).
+	readOnce bool
 }
 
 // DisplayID is the display's id.
@@ -207,8 +210,19 @@ func (b *Background) Observe(ctx context.Context, opt driver.ObserveOptions) (*s
 			b.nudge(ctx, time.Now())
 			return b.emptyScreen(), nil
 		}
+		if errors.Is(err, driver.ErrUnsupported) && ctx.Err() == nil && b.wasRead() {
+			// Accessibility read the display before and stopped tracking
+			// it when its last window went: the app left it (Back from
+			// its first screen, a crash, Android stopping it). An empty
+			// display, or the gateway would move the task to the phone's
+			// own screen.
+			return b.emptyScreen(), nil
+		}
 		return nil, b.d.wrap(err)
 	}
+	b.mu.Lock()
+	b.readOnce = true
+	b.mu.Unlock()
 	s := agentScreen(t, b.d.app.Package)
 	s.CapturedAt = b.d.c.HostTime(t.Time)
 	if s.App.Name == "" {
@@ -244,6 +258,14 @@ func (b *Background) untracked(now time.Time) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.launchedAt.IsZero() || now.Sub(b.launchedAt) < launchGrace
+}
+
+// wasRead reports whether accessibility read the display's windows
+// before.
+func (b *Background) wasRead() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.readOnce
 }
 
 // nudgeDue says which nudge, if any, is due at now for a read that found

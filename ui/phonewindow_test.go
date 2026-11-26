@@ -130,9 +130,123 @@ func TestPhoneWindowKeepsTheStream(t *testing.T) {
 	}
 }
 
+// TestPhoneWindowChrome: the window has no title bar. The bar's empty space
+// and the margin around the screen move it, which the Tester, with no
+// window, cannot see: a drag there reaches neither the phone nor a button,
+// where a click on the screen reaches the phone. Close in the bar, named
+// and with its tooltip, and ⌘W close the window and let its mirror go.
+func TestPhoneWindowChrome(t *testing.T) {
+	ta := newTestApp(t, fakeapi.OnePhone)
+	ta.sync()
+	img, _ := fakeCheckout(t, 360, 800, 3, false)
+	stillMirror(ta, "pixel-9", img)
+	ta.openPhoneWindow("pixel-9")
+	wt := windowTester(ta, "pixel-9", 300, 640)
+	wt.Frame()
+	scr, ok := wt.Find(locales.MirrorScreenLabel("Pixel 9"))
+	if !ok {
+		t.Fatalf("no screen in the window: %q", wt.Texts())
+	}
+	recents, ok := wt.Find(locales.PhoneKeyRecents())
+	pin, ok2 := wt.Find(locales.PhoneWindowOnTop())
+	if !ok || !ok2 {
+		t.Fatalf("the window's bar: %q", wt.Texts())
+	}
+	n := len(ta.api.Inputs())
+	for _, at := range []struct {
+		what string
+		x, y float32
+	}{
+		{"the bar's empty space", (recents.X + recents.W + pin.X) / 2, recents.Y + recents.H/2},
+		{"the margin beside the screen", scr.X / 2, scr.Y + scr.H/2},
+		{"the margin above the screen", scr.X + scr.W/2, scr.Y / 2},
+	} {
+		wt.Press(at.x, at.y)
+		wt.Move(at.x+2, at.y+1)
+		wt.Release(at.x+2, at.y+1)
+		wt.Frame()
+		ta.sync()
+		if got := ta.api.Inputs()[n:]; len(got) > 0 {
+			t.Errorf("a drag on %s sent the phone %+v", at.what, got)
+		}
+		if ta.phoneWins["pixel-9"] == nil || ta.winTop["pixel-9"] {
+			t.Fatalf("a drag on %s pressed a button", at.what)
+		}
+	}
+	clickScreen(t, ta, wt, scr, 0.5, 0.5) // the screen is the phone's
+
+	if b, ok := wt.Access(locales.PhoneWindowClose()); !ok || b.Role != mg.RoleButton || b.Description != locales.PhoneWindowClose() {
+		t.Errorf("Close in the bar: %+v", b)
+	}
+	if err := wt.Click(locales.PhoneWindowClose()); err != nil {
+		t.Fatal(err)
+	}
+	ta.sync()
+	if ta.phoneWins["pixel-9"] != nil || ta.mirrors["pixel-9"] != nil {
+		t.Errorf("Close kept the window %v and the mirror %v", ta.phoneWins, ta.mirrors)
+	}
+
+	// ⌘W (Ctrl+W) closes it too.
+	stillMirror(ta, "pixel-9", img)
+	ta.openPhoneWindow("pixel-9")
+	wt = windowTester(ta, "pixel-9", 300, 640)
+	wt.Frame()
+	wt.Key(mg.Cmd, mg.KeyW)
+	wt.Frame()
+	ta.sync()
+	if ta.phoneWins["pixel-9"] != nil || ta.mirrors["pixel-9"] != nil {
+		t.Errorf("⌘W kept the window %v and the mirror %v", ta.phoneWins, ta.mirrors)
+	}
+}
+
+// TestPhoneWindowBarFits: in a new window, the bar under the screen holds
+// the keys, Hand back, Keep on top and Close whole, with an Android phone,
+// which has the most keys, in the person's hands, in each of the client's
+// languages. Narrower, down to the least width, Keep on top gives Close its
+// place: Close shows whole wherever the keys and Hand back leave it room.
+func TestPhoneWindowBarFits(t *testing.T) {
+	for _, lang := range testLanguages() {
+		inLanguage(t, lang)
+		ta := newTestAppTimeout(t, fakeapi.Takeover, 10*time.Minute)
+		ta.waitFor(t, "the takeover", func() bool {
+			return len(ta.devices) > 0 && ta.devices[0].Status == gateway.DeviceInControl
+		})
+		img, _ := fakeCheckout(t, 360, 800, 3, false)
+		stillMirror(ta, "pixel-9", img)
+		ta.openPhoneWindow("pixel-9")
+		dw, dh := phoneWindowSize(ta.phoneWins["pixel-9"].aspect, 0, 0)
+		for w := dw; w >= 200; w -= 2 {
+			wt := windowTester(ta, "pixel-9", w, dh)
+			inLanguage(t, lang, wt)
+			wt.Frame()
+			hand, ok := wt.Find(locales.PhoneHandBack())
+			if !ok {
+				t.Fatalf("%s, %d wide: no Hand back: %q", lang, w, wt.Texts())
+			}
+			// Find gives what of an element shows inside the window.
+			cl, ok := wt.Find(locales.PhoneWindowClose())
+			whole := ok && cl.W >= winKey-0.5
+			if w == dw {
+				for _, name := range []string{locales.PhoneKeyBack(), locales.PhoneKeyHome(), locales.PhoneKeyRecents(), locales.PhoneWindowOnTop()} {
+					if r, ok := wt.Find(name); !ok || r.W < winKey-0.5 {
+						t.Errorf("%s, a new window %d wide: %s is %v", lang, w, name, r)
+					}
+				}
+				if !whole || cl.X+cl.W > float32(w-(winPad-2))+0.5 {
+					t.Errorf("%s, a new window %d wide: Close is %v", lang, w, cl)
+				}
+			}
+			if hand.X+hand.W+2+winKey <= float32(w) && !whole {
+				t.Errorf("%s, %d wide: Close is %v, with room for it after Hand back %v", lang, w, cl, hand)
+			}
+		}
+	}
+}
+
 // TestPhoneWindowStates: the right-click menus open the window; a phone with
-// no live screen shows why, with Show in Pinky; an iPhone has only Home;
-// Keep on top turns on and off; and a phone removed takes its window along.
+// no live screen shows why, with Show in Pinky, and Close closes its window;
+// an iPhone has only Home; Keep on top turns on and off; and a phone removed
+// takes its window along.
 func TestPhoneWindowStates(t *testing.T) {
 	ta := newTestApp(t, fakeapi.ThreePhones)
 	ta.waitFor(t, "the lunch task", func() bool { return ta.taskOf("pixel-9") != nil })
@@ -163,6 +277,13 @@ func TestPhoneWindowStates(t *testing.T) {
 	}
 	if ta.sel != "galaxy-s25" || ta.page != pagePhones {
 		t.Errorf("Show in Pinky chose %q on page %v", ta.sel, ta.page)
+	}
+	if err := wt.Click(locales.PhoneWindowClose()); err != nil {
+		t.Fatal(err)
+	}
+	ta.sync()
+	if ta.phoneWins["galaxy-s25"] != nil {
+		t.Error("Close kept the offline phone's window")
 	}
 
 	if err := tt.Click("All phones"); err != nil {
@@ -224,6 +345,17 @@ func TestPhoneWindowShape(t *testing.T) {
 		w, h = fitPhoneWindow(400, 700, phone, byWidth)
 		if sw, sh := screen(w, h); abs32(sw/sh-phone) > 0.01 || (byWidth && w != 400) || (!byWidth && h != 700) {
 			t.Errorf("fit by width %v: %d × %d", byWidth, w, h)
+		}
+	}
+	// Made as small as it goes, the window keeps the screen's shape with no
+	// side less than its least, for a phone and for a tablet turned
+	// sideways.
+	for _, aspect := range []float32{phone, 4.0 / 3} {
+		for _, byWidth := range []bool{true, false} {
+			w, h = fitPhoneWindow(winMinW, winMinH, aspect, byWidth)
+			if sw, sh := screen(w, h); w < winMinW || h < winMinH || abs32(sw/sh-aspect) > 0.01 {
+				t.Errorf("fit %.2f by width %v at the least size: %d × %d", aspect, byWidth, w, h)
+			}
 		}
 	}
 	// Turned sideways, the screen keeps its area and fits the display.

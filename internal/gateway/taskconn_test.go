@@ -36,6 +36,7 @@ func newTwoWayPhone() (*twoWayPhone, *demo.Device) {
 	dev := demo.NewDevice("iphone", "iPhone 13 mini", driver.IOS)
 	dev.AddApp("com.dbs.sg.dbsmbanking", "digibank")
 	dev.AddApp("cmb.pb", "招商银行")
+	dev.AddApp("com.apple.camera", "Camera")
 	return &twoWayPhone{Provider: demo.NewProvider(driver.IOS, dev)}, dev
 }
 
@@ -175,8 +176,13 @@ func TestTaskConnectionWords(t *testing.T) {
 		t.Error("an unknown word is taken")
 	}
 	for _, app := range []string{"com.dbs.sg.dbsmbanking", "digibank", "招商银行", "cmb.pb", "com.cmbchina.MPBBank", "China Merchants Bank"} {
-		if _, ok := refusesSharing(app); !ok {
+		if got, ok := refusesSharing(app); !ok || got.why != refusesToRun {
 			t.Errorf("%s is not known to refuse screen sharing", app)
+		}
+	}
+	for _, app := range []string{"com.apple.camera", "Camera", "相机", "カメラ"} {
+		if got, ok := refusesSharing(app); !ok || got != camera {
+			t.Errorf("%s = %v, %v; want the Camera, which gets no picture while the screen is shared", app, got, ok)
 		}
 	}
 	if _, ok := refusesSharing("com.apple.calculator"); ok {
@@ -215,6 +221,25 @@ func TestConnectAsksForTheHelper(t *testing.T) {
 	if way, _ := p.state(); way != "" {
 		t.Fatalf("provider way %q after the task", way)
 	}
+}
+
+// TestLaunchCameraMovesToTheHelper: opening the system Camera moves the
+// task too, and says why in the Camera's own words: it is not refused, it
+// shows black.
+func TestLaunchCameraMovesToTheHelper(t *testing.T) {
+	shortSwitchBack(t)
+	p, _ := newTwoWayPhone()
+	g := twoWayGateway(t, p)
+	s, _ := connect(t, g, "Scan a receipt")
+	res := launchAllowed(g, s, "com.apple.camera")
+	if !strings.Contains(res.Message, "Camera gets no picture while the screen is shared") || strings.Contains(res.Message, "refuses") {
+		t.Fatalf("launch: %+v", res)
+	}
+	if b := backendOf(g); b != wayHelper {
+		t.Fatalf("backend %q after launching the Camera", b)
+	}
+	mustStatus(t, s.Release(context.Background(), ReleaseRequest{}), StatusSettled)
+	waitUntil(t, "the phone back on CoreDevice", func() bool { return backendOf(g) == wayCoreDevice })
 }
 
 func TestLaunchMovesToTheHelper(t *testing.T) {

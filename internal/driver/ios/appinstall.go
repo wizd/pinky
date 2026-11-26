@@ -2,6 +2,8 @@ package ios
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +38,13 @@ import (
 // InstallHelper downloads; a development build has none to download.
 var PinkyVersion = "0.0.0-dev"
 
+// PinkyKitSHA256 is the SHA-256, in hex, of this release's iPhone app kit,
+// which the release build writes in with PinkyVersion (main.iphoneKitSHA256):
+// a kit downloaded, or found in the cache, that hashes otherwise is never
+// built, so what reaches Xcode, and the phone, is the kit the release was
+// built with. A build that doesn't know it takes the kit as before.
+var PinkyKitSHA256 = ""
+
 // iphoneKitEnv names a kit to use instead of the release's: the archive or
 // an unpacked folder (ios/build.sh kit), for development builds.
 const iphoneKitEnv = "PINKY_IPHONE_KIT"
@@ -61,25 +70,25 @@ var errNoKit = errors.New("this Pinky has no iPhone app kit")
 // iphoneKit finds the kit and unpacks it into dir/kit, returning the
 // folder with Pinky.xcodeproj. The release's is downloaded into cache once.
 func iphoneKit(ctx context.Context, client *http.Client, cache, dir string) (string, error) {
+	var f *os.File
 	archive := os.Getenv(iphoneKitEnv)
 	if archive != "" {
 		if st, err := os.Stat(archive); err == nil && st.IsDir() {
 			return archive, nil
+		}
+		var err error
+		if f, err = os.Open(archive); err != nil {
+			return "", err
 		}
 	} else {
 		if strings.Contains(PinkyVersion, "dev") || PinkyVersion == "" {
 			return "", errNoKit
 		}
 		archive = filepath.Join(cache, "pinky-iphone-"+PinkyVersion+".tar.gz")
-		if _, err := os.Stat(archive); err != nil {
-			if err := download(ctx, client, iphoneKitURL(PinkyVersion), archive); err != nil {
-				return "", err
-			}
+		var err error
+		if f, err = openKit(ctx, client, archive); err != nil {
+			return "", err
 		}
-	}
-	f, err := os.Open(archive)
-	if err != nil {
-		return "", err
 	}
 	defer f.Close()
 	kit := filepath.Join(dir, "kit")
@@ -96,8 +105,68 @@ func iphoneKit(ctx context.Context, client *http.Client, cache, dir string) (str
 	return kit, nil
 }
 
-// download fetches url into path, through a file beside it.
-func download(ctx context.Context, client *http.Client, url, path string) error {
+// openKit opens this release's kit in the cache, downloading it when it is
+// not there. With PinkyKitSHA256 known, the file it returns has been read
+// for its hash, and is unpacked as it is, so what is checked is what is
+// built: a cached kit that hashes otherwise is fetched again, and a download
+// that does never reaches the cache.
+func openKit(ctx context.Context, client *http.Client, archive string) (*os.File, error) {
+	for fetched := false; ; fetched = true {
+		if _, err := os.Stat(archive); err != nil {
+			if err := download(ctx, client, iphoneKitURL(PinkyVersion), archive, PinkyKitSHA256); err != nil {
+				return nil, err
+			}
+		}
+		f, err := os.Open(archive)
+		if err != nil {
+			return nil, err
+		}
+		sum, err := fileSHA256(f)
+		if err != nil {
+			f.Close()
+			return nil, fmt.Errorf("reading the iPhone app kit: %w", err)
+		}
+		if PinkyKitSHA256 == "" || strings.EqualFold(sum, PinkyKitSHA256) {
+			return f, nil
+		}
+		f.Close()
+		os.Remove(archive)
+		if fetched {
+			return nil, errKitMismatch(sum)
+		}
+	}
+}
+
+// fileSHA256 is the file's SHA-256 in hex, read from its start; the file is
+// left at its start again.
+func fileSHA256(f *os.File) (string, error) {
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// errKitMismatch says a kit isn't the one this Pinky was released with.
+func errKitMismatch(sum string) error {
+	return fmt.Errorf("the iPhone app kit for Pinky %s is not the one it was released with (SHA-256 %s, want %s): try again later, or update Pinky",
+		PinkyVersion, short(sum), short(strings.ToLower(PinkyKitSHA256)))
+}
+
+func short(sum string) string {
+	if len(sum) > 12 {
+		return sum[:12] + "…"
+	}
+	return sum
+}
+
+// download fetches url into path, through a temporary file of its own beside
+// it, which takes path's place only once it is whole and, with want given,
+// hashes to want.
+func download(ctx context.Context, client *http.Client, url, path, want string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -114,14 +183,18 @@ func download(ctx context.Context, client *http.Client, url, path string) error 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	tmp := path + ".part"
-	out, err := os.Create(tmp)
+	out, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.part")
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(out, io.LimitReader(res.Body, iphoneKitMax))
+	tmp := out.Name()
+	h := sha256.New()
+	_, err = io.Copy(io.MultiWriter(out, h), io.LimitReader(res.Body, iphoneKitMax))
 	if cerr := out.Close(); err == nil {
 		err = cerr
+	}
+	if sum := hex.EncodeToString(h.Sum(nil)); err == nil && want != "" && !strings.EqualFold(sum, want) {
+		err = errKitMismatch(sum)
 	}
 	if err == nil {
 		err = os.Rename(tmp, path)
@@ -140,7 +213,29 @@ func appBundleID(team string) string { return "pinky." + strings.ToLower(team) }
 // appSchemes are the kit's schemes, in the order InstallHelper tries them:
 // the app with its own packet tunnel, which needs a paid team (a personal
 // team cannot sign the Network Extension capability), then the one without.
-var appSchemes = []string{"Pinky", "PinkyLite"}
+var appSchemes = []string{"Pinky", liteScheme}
+
+// liteScheme is the kit's scheme without a packet tunnel: on the phone it
+// needs LocalDevVPN from the App Store to run tasks there
+// (driver.HelperLite).
+const liteScheme = "PinkyLite"
+
+// LocalDevVPN, the App Store app the lite build needs on the phone, and
+// the addresses to give it there (docs/notes/iphone-app.md): its default
+// Tunnel IP, 10.7.1.1/32, gets no answer from the phone.
+const (
+	LocalDevVPNStore    = "https://apps.apple.com/app/localdevvpn/id6755608044"
+	LocalDevVPNTunnelIP = "10.7.0.2/30"
+	LocalDevVPNDeviceIP = "10.7.0.1/32"
+)
+
+// liteNextStep is what the person does on the phone after Pinky installed
+// the lite build, for the command line; clients say it in their words.
+func liteNextStep(phone string) string {
+	return fmt.Sprintf("This is Pinky's lite build: to run tasks on %s itself, it needs LocalDevVPN. "+
+		"On the phone, install LocalDevVPN from the App Store (%s), set Tunnel IP to %s and Device IP to %s "+
+		"in its Settings › Network Configuration, then tap Connect.\n", phone, LocalDevVPNStore, LocalDevVPNTunnelIP, LocalDevVPNDeviceIP)
+}
 
 // appBuildArgs builds the kit's scheme for the phone, signed for team.
 // updates lets Xcode ask Apple for profiles (and the App IDs with their
@@ -317,6 +412,9 @@ type appInstall struct {
 	local            bool
 	testArgs         func(xctestrun string) []string // also tells the person
 	start            func(args []string) (string, error)
+	// progress hears driver.HelperLite once Xcode built the lite build;
+	// nil for none.
+	progress func(driver.HelperStep)
 }
 
 // installApp builds Pinky's app from the kit, makes it WDA's host, signs
@@ -342,6 +440,9 @@ func installApp(ctx context.Context, a appInstall) (string, provisioningProfile,
 		}
 		if err == nil {
 			app, scheme = pinkyAppIn(dd, s), s
+			if s == liteScheme && a.progress != nil {
+				a.progress(driver.HelperLite)
+			}
 			break
 		}
 		if ctx.Err() != nil {

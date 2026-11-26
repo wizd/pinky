@@ -21,10 +21,11 @@ type netProvider struct {
 	mu          sync.Mutex
 	conn        map[string]string // Info.Connection by id; the demo's is "usb"
 	unplugged   map[string]bool   // not listed
-	listErr     error            // List fails with it
+	listErr     error             // List fails with it
 	forgotten   map[string]bool
 	calls       []string                 // "forget id", "remember id", "disconnect id"
 	gate        map[string]chan struct{} // Open of these phones waits for the channel to close
+	atGate      int                      // Opens that reached a gate
 	openedClose []*closeCounter          // the gated phones' sessions
 }
 
@@ -71,6 +72,9 @@ func (p *netProvider) Open(ctx context.Context, id string) (driver.Device, error
 	dev, err := p.Provider.Open(ctx, id)
 	p.mu.Lock()
 	gate := p.gate[id]
+	if gate != nil && err == nil {
+		p.atGate++
+	}
 	p.mu.Unlock()
 	if gate == nil || err != nil {
 		return dev, err
@@ -560,7 +564,20 @@ func TestRemoveDeviceWhileOpening(t *testing.T) {
 		p.gate["mi"] = gate
 		delete(p.unplugged, "mi")
 	})
-	waitIDs(t, g, "mi", "pixel") // listed, and being opened
+	waitIDs(t, g, "mi", "pixel") // listed
+	// Listed comes a moment before the gateway decides to open it: removed
+	// in between, it is never opened, rightly, and there is nothing to test.
+	for deadline := time.Now().Add(3 * time.Second); ; time.Sleep(5 * time.Millisecond) {
+		p.mu.Lock()
+		n := p.atGate
+		p.mu.Unlock()
+		if n == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%d opens of the Mi at the gate, want 1", n)
+		}
+	}
 	if err := g.RemoveDevice(context.Background(), "mi", RemoveOptions{}); err != nil {
 		t.Fatal(err)
 	}

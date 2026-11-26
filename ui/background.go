@@ -96,10 +96,17 @@ func (a *app) agentMirrorFor(id, task string) *mirror {
 	if m == nil {
 		m = &mirror{a: a, id: id, agent: true, task: task}
 		a.mirrors[key] = m
-		m.open()
+		if a.unseen {
+			m.state = "still"
+		} else {
+			m.open()
+		}
 	}
 	m.used = a.buildSeq
 	m.task = task
+	if a.unseen {
+		return m
+	}
 	own := errors.Is(m.err, gateway.ErrOwnScreen) && m.ownTask == task
 	if m.state == "failed" && !m.opening && !own && time.Now().After(m.retry) && a.videoErr == nil {
 		m.open()

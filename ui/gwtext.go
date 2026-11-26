@@ -21,4 +21,5 @@ var (
 	newAgentNeed = gwtext.NewAgentNeed
 	translated   = gwtext.Translated
 	keyName      = gwtext.KeyName
+	lostSetup    = gwtext.LostSetup
 )

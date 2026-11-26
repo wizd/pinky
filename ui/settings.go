@@ -313,7 +313,8 @@ func (a *app) settingsSafety(c *mg.Context) {
 		}
 		a.offWhile(c, rulesYAML).Children(func() {
 			a.toggleRow(c, "codes", locales.SettingsSafetyHideCodes(), locales.SettingsSafetyHideCodesDesc(), false, &st.HideCodes)
-			a.toggleRow(c, "virtual-credentials", locales.SettingsSafetyVirtualCredentials(), locales.SettingsSafetyVirtualCredentialsDesc(), true, &st.VirtualCredentials)
+			a.toggleRow(c, "virtual-credentials", locales.SettingsSafetyVirtualCredentials(), locales.SettingsSafetyVirtualCredentialsDesc(), false, &st.VirtualCredentials)
+			a.toggleRow(c, "phone-credentials", locales.SettingsSafetyPhoneCredentials(), locales.SettingsSafetyPhoneCredentialsDesc(), true, &st.PhoneCredentials)
 		})
 	})
 	a.rulesSection(c)
@@ -457,9 +458,13 @@ func (a *app) settingsPhones(c *mg.Context) {
 		}
 	})
 	keepAwake := a.awayKeepAwakeShown(c)
+	quiet := a.quietRestartShown()
 	group(c).Children(func() {
-		if a.toggleRow(c, "ios-wifi", locales.SettingsPhonesWiFi(), locales.SettingsPhonesWiFiDesc(), !keepAwake, &a.settings.IOSWiFi) {
+		if a.toggleRow(c, "ios-wifi", locales.SettingsPhonesWiFi(), locales.SettingsPhonesWiFiDesc(), !keepAwake && !quiet, &a.settings.IOSWiFi) {
 			a.applyWiFi(a.settings.IOSWiFi)
+		}
+		if quiet {
+			a.quietRestartRow(c, !keepAwake)
 		}
 		if keepAwake {
 			a.awayKeepAwakeRow(c)

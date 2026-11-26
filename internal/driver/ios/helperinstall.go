@@ -248,9 +248,14 @@ func InstallHelper(ctx context.Context, o HelperInstall) error {
 			defer cancel()
 			return xr.run(run, driver.HelperInstalling, args, []string{"TEST_RUNNER_USE_IP=127.0.0.1"})
 		}
+		lite := false
 		id, appProfile, err := installApp(ctx, appInstall{x: x, xr: xr, out: out, client: client,
 			cache: o.Dir, tmp: tmp, udid: ph.UDID, team: team, runner: app, products: products,
 			local: o.LocalSigning,
+			progress: func(s driver.HelperStep) {
+				lite = lite || s == driver.HelperLite
+				progress(s)
+			},
 			testArgs: func(xctestrun string) []string {
 				fmt.Fprintf(out, "Installing Pinky on %s and starting WebDriverAgent in it once. Keep the phone unlocked; if it asks for its passcode to allow automation, enter it there.\n", ph.Name)
 				progress(driver.HelperInstalling)
@@ -261,6 +266,9 @@ func InstallHelper(ctx context.Context, o HelperInstall) error {
 		case err == nil:
 			fmt.Fprintf(out, "Installed Pinky (%s) on %s; WebDriverAgent answered in it and was stopped again.\n", id, ph.Name)
 			fmt.Fprintf(out, "Its signature lasts until %s. Pinky starts WebDriverAgent in it whenever it opens the phone.\n", helperDate(appProfile.Expires))
+			if lite {
+				fmt.Fprint(out, liteNextStep(ph.Name))
+			}
 			installs.note(ph.UDID, helperRecord{Team: team, BundleID: bid, Expires: appProfile.Expires})
 			return nil
 		case ctx.Err() != nil:

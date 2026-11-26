@@ -86,6 +86,11 @@ type Element struct {
 	// empty field that shows its hint. The policy judges what a field is by
 	// its name, not by what someone wrote in it. It is never shown to agents.
 	Content string
+	// Hint is, for a text field whose Label is the text typed into it and so
+	// lacks its name (Android), the hint the text stands in place of. It
+	// names the field to the policy, as the hint of an empty field does in
+	// Label. It is never shown to agents.
+	Hint string
 	// Masked is set when Pinky masked a one-time code in Label (policy);
 	// pictures of the screen cover Bounds. It is never shown to agents.
 	Masked bool
@@ -225,6 +230,12 @@ type Screen struct {
 	// the tree has none of its elements. Elements hold other windows'
 	// nodes and what OCR read from a picture, if anything.
 	AppHidden bool
+	// TreeTooSlow: the phone did not give the element tree in time (an
+	// iPhone through WebDriverAgent on a screen whose tree takes it tens
+	// of seconds, such as a long React Native list), so Elements hold only
+	// what OCR read from a picture, if anything; the app and lock state
+	// are still known when the phone said them.
+	TreeTooSlow bool
 }
 
 // Find returns the element with the given ref.
@@ -276,6 +287,9 @@ func (s *Screen) Header() string {
 	}
 	if s.AppHidden {
 		parts = append(parts, "app hidden from accessibility: OCR text only")
+	}
+	if s.TreeTooSlow {
+		parts = append(parts, "element tree too slow: OCR text only")
 	}
 	if f, ok := s.Focused(); ok && f.Ref != 0 {
 		parts = append(parts, fmt.Sprintf("focus [%d]", f.Ref))

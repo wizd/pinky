@@ -320,12 +320,17 @@ func TestExemptionsInTheRulesFile(t *testing.T) {
 		"no app":       "always_allow:\n  - rule: Payments\n",
 		"task apps":    "always_allow:\n  - rule: Task apps\n    app: com.dinely.app\n",
 		"every action": "always_allow:\n  - rule: Payments\n    with: [Every action]\n    app: com.dinely.app\n",
-		"credentials":  "always_allow:\n  - rule: credentials\n    app_name: Dinely\n",
+		"read-only":    "always_allow:\n  - rule: Read-only\n    app_name: Dinely\n",
 	}
 	for name, src := range bad {
 		if _, err := ParseFile([]byte(src)); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+	// Credentials may be kept: they ask on a phone where the person
+	// allows them (File.PhoneCredentials), and are refused elsewhere.
+	if _, err := ParseFile([]byte("always_allow:\n  - rule: credentials\n    app_name: Dinely\n")); err != nil {
+		t.Errorf("credentials: %v", err)
 	}
 	f, err := ParseFile([]byte("always_allow:\n  - rule: ' Payments '\n    with: Commits\n    app_name: ' Dinely '\n"))
 	if err != nil {

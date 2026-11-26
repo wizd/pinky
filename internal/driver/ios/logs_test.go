@@ -36,6 +36,11 @@ func TestLookupResult(t *testing.T) {
 	if b, _ := lookupResult(m, "dev.pinky.example"); b.Dev {
 		t.Error("a build without get-task-allow is a development build")
 	}
+	// App Store, TestFlight and ad hoc builds say false.
+	m["LookupResult"].(map[string]any)["dev.pinky.example"].(map[string]any)["Entitlements"] = map[string]any{"get-task-allow": false}
+	if b, _ := lookupResult(m, "dev.pinky.example"); b.Dev {
+		t.Error("a build with get-task-allow false is a development build")
+	}
 	if _, ok := lookupResult(m, "com.someone.else"); ok {
 		t.Error("found an app that is not there")
 	}
@@ -322,7 +327,7 @@ func TestFollowerTrim(t *testing.T) {
 	base := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
 	f.mu.Lock()
 	for i := range followMaxLines + 1 {
-		f.addLocked(driver.LogLine{Time: base.Add(time.Duration(i) * time.Millisecond), Text: "x"})
+		f.addLocked(driver.LogLine{Time: base.Add(time.Duration(i) * time.Millisecond), Text: "x"}, false)
 	}
 	n, trimmed := len(f.lines), f.trimmed
 	f.mu.Unlock()
@@ -336,6 +341,87 @@ func TestFollowerTrim(t *testing.T) {
 	f.start = base
 	if res := f.query(driver.LogQuery{}); !res.From.Equal(trimmed) {
 		t.Errorf("from %v, want the newest dropped line %v", res.From, trimmed)
+	}
+}
+
+// The string-table lookups Pinky's screen reads cause are left out and
+// counted unless the filter names CFBundle, and never push the app's own
+// lines out.
+func TestFollowerReadNoise(t *testing.T) {
+	phone := newLogPhoneFake(map[int]string{10: testExe})
+	f := newFollower(testDir, phone.source())
+	defer f.stop()
+	f.scan()
+	base := time.Date(2026, 11, 9, 10, 0, 0, 0, time.UTC)
+	strs := &ostrace.LogLabel{Subsystem: "com.apple.CFBundle", Category: "strings"}
+	app := &ostrace.LogLabel{Subsystem: "cc.example.app", Category: "sync"}
+	noise := "Bundle: <private>, key: <private>, value: (null), table: Accessibility, localizationNames: (null)"
+	other := "Bundle: <private>, key: <private>, value: (null), table: Localizable"
+	s := phone.stream(10)
+	for i, e := range []ostrace.LogEntry{
+		{Message: "sync started", Label: app},
+		{Message: noise, Label: strs},
+		{Message: "Bundle: <private>, key: <private>, value: (null), table: AccessibilityLocalizable", Label: strs},
+		{Message: other, Label: strs},
+		{Message: noise, Label: &ostrace.LogLabel{Subsystem: "com.apple.CFBundle", Category: "resources"}},
+		{Message: noise, Label: strs, Level: ostrace.LogLevelError},
+		{Message: "sync failed", Level: ostrace.LogLevelError, Label: app},
+	} {
+		e.PID, e.Timestamp = 10, base.Add(time.Duration(i)*time.Second)
+		s.ch <- e
+	}
+	waitUntil(t, "lines", func() bool {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return len(f.lines)+len(f.noise) == 7
+	})
+	texts := func(r driver.LogResult) []string {
+		var out []string
+		for _, l := range r.Lines {
+			out = append(out, l.Text)
+		}
+		return out
+	}
+
+	res := f.query(driver.LogQuery{Max: 3})
+	if want := []string{other, noise, "sync failed"}; !slices.Equal(texts(res), want) {
+		t.Fatalf("default: %q, want %q", texts(res), want)
+	}
+	if res.Hidden != 3 || res.HiddenTag != readNoiseTag || res.Dropped != 1 {
+		t.Errorf("default: hidden %d %q, dropped %d", res.Hidden, res.HiddenTag, res.Dropped)
+	}
+	if res := f.query(driver.LogQuery{Level: driver.LevelError}); len(res.Lines) != 1 || res.Hidden != 1 {
+		t.Errorf("errors: %q hidden %d", texts(res), res.Hidden)
+	}
+	if res := f.query(driver.LogQuery{Filter: "cc.example.app"}); len(res.Lines) != 2 || res.Hidden != 0 || res.HiddenTag != "" {
+		t.Errorf("by subsystem: %q hidden %d", texts(res), res.Hidden)
+	}
+	// A filter that only meets their text, or a wider tag, still leaves
+	// them out.
+	for _, filter := range []string{"accessibility", "com.apple", "strings"} {
+		if res := f.query(driver.LogQuery{Filter: filter}); res.Hidden != 3 {
+			t.Errorf("filter %q: %q hidden %d", filter, texts(res), res.Hidden)
+		}
+	}
+	for filter, n := range map[string]int{"CFBundle": 5, "com.apple.cfbundle:strings": 4} {
+		if res := f.query(driver.LogQuery{Filter: filter}); len(res.Lines) != n || res.Hidden != 0 {
+			t.Errorf("filter %q: %q hidden %d", filter, texts(res), res.Hidden)
+		}
+	}
+
+	// A flood of them leaves the app's lines, and where they start, alone.
+	f.mu.Lock()
+	for i := range followMaxLines + 1 {
+		f.addLocked(driver.LogLine{Time: base.Add(time.Minute + time.Duration(i)*time.Millisecond), Tag: readNoiseTag, Text: noise}, true)
+	}
+	f.mu.Unlock()
+	f.start = base
+	res = f.query(driver.LogQuery{})
+	if !slices.Contains(texts(res), "sync started") || !res.From.Equal(base) || res.Hidden < followMaxLines*3/4 {
+		t.Errorf("after a flood: %d lines from %v, hidden %d", len(res.Lines), res.From, res.Hidden)
+	}
+	if res := f.query(driver.LogQuery{Filter: "CFBundle"}); !res.From.After(base) {
+		t.Errorf("with the noise: from %v", res.From)
 	}
 }
 

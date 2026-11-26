@@ -2,6 +2,7 @@ package ui
 
 import (
 	"runtime"
+	"time"
 
 	mg "github.com/egoist/mygo/ui"
 
@@ -16,6 +17,7 @@ func iconPNG() []byte { return assets.Icon256 }
 func (a *app) view(c *mg.Context) {
 	p := applyTheme(c)
 	a.buildSeq++
+	a.unseen = c.WindowHidden() || time.Since(a.hidAt) < hideSettle
 	for _, msg := range a.toasts {
 		c.Toast(msg)
 	}
@@ -54,6 +56,7 @@ func (a *app) view(c *mg.Context) {
 	a.awayByHandDialog(c)
 	a.phoneWiFiDialog(c)
 	a.schedDialog(c)
+	a.liteDialog(c)
 	a.sweepMirrors()
 	// A QR pairing lasts while its step shows, and a recording plays while
 	// Activity does.

@@ -272,7 +272,7 @@ func (cv *converter) emit(n *Node, path, label string, check *Node) {
 		check = n
 	}
 	role := roleOf(n, check)
-	cv.out = append(cv.out, screen.Element{
+	e := screen.Element{
 		Role:    role,
 		Label:   label,
 		Bounds:  b,
@@ -281,7 +281,11 @@ func (cv *converter) emit(n *Node, path, label string, check *Node) {
 		Path:    path,
 		ID:      n.ID,
 		Content: inputContent(n),
-	})
+	}
+	if e.Content != "" {
+		e.Hint = clean(firstNonEmpty(n.Hint, n.Desc))
+	}
+	cv.out = append(cv.out, e)
 }
 
 // unoccluded drops an element whose center lies under a window above it,

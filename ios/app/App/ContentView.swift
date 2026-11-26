@@ -133,12 +133,13 @@ struct ContentView: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
-            SetupStep(number: 2, title: "Turn on Pinky's VPN", done: m.paired && vpnOn, now: m.paired && !vpnOn) {
-                Text("Pinky reaches this iPhone through a VPN that never leaves the phone.")
-                    .font(.callout).foregroundStyle(.secondary)
+            SetupStep(number: 2, title: m.inApp ? LocalizedStringKey("Turn on LocalDevVPN") : "Turn on Pinky's VPN",
+                      done: m.paired && vpnOn, now: m.paired && !vpnOn) {
                 if m.inApp {
-                    Text("Turn on LocalDevVPN, then come back.").font(.callout).foregroundStyle(.secondary)
+                    LocalDevVPNSteps()
                 } else {
+                    Text("Pinky reaches this iPhone through a VPN that never leaves the phone.")
+                        .font(.callout).foregroundStyle(.secondary)
                     Button(m.vpn == .connecting ? LocalizedStringKey("Turning on…") : "Turn on") { Task { await m.connect() } }
                         .buttonStyle(.borderedProminent)
                         .disabled(m.vpn == .connecting)
@@ -163,7 +164,7 @@ struct ContentView: View {
                 Label { Text("Pinky can't reach this iPhone").font(.headline) } icon: {
                     Image(systemName: "iphone.slash").foregroundStyle(Color.pinkyAmber)
                 }
-                Text(L.reason(m.reason)).font(.callout)
+                Text(m.inApp ? LocalDevVPN.reason(m.reason) : L.reason(m.reason)).font(.callout)
                 if let detail = d.detail, !detail.isEmpty, m.reason == "failed" {
                     Text(detail).font(.footnote).foregroundStyle(.secondary)
                 }
@@ -361,6 +362,57 @@ struct EndedCard: View {
             if let s = agent.suggested, !s.isEmpty { SuggestionsView(list: s) }
         }
         .listRowBackground(e.tone.color.opacity(0.08))
+    }
+}
+
+/// Turning on LocalDevVPN, in the build without a VPN of its own: where to
+/// get it, what to set in it and, when its tunnel is up with another
+/// address, which. The step is done once the tunnel is up with Pinky's
+/// address (AppModel.checkTunnel), which the app looks for every two
+/// seconds while it is in front.
+struct LocalDevVPNSteps: View {
+    @EnvironmentObject var m: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Pinky reaches this iPhone through LocalDevVPN, a free app from the App Store. Its VPN never leaves the phone.")
+                .font(.callout).foregroundStyle(.secondary)
+            Link(destination: LocalDevVPN.store) {
+                Label("Get LocalDevVPN in the App Store", systemImage: "arrow.down.app")
+            }
+            .font(.callout.weight(.medium))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("In LocalDevVPN, open Settings › Network Configuration and set:")
+                Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 4) {
+                    setting("Tunnel IP", LocalDevVPN.tunnelIP)
+                    setting("Device IP", LocalDevVPN.deviceIP)
+                }
+                .padding(.leading, 12)
+                Text("Save, tap Connect, then come back.")
+            }
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            if case .otherAddress(let a) = m.localDevVPN {
+                Label {
+                    Text("LocalDevVPN is on, but its Tunnel IP is \(a). Set it to \(LocalDevVPN.tunnelIP), save, then connect again.")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+                .font(.callout).foregroundStyle(Color.pinkyAmber)
+            } else {
+                Label { Text("Waiting for LocalDevVPN…") } icon: { ProgressView() }
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// One of LocalDevVPN's settings, named as LocalDevVPN names it, and
+    /// its value, which the person can copy.
+    private func setting(_ name: LocalizedStringKey, _ value: String) -> some View {
+        GridRow {
+            Text(name).foregroundStyle(.secondary)
+            Text(verbatim: value).font(.callout.monospaced()).textSelection(.enabled)
+        }
     }
 }
 

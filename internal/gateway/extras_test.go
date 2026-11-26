@@ -39,6 +39,9 @@ type extraDev struct {
 
 	pkgs      map[string]driver.Package // phone_app: a file holding a key is that package
 	installed map[string]string         // phone_app: scripted packages installed, id to version
+	devBuilds map[string]bool           // DevBuild: development builds, by app id
+	devErr    error                     // DevBuild fails with it
+	devAsked  []string                  // DevBuild: the app ids asked about
 
 	conn atomic.Value // string: Info's Connection, when set
 }

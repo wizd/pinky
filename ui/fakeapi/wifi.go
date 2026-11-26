@@ -184,3 +184,32 @@ func (a *API) Trusted() []string {
 	defer a.mu.Unlock()
 	return slices.Clone(a.trusted)
 }
+
+// QuietRestart implements the client's switch for restarts of the device
+// service without a password: supported, and allowed as SetQuietRestart
+// left it.
+func (a *API) QuietRestart() (supported, allowed bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return true, a.quiet
+}
+
+// SetQuietRestart allows restarts without a password, or fails with what
+// SetRestartError set.
+func (a *API) SetQuietRestart(ctx context.Context, on bool, reason string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.quietWhy = append(a.quietWhy, reason)
+	if a.restartErr != nil {
+		return a.restartErr
+	}
+	a.quiet = on
+	return nil
+}
+
+// QuietReasons returns the reasons SetQuietRestart was called with.
+func (a *API) QuietReasons() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return slices.Clone(a.quietWhy)
+}

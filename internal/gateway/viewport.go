@@ -111,10 +111,19 @@ func sameRow(a, b viewportLine) bool {
 
 // filterPinned removes lines that stayed at the same place between two
 // viewports. Sticky bars and floating controls would otherwise interrupt the
-// text sequence that identifies the actual overlap.
+// text sequence that identifies the actual overlap. Once the list moved, a
+// line whose text current shows more than once (a row's bullet or button)
+// stays: one lands where another was when the list moves by whole rows,
+// and leaving it out broke the run and matched the screens at the wrong
+// place.
 func filterPinned(previous, current []viewportLine) []viewportLine {
 	out := make([]viewportLine, 0, len(current))
+	repeated := rowLabels(previous, current)
 	for _, line := range current {
+		if repeated[viewportKey(line)] {
+			out = append(out, line)
+			continue
+		}
 		pinned := false
 		for _, old := range previous {
 			if viewportKey(old) == viewportKey(line) && nearlySameRect(old.Bounds, line.Bounds) {
@@ -130,11 +139,16 @@ func filterPinned(previous, current []viewportLine) []viewportLine {
 }
 
 // pinnedLines returns previous lines that stayed at the same place and kept
-// the same content in current. A caller can retain this small set across
-// further captures even when a changing list container no longer exposes it.
+// the same content in current, but for the rows' repeated labels
+// filterPinned keeps. A caller can retain this small set across further
+// captures even when a changing list container no longer exposes it.
 func pinnedLines(previous, current []viewportLine) []viewportLine {
 	out := make([]viewportLine, 0, len(previous))
+	repeated := rowLabels(previous, current)
 	for _, line := range previous {
+		if repeated[viewportKey(line)] {
+			continue
+		}
 		for _, now := range current {
 			if viewportKey(line) == viewportKey(now) && nearlySameRect(line.Bounds, now.Bounds) {
 				out = append(out, line)
@@ -143,6 +157,46 @@ func pinnedLines(previous, current []viewportLine) []viewportLine {
 		}
 	}
 	return out
+}
+
+// rowLabels returns the keys of the lines current shows more than once,
+// when the content moved between previous and current: a line both show
+// once is somewhere else. Without such a line the screen may not have
+// moved, and every line that stayed is pinned as before.
+func rowLabels(previous, current []viewportLine) map[string]bool {
+	count := func(lines []viewportLine) map[string]int {
+		n := make(map[string]int, len(lines))
+		for _, line := range lines {
+			n[viewportKey(line)]++
+		}
+		return n
+	}
+	before, now := count(previous), count(current)
+	moved := false
+	for _, line := range current {
+		k := viewportKey(line)
+		if now[k] != 1 || before[k] != 1 {
+			continue
+		}
+		for _, old := range previous {
+			if viewportKey(old) == k && !nearlySameRect(old.Bounds, line.Bounds) {
+				moved = true
+			}
+		}
+		if moved {
+			break
+		}
+	}
+	repeated := map[string]bool{}
+	if !moved {
+		return repeated
+	}
+	for k, n := range now {
+		if n > 1 {
+			repeated[k] = true
+		}
+	}
+	return repeated
 }
 
 // appendViewport returns the content on current that follows the adjacent

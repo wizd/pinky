@@ -81,6 +81,7 @@ type Provider struct {
 	lost       lostState                                               // phones usbmuxd lost on Wi-Fi (lost.go)
 	nmux       muxState                                                // a usbmuxd of its own on Linux (netmux.go)
 	restartFn  func(ctx context.Context, command, reason string) error // for tests: runAsAdmin
+	quiet      quietRestart                                            // restarting usbmuxd without a password (quietrestart.go)
 	prep       preparer                                                // Developer Mode and the developer disk image (prepare.go)
 	muxErr     error                                                   // usbmuxd's answer to the last List
 	muxChecked bool

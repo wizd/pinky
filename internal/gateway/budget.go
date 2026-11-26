@@ -79,13 +79,22 @@ const approvalReserve = 10 * time.Second
 // outOfTimeAfterAction is the result of an action whose effect could not be
 // read before the call's budget ran out.
 func outOfTimeAfterAction(budget time.Duration) *Result {
-	return statusResult(StatusUncertain, "The action was sent, but the phone answered too slowly to read the screen within the call's %s. Observe before anything else; do not repeat it blindly.", human(budget))
+	return &Result{Status: StatusUncertain, outOfTime: true, Message: fmt.Sprintf(
+		"The action was sent, but the phone answered too slowly to read the screen within the call's %s. Observe before anything else; do not repeat it blindly.", human(budget))}
 }
 
 // outOfTimeBeforeAction is the result of a call whose budget ran out
 // before it could act or read.
 func outOfTimeBeforeAction(budget time.Duration) *Result {
-	return errResult(ErrInternal, "The phone answered too slowly: the screen could not be read within the call's %s. Nothing was done. Try again; if this keeps happening, observe first or use fewer steps per phone_batch.", human(budget))
+	return &Result{Error: ErrInternal, outOfTime: true, Message: fmt.Sprintf(
+		"The phone answered too slowly: the screen could not be read within the call's %s. Nothing was done. Try again; if this keeps happening, observe first or use fewer steps per phone_batch.", human(budget))}
+}
+
+// busyOutOfTime is the result of a call whose budget ran out while another
+// action on the phone held its action lock.
+func busyOutOfTime(budget time.Duration) *Result {
+	return &Result{Error: ErrInternal, outOfTime: true, Message: fmt.Sprintf(
+		"Another action on the phone was still running when the call's %s ran out. Nothing was done. Observe, then try again.", human(budget))}
 }
 
 func human(d time.Duration) string {

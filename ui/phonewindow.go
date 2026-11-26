@@ -20,6 +20,13 @@ import (
 // the ⋯ menu under the mirror and from the phone's right-click menu; opened
 // again, it comes to the front.
 //
+// The window has no title bar, window buttons or menu bar (issue 233): it
+// is the phone's screen and the bar of keys, and keeps the system's
+// shadow, corners and edges, which resize it. The bar's empty space and
+// the margin around the screen move it, never the screen, which is the
+// phone's; Close in the bar and ⌘W close it, and its title, the phone's
+// name, stays for the taskbar, the Dock and the app switchers.
+//
 // The window shows the phone's mirror itself: the one the phone's page and
 // its tile show, with its one stream from the gateway, its one decoder and
 // its one bitmap, which each window's renderer uploads for itself. Input
@@ -48,13 +55,16 @@ type phoneWin struct {
 
 // The window's parts: winPad around the screen, but under it, where the
 // bar of keys is winBar high; the screen's height in a new window, at most;
-// and how long the window waits after the person resizes it before it
-// takes the screen's shape again.
+// the least size the person can resize the window to, which it keeps as it
+// takes the screen's shape too; and how long the window waits after the
+// person resizes it before it takes the screen's shape again.
 const (
 	winPad     = 8
 	winBar     = 44
 	winKey     = 32
 	winScreenH = 640
+	winMinW    = 200
+	winMinH    = 240
 	winSettle  = 400 * time.Millisecond
 )
 
@@ -93,7 +103,13 @@ func (a *app) openPhoneWindow(id string) {
 	pw.last = [2]int{w, h}
 	pw.win = mygo.NewWindow(mygo.WindowOptions{
 		Title: d.Info.Name, Width: w, Height: h, UseContentSize: true,
-		MinWidth: 200, MinHeight: 240,
+		MinWidth: winMinW, MinHeight: winMinH,
+		// No title bar and no window buttons: a hidden title bar without
+		// its buttons keeps the shadow, the rounded corners and the edges
+		// that resize the window, the top one too, which a Frameless
+		// window lacks on Windows. Nor a menu bar on Linux and Windows,
+		// where Alt or F10 opens its menus and its shortcuts work.
+		TitleBarStyle: mygo.TitleBarHidden, HideWindowButtons: true, AutoHideMenuBar: true,
 		// Where the person last put this phone's window, and its size,
 		// which takes the screen's shape again if the phone turned since.
 		StateKey:        "phone-" + id,
@@ -182,14 +198,17 @@ func phoneWindowSize(aspect, maxW, maxH float32) (int, int) {
 
 // fitPhoneWindow returns the content size closest to cw × ch that shows a
 // screen of aspect whole, with nothing beside it: the width kept when
-// byWidth, else the height.
+// byWidth, else the height, unless that leaves the other side less than the
+// window's least. The window's minimum binds only the person's resizes, not
+// SetContentSize: a window they made as low as it goes would otherwise
+// settle narrower than winMinW, too narrow for its bar and its Close.
 func fitPhoneWindow(cw, ch int, aspect float32, byWidth bool) (int, int) {
-	if byWidth {
-		sw := max(float32(cw-2*winPad), 1)
-		return cw, int(sw/aspect + winPad + winBar + 0.5)
+	sw := float32(cw - 2*winPad)
+	if !byWidth {
+		sw = float32(ch-winPad-winBar) * aspect
 	}
-	sh := max(float32(ch-winPad-winBar), 1)
-	return int(sh*aspect + 2*winPad + 0.5), ch
+	sw = max(sw, winMinW-2*winPad, (winMinH-winPad-winBar)*aspect)
+	return int(sw + 2*winPad + 0.5), int(sw/aspect + winPad + winBar + 0.5)
 }
 
 // turnPhoneWindow returns the content size for a screen of aspect in a
@@ -278,6 +297,7 @@ func (a *app) windowLive(d gateway.DeviceView) bool {
 // keys under it.
 func (a *app) phoneWindowView(c *mg.Context, id string) {
 	p := applyTheme(c)
+	a.unseen = c.WindowHidden()
 	pw := a.phoneWins[id]
 	if pw == nil {
 		return
@@ -306,7 +326,9 @@ func (a *app) phoneWindowView(c *mg.Context, id string) {
 	}
 	w, h := c.Size()
 	mg.Column(c).Fill().Background(p.bg).Children(func() {
-		mg.Box(c).Grow(1).MinHeight(0).Padding(winPad, winPad, 0, winPad).Center().Children(func() {
+		// The margin around the screen moves the window; the screen takes
+		// its own presses, which go to the phone.
+		dragsWindow(mg.Box(c).Grow(1).MinHeight(0).Padding(winPad, winPad, 0, winPad).Center()).Children(func() {
 			room := [2]float32{max(w-2*winPad, 1), max(h-winPad-winBar, 1)}
 			if live {
 				a.phoneWindowScreen(c, pw, *d, room)
@@ -386,29 +408,47 @@ func (a *app) phoneWindowState(c *mg.Context, d gateway.DeviceView, room [2]floa
 	})
 }
 
+// dragsWindow makes e move the window, which has no title bar, as a title
+// bar would, but for a double click, which does nothing there: the window
+// does not maximize (DisableMaximize), which MyGo would have it do on
+// Linux. The buttons in e stay buttons.
+func dragsWindow(e mg.Element) mg.Element {
+	e.DragWindow().WindowDoubleClicked()
+	return e
+}
+
 // phoneWindowBar is the bar under the phone's screen in its window, width
 // wide: the phone's keys, the control banner made small while the person
-// holds the phone, with Hand back, and Keep on top.
+// holds the phone, with Hand back, Keep on top and Close. Its empty space
+// and the banner move the window.
 func (a *app) phoneWindowBar(c *mg.Context, d gateway.DeviceView, live bool, width float32) {
 	p := pal(c)
 	id := d.Info.ID
-	mg.Row(c.Key("win-bar-"+id)).Height(winBar).Shrink(0).Padding(0, winPad-2).Gap(2).AlignItems(mg.Center).Children(func() {
+	dragsWindow(mg.Row(c.Key("win-bar-"+id)).Height(winBar).Shrink(0).Padding(0, winPad-2).Gap(2).AlignItems(mg.Center)).Children(func() {
 		var want controlText
+		pin := true // Keep on top, which a bar short of room leaves out
 		if live {
 			a.phoneKeys(c, d, winKey, "")
 			want, _ = a.controlFor(d, a.taskOf(id))
 		}
 		if want != (controlText{}) {
 			// The banner's bold start says who has the phone, where the bar
-			// has room for it whole; all its words are its tooltip and its
-			// label.
+			// has room for it whole beside the keys, Hand back, Keep on top
+			// and Close; all its words are its tooltip and its label.
 			words := strings.TrimSpace(want.bold + want.rest)
 			bold := strings.TrimSpace(want.bold)
 			keys := float32(1)
 			if d.Info.Platform != driver.IOS {
 				keys = 3
 			}
-			room := width - 2*(winPad-2) - (keys+1)*(winKey+2) - buttonWidth(c, locales.PhoneHandBack(), true) - sp1 - iconBody - 6 - 2*2
+			room := width - 2*(winPad-2) - (keys+2)*(winKey+2) - buttonWidth(c, locales.PhoneHandBack(), true) - sp1 - iconBody - 6 - 2*2
+			if room < -iconBody-6 {
+				// No room for Close after the keys and Hand back, as in a
+				// narrow window: Keep on top gives it its place until the
+				// window is wider, or the person hands the phone back.
+				pin = false
+				room += winKey + 2
+			}
 			tw, _ := c.MeasureText(0, mg.Span{Text: bold, Size: fsSmall, Weight: fwSemibold})
 			mg.Row(c).Grow(1).MinWidth(0).Gap(6).AlignItems(mg.Center).Margin(0, 0, 0, sp1).
 				Role(mg.RoleStatus).Label(words).Tooltip(words).Children(func() {
@@ -423,23 +463,35 @@ func (a *app) phoneWindowBar(c *mg.Context, d gateway.DeviceView, live bool, wid
 		} else {
 			mg.Spacer(c)
 		}
-		on := a.winTop[id]
-		label, ic := locales.PhoneWindowOnTop(), icPin
-		if on {
-			label, ic = locales.PhoneWindowOnTopOff(), icPinOn
+		if pin {
+			on := a.winTop[id]
+			label, ic := locales.PhoneWindowOnTop(), icPin
+			if on {
+				label, ic = locales.PhoneWindowOnTopOff(), icPinOn
+			}
+			if winButton(c, "win-top-"+id, ic, label, on).Clicked() {
+				a.setWindowOnTop(id, !on)
+			}
 		}
-		b := mg.ButtonBase(c.Key("win-top-"+id)).Size(winKey, winKey-4).Radius(rControl).Center().Label(label).Tooltip(label)
-		col := p.ink2
-		if b.Hovered() {
-			b.Background(p.bg3)
-			col = p.ink
+		if winButton(c, "win-close-"+id, icX, locales.PhoneWindowClose(), false).Clicked() {
+			// After the frame, as ⌘W: the window goes with its view.
+			a.post(func() { a.closePhoneWindow(id) })
 		}
-		if on {
-			col = p.ink
-		}
-		if b.Clicked() {
-			a.setWindowOnTop(id, !on)
-		}
-		b.TextColor(col).Children(func() { mg.Icon(c, ic).FontSize(iconBody) })
 	})
+}
+
+// winButton is an icon button of the window's bar, winKey wide, with label
+// as its tooltip; on keeps its icon dark, as Keep on top's while it holds.
+func winButton(c *mg.Context, key string, ic *mg.SVG, label string, on bool) mg.Element {
+	p := pal(c)
+	b := mg.ButtonBase(c.Key(key)).Size(winKey, winKey-4).Radius(rControl).Center().Label(label).Tooltip(label)
+	col := p.ink2
+	if b.Hovered() {
+		b.Background(p.bg3)
+		col = p.ink
+	}
+	if on {
+		col = p.ink
+	}
+	return b.TextColor(col).Children(func() { mg.Icon(c, ic).FontSize(iconBody) })
 }

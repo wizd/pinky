@@ -65,6 +65,10 @@ type WDADevice struct {
 	// one did not come (ocrPicture); unix nanos, 0 at once.
 	framesAfter atomic.Int64
 
+	trees wdaTrees // tree requests, and the apps whose trees are slow (wda_tree.go)
+	// recognize reads a picture's text; nil: recognizeText (tests set it).
+	recognize func([]byte) ([]ocrLine, error)
+
 	closeOnce sync.Once
 	idle      wdaIdle // rest_wda.go
 
@@ -314,12 +318,25 @@ const (
 	wdaLandscape = 2
 )
 
-// source reads WDA's tree and records the orientation from it. In
+// wdaSourceWait bounds a full tree read for input that needs one (the
+// passcode pad).
+const wdaSourceWait = 30 * time.Second
+
+// source reads WDA's full tree, as input that needs one does, within
+// wdaSourceWait.
+func (d *WDADevice) source(ctx context.Context) (*wdaNode, error) {
+	ctx, cancel := context.WithTimeout(ctx, wdaSourceWait)
+	defer cancel()
+	return d.tree(ctx, wdaDepth)
+}
+
+// sourceNow reads WDA's tree and records the orientation from it. In
 // landscape, XCTest gives an alert's window the panel's native frame
 // instead of the interface's (seen on the iPad Simulator, iPadOS 26.5:
 // Settings' Enable Dictation? alert, its buttons tall and narrow); such
-// windows are turned upright the way the picture is.
-func (d *WDADevice) source(ctx context.Context) (*wdaNode, error) {
+// windows are turned upright the way the picture is. Reads go through
+// tree, one at a time.
+func (d *WDADevice) sourceNow(ctx context.Context) (*wdaNode, error) {
 	root, err := d.c.source(ctx)
 	if err != nil {
 		return nil, err
@@ -448,7 +465,9 @@ func (d *WDADevice) toPoints(p screen.Point) wdaPoint {
 	return wdaPoint{X: (x + 0.5) / d.scale, Y: (y + 0.5) / d.scale}
 }
 
-// Observe implements driver.Device: WDA's page source, with frames.
+// Observe implements driver.Device: WDA's page source, with frames. A tree
+// that does not come in time, or an app whose tree is known to be too slow,
+// makes a read of what OCR finds in a picture instead (wda_tree.go).
 func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*screen.Screen, error) {
 	var (
 		wg       sync.WaitGroup
@@ -463,37 +482,59 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 		tm       wdaTimes
 	)
 	start := time.Now()
+	// What the read asks the phone ends in time for a picture's text, so a
+	// stalled tree leaves the read something to say.
+	tctx, tcancel := context.WithDeadline(ctx, treeBy(ctx, start))
+	defer tcancel()
+	appRead := make(chan struct{})
+	go func() { defer close(appRead); app, _ = d.c.activeApp(tctx) }()
+	level := treeFull
+	if d.trees.anySlow(start) {
+		// The app in front says how to read its tree; WDA names it at once
+		// when no tree holds it up.
+		<-appRead
+		level = d.trees.level(d.appOr(app), time.Now())
+	}
+	tm.level = level
 	known := make(chan struct{}) // the app and the lock state
-	var knowing sync.WaitGroup
-	knowing.Add(2)
-	go func() { knowing.Wait(); close(known) }()
-	wg.Add(3)
-	go func() { defer wg.Done(); root, srcErr = d.source(ctx); tm.source = time.Since(start) }()
-	go func() { defer wg.Done(); defer knowing.Done(); app, _ = d.c.activeApp(ctx) }()
+	var locking sync.WaitGroup
+	locking.Add(1)
+	go func() { <-appRead; locking.Wait(); close(known) }()
+	wg.Add(2)
+	if level != treeNone {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			root, srcErr = d.tree(tctx, level.depth())
+			tm.source = time.Since(start)
+		}()
+	}
+	go func() { defer wg.Done(); <-appRead }()
 	go func() {
 		defer wg.Done()
-		defer knowing.Done()
-		locked, _ = d.lockState(ctx)
+		defer locking.Done()
+		locked, _ = d.lockState(tctx)
 		tm.lock = time.Since(start)
 	}()
-	if opt.OCR {
+	picture := func() {
+		pictured.Add(1)
+		go func() {
+			defer pictured.Done()
+			pic, from, err := d.ocrPicture(ctx)
+			tm.shot, tm.from = time.Since(start), from
+			if err != nil {
+				return
+			}
+			if l, err := d.readText(pic); err == nil {
+				lines, ocrDone = l, true
+			}
+			tm.ocr = time.Since(start) - tm.shot
+		}()
+	}
+	if opt.OCR || level == treeNone {
 		// The picture waits until the read may take it (capturegate.go):
 		// WDA names the app in front long before the page source comes.
-		gate = newCaptureGate(opt.MayCapture, func() {
-			pictured.Add(1)
-			go func() {
-				defer pictured.Done()
-				pic, from, err := d.ocrPicture(ctx)
-				tm.shot, tm.from = time.Since(start), from
-				if err != nil {
-					return
-				}
-				if l, err := recognizeText(pic, ocrOptions{Languages: ocrLanguages}); err == nil {
-					lines, ocrDone = l, true
-				}
-				tm.ocr = time.Since(start) - tm.shot
-			}()
-		})
+		gate = newCaptureGate(opt.MayCapture, picture)
 		if opt.MayCapture != nil {
 			wg.Add(1)
 			go func() {
@@ -508,8 +549,18 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 		}
 	}
 	wg.Wait()
+	treeless := level == treeNone
+	if srcErr != nil && tctx.Err() != nil && ctx.Err() == nil {
+		// The tree did not come in time: the read goes on without it, and
+		// the app's next reads ask for less.
+		treeless, srcErr, tm.timedOut = true, nil, true
+		d.trees.slower(d.appOr(app), level, time.Now())
+	} else if srcErr == nil && !treeless && tm.source >= wdaTreeSlow {
+		d.trees.slower(d.appOr(app), level, time.Now())
+	}
+	d.trees.sawApp(app.BundleID)
 	// At the end, once the picture is in (pictured.Wait below).
-	defer func() { d.noteSlowRead(start, tm, root, opt.OCR) }()
+	defer func() { d.noteSlowRead(start, tm, root, gate != nil) }()
 	w, h := d.size() // d.source saw the orientation
 	s := &screen.Screen{
 		Width: w, Height: h,
@@ -521,6 +572,9 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 	if srcErr == nil {
 		s.App = d.appInfo(ctx, app, root)
 	}
+	if gate == nil && treeless {
+		gate = newCaptureGate(opt.MayCapture, picture)
+	}
 	if gate != nil {
 		use := gate.late(s)
 		pictured.Wait()
@@ -531,6 +585,14 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 	if srcErr != nil {
 		return nil, fmt.Errorf("observe: %w", srcErr)
 	}
+	if treeless {
+		s.TreeTooSlow = true
+		if ocrDone {
+			addOCR(s, lines)
+		}
+		return s, nil
+	}
+	s.Partial = level == treeShallow
 	scale := d.scale
 	if root.Rect.Width > 0 {
 		scale = float64(w) / root.Rect.Width
@@ -546,27 +608,55 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 			return s, nil
 		}
 	}
-	if ocrDone && len(lines) > 0 {
-		if top, kb := keyboardFromOCR(lines); kb {
-			noteOCRKeyboard(s, top)
-			kept := lines[:0:0]
-			for _, l := range lines {
-				if l.Y < top {
-					kept = append(kept, l)
-				}
-			}
-			lines = kept
-		}
-		s.Elements = append(s.Elements, ocrExtras(s.Elements, lines, w, h)...)
+	if ocrDone {
+		addOCR(s, lines)
 	}
 	return s, nil
+}
+
+// addOCR adds the text OCR read that no element of s shows; text where OCR
+// sees the keyboard's keys only marks the keyboard as shown.
+func addOCR(s *screen.Screen, lines []ocrLine) {
+	if len(lines) == 0 {
+		return
+	}
+	if top, kb := keyboardFromOCR(lines); kb {
+		noteOCRKeyboard(s, top)
+		kept := lines[:0:0]
+		for _, l := range lines {
+			if l.Y < top {
+				kept = append(kept, l)
+			}
+		}
+		lines = kept
+	}
+	s.Elements = append(s.Elements, ocrExtras(s.Elements, lines, s.Width, s.Height)...)
+}
+
+// readText reads a picture's text.
+func (d *WDADevice) readText(pic []byte) ([]ocrLine, error) {
+	if d.recognize != nil {
+		return d.recognize(pic)
+	}
+	return recognizeText(pic, ocrOptions{Languages: ocrLanguages})
+}
+
+// appOr is a's bundle id, or the last read's app when WDA did not say
+// (its answer waited behind the tree).
+func (d *WDADevice) appOr(a wdaApp) string {
+	if a.BundleID != "" {
+		return a.BundleID
+	}
+	return d.trees.last()
 }
 
 // wdaTimes are when the parts of a read ended, from its start; ocr is the
 // recognition alone.
 type wdaTimes struct {
 	source, lock, shot, ocr time.Duration
-	from                    string // where OCR's picture came from (ocrPicture)
+	from                    string    // where OCR's picture came from (ocrPicture)
+	level                   treeLevel // how much of the tree the read asked for
+	timedOut                bool      // the tree did not come in time
 }
 
 // slowRead is how long a read may take before the log says what took the
@@ -592,7 +682,8 @@ func (d *WDADevice) noteSlowRead(start time.Time, tm wdaTimes, root *wdaNode, oc
 		count(root)
 	}
 	args := []any{"device", d.info.ID, "total", total.Round(time.Millisecond), "source", tm.source.Round(time.Millisecond),
-		"nodes", nodes, "lock", tm.lock.Round(time.Millisecond), "connection", d.info.Connection}
+		"nodes", nodes, "tree", tm.level.String(), "tree_timed_out", tm.timedOut,
+		"lock", tm.lock.Round(time.Millisecond), "connection", d.info.Connection}
 	if ocr {
 		args = append(args, "picture", tm.shot.Round(time.Millisecond), "from", tm.from, "ocr", tm.ocr.Round(time.Millisecond))
 	}
@@ -764,9 +855,17 @@ func (d *WDADevice) Key(ctx context.Context, k driver.Key) error {
 // always start the system's edge swipe (not on the iOS 18 Simulator), so
 // the button comes first.
 func (d *WDADevice) back(ctx context.Context) error {
-	if root, err := d.source(ctx); err == nil {
-		if p, ok := backButton(root, d.scale); ok {
-			return d.Tap(ctx, p, driver.TapOptions{})
+	// The app of the last read is most likely still in front: where its
+	// tree is too slow, a shallow one has the bar, and with none at all
+	// the swipe goes at once.
+	if level := d.trees.level(d.trees.last(), time.Now()); level != treeNone {
+		tctx, cancel := context.WithTimeout(ctx, wdaBackWait)
+		root, err := d.tree(tctx, level.depth())
+		cancel()
+		if err == nil {
+			if p, ok := backButton(root, d.scale); ok {
+				return d.Tap(ctx, p, driver.TapOptions{})
+			}
 		}
 	}
 	w, h := d.size()
@@ -777,6 +876,11 @@ func (d *WDADevice) back(ctx context.Context) error {
 	from.X = 0
 	return d.c.gesturePath(ctx, []wdaPoint{from, from, to}, []time.Duration{0, 50 * time.Millisecond, 250 * time.Millisecond}, 0)
 }
+
+// wdaBackWait is how long Back waits for the tree to find the back button
+// before it swipes from the edge instead: an app whose tree takes tens of
+// seconds (wda_tree.go) would hold the key that long.
+const wdaBackWait = 5 * time.Second
 
 // backButton finds a navigation bar's back button. UIKit names it
 // BackButton (its label is the page it goes back to); an iPad's split view
@@ -1075,6 +1179,7 @@ func (d *WDADevice) videoSize() (int, int) {
 // the test run Pinky started; WDA itself stays installed.
 func (d *WDADevice) Close() error {
 	d.closeOnce.Do(func() {
+		d.trees.close()
 		d.idle.close()
 		d.StopAppLogs()
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)

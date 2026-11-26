@@ -156,7 +156,7 @@ func TestDownloadLink(t *testing.T) {
 	os.WriteFile(secret, []byte("secret"), 0o600)
 	os.Remove(filepath.Join(dir, "swapped.png"))
 	if err := os.Symlink(secret, filepath.Join(dir, "swapped.png")); err != nil {
-		t.Fatal(err)
+		t.Skip("no symbolic links here:", err)
 	}
 	if resp, body := get(t, link); resp.StatusCode != http.StatusNotFound || strings.Contains(string(body), "secret") {
 		t.Fatalf("swapped: %d %s", resp.StatusCode, body)

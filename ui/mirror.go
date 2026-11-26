@@ -54,6 +54,12 @@ type mirror struct {
 	firstAt  time.Time // when this stream's first picture came, zero before it
 	holdDue  bool      // a build is asked for once the picture may be held (stillFor)
 	asleep   atomic.Bool
+	// stalls counts the times the mirror's decoder gave no picture for
+	// what came (video.ErrStalled); from the second on, or after one that
+	// hung (video.ErrHung), it decodes in software. lateAt is when a late
+	// picture was last logged.
+	stalls int
+	lateAt time.Time
 
 	picW, picH int     // the stream's picture size the right way up: the device's pixels
 	turn       int     // quarter turns clockwise that put the picture upright (driver.Packet.Turn)
@@ -76,6 +82,12 @@ type mirror struct {
 	wheelTick bool         // wheel's finger is gliding, a tick to come
 	pinch     *mirrorPinch // two fingers are down (mirrorpinch.go)
 	compose   string       // an input method's composition
+
+	// pointerOn and lookedAt track recent pointer/input activity on the
+	// phone's page so a locked iPhone stays live while in use (pageStill).
+	pointerOn bool
+	lookedAt  time.Time
+	lookDue   bool // timer pending to recheck pageStill after pageLookFor
 }
 
 // surface is where a mirror shows. One mirror, and its one stream, may show
@@ -90,15 +102,23 @@ const (
 )
 
 // mirrorFor returns the phone's mirror, opening its stream if needed: a
-// still opens it again, showing its picture until the stream's first.
+// still opens it again, showing its picture until the stream's first. A
+// build of a window that shows nothing (unseen) opens none.
 func (a *app) mirrorFor(id string) *mirror {
 	m := a.mirrors[id]
 	if m == nil {
 		m = &mirror{a: a, id: id}
 		a.mirrors[id] = m
-		m.open()
+		if a.unseen {
+			m.state = "still"
+		} else {
+			m.open()
+		}
 	}
 	m.used = a.buildSeq
+	if a.unseen {
+		return m
+	}
 	if m.state == "still" {
 		m.open()
 	}
@@ -155,13 +175,14 @@ func (a *app) stillFor(id string) *mirror {
 	return m
 }
 
-// sweepMirrors lets go of the mirrors this build did not show. A phone's
+// sweepMirrors lets go of the mirrors this build did not show, and of
+// all of them while nothing of the main window shows on screen (unseen). A phone's
 // own mirror that has a picture holds it, so that All phones shows it
 // again without opening the stream for it; agents' displays, and phones
 // gone or offline, close.
 func (a *app) sweepMirrors() {
 	for id, m := range a.mirrors {
-		if m.used == a.buildSeq || a.inWindow(m) {
+		if (m.used == a.buildSeq && !a.unseen) || a.inWindow(m) {
 			continue
 		}
 		if d := a.device(m.id); !m.agent && m.bitmap != nil && d != nil && d.Info.State == driver.StateOnline && d.Status != gateway.DeviceOffline {
@@ -173,6 +194,19 @@ func (a *app) sweepMirrors() {
 		m.close()
 		delete(a.mirrors, id)
 	}
+}
+
+// hideSettle is how long the main window stays marked unseen after hiding
+// or minimizing: macOS updates WindowHidden ~0.3 s later, so without this
+// window an intervening build would reopen the streams.
+const hideSettle = time.Second
+
+// mainHid closes mirrors when the main window hides or minimizes, and
+// keeps builds from reopening them for hideSettle while WindowHidden catches up.
+func (a *app) mainHid() {
+	a.hidAt = time.Now()
+	a.closeMirrors()
+	time.AfterFunc(hideSettle, func() { a.post(func() {}) })
 }
 
 // closeMirrors closes the mirrors as the main window hides or minimizes,
@@ -212,7 +246,7 @@ func (m *mirror) open() {
 	}
 	m.opening = true
 	m.openedAt, m.firstAt, m.holdDue = time.Now(), time.Time{}, false
-	a, task := m.a, m.task
+	a, task, software := m.a, m.task, m.stalls > 1
 	go func() {
 		logf("pinky: mirror %s: opening the stream (gen %d, agent %v)", m.id, gen, m.agent)
 		if m.agent {
@@ -233,7 +267,8 @@ func (m *mirror) open() {
 		}
 		var p *video.Player
 		if err == nil {
-			p, err = video.NewPlayer(s, video.PlayerOptions{YUV: true, SkipRepeats: true, OnFrame: m.wake})
+			p, err = video.NewPlayer(s, video.PlayerOptions{YUV: true, SkipRepeats: true, OnFrame: m.wake,
+				OnWaiting: m.nudge, StallAfter: mirrorStallAfter, Decoder: video.DecoderOptions{Software: software}})
 			if err != nil {
 				s.Close()
 			}
@@ -285,9 +320,33 @@ func (m *mirror) open() {
 	}()
 }
 
+// mirrorStallAfter is how long a mirror's decoder may take the stream's
+// packets without giving a picture before the mirror opens the stream again
+// (video.PlayerOptions.StallAfter).
+const mirrorStallAfter = 3 * time.Second
+
+// mirrorLate is how long a picture may wait to be painted before the mirror
+// logs it: the windows stopped painting the mirror while pictures came.
+const mirrorLate = 2 * time.Second
+
 // ended records that the mirror's stream ended after it played, and writes
-// it to the log: the mirror tries again in two seconds.
+// it to the log: the mirror tries again in two seconds. A decoder that
+// stalled is no failure of the stream: the mirror opens it again at once,
+// with a new decoder, and shows its picture meanwhile; from the second
+// stall on, the decoder works in software, and so it does at once after a
+// decoder that hung (video.ErrHung): a hardware decoder stuck in the GPU's
+// driver may well take the next one down with it.
 func (m *mirror) ended(err error) {
+	if errors.Is(err, video.ErrStalled) {
+		m.stalls++
+		if errors.Is(err, video.ErrHung) {
+			m.stalls = max(m.stalls, 2)
+		}
+		m.a.logInfo(fmt.Sprintf("pinky: mirror %s: the picture stalled; opening the stream again", m.id),
+			"err", err, "stalls", m.stalls, "software", m.stalls > 1)
+		m.open()
+		return
+	}
 	const wait = 2 * time.Second
 	m.state, m.err = "failed", err
 	m.retry = time.Now().Add(wait)
@@ -351,6 +410,16 @@ func (m *mirror) wake() {
 	if m.asleep.CompareAndSwap(true, false) {
 		m.a.post(func() {})
 	}
+}
+
+// nudge has the windows paint the mirror again: pictures have waited for
+// over a second while new ones came, so painting stopped though the mirror
+// was not asleep, and wake, which posts only for a sleeping mirror, would
+// never start it again. The player calls it, on its goroutine, at most
+// once a second.
+func (m *mirror) nudge() {
+	m.asleep.Store(false)
+	m.a.post(func() {})
 }
 
 // hold lets the mirror's stream go and keeps its picture: a still, until
@@ -502,12 +571,25 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 		way = a.waitingWay(t, step)
 	}
 	scr := mg.Box(c).Fill().Radius(radius).Clip().Background(hex("#000000"))
+	if where == onPage && !m.agent {
+		// Keep a locked iPhone live while hovered and briefly after (pageStill).
+		// pageStill ran earlier in this build, so rebuild when hover changes.
+		on := scr.Hovered()
+		if on || m.pointerOn {
+			m.lookedAt = time.Now()
+		}
+		if on != m.pointerOn {
+			a.post(func() {})
+		}
+		m.pointerOn = on
+	}
 	switch {
 	case m.agent:
 		scr.Label(locales.MirrorAgentScreenLabel(agentOrTheAgent(t), d.Info.Name))
 	case !tile:
 		scr.Focusable().FocusRing(false).Cursor(mg.CursorPointer).Label(locales.MirrorScreenLabel(d.Info.Name)).
 			HandleInput(func(ev mg.InputEvent) bool {
+				m.lookedAt = time.Now()
 				// The event's position is on this surface, at its size.
 				m.boxW, m.boxH = m.boxes[where][0], m.boxes[where][1]
 				m.inputOn = where
@@ -527,6 +609,12 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 					// the Connecting overlay; painting does not build it
 					// again, and a still screen sends nothing else.
 					a.post(func() {})
+				}
+				if late := time.Since(f.Ready); late >= mirrorLate && time.Since(m.lateAt) >= time.Minute {
+					// The windows stopped painting the mirror while pictures
+					// came (nudge): say so, as it looks like a frozen phone.
+					m.lateAt = time.Now()
+					a.logInfo(fmt.Sprintf("pinky: mirror %s: painted a picture late", m.id), "waited", late.Round(100*time.Millisecond))
 				}
 				if m.firstAt.IsZero() {
 					// A tile waiting to hold its picture (stillFor) waits
@@ -624,6 +712,11 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 					mg.Text(c, locales.MirrorScreenOffWake()).FontSize(fsSmall).TextColor(hex("#d0d0d8")).PassThrough()
 				}
 			})
+		case tile && m.state == "still" && m.bitmap != nil:
+			// An idle iPhone's tile holds its last picture (stillFor): say so,
+			// or the phone seems to have frozen while it goes on changing.
+			mg.Text(c, locales.MirrorNotLiveTile()).Attach(mg.AnchorBottom, mg.AnchorBottom).Bottom(10).Padding(3, 8).Radius(999).
+				Background(mg.RGBA(20, 20, 24, 0.72)).TextColor(hex("#ffffff")).FontSize(fsSmall).NoWrap().PassThrough()
 		case (m.state == "connecting" || m.state == "playing") && m.bitmap == nil:
 			mg.Column(c).Absolute().Top(0).Left(0).Right(0).Bottom(0).Center().Gap(10).PassThrough().Children(func() {
 				spinner(c)

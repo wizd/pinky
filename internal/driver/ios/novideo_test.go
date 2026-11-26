@@ -16,6 +16,7 @@ type fakeStream struct {
 	t   *testing.T
 	m   *media
 	seq uint16
+	ts  uint32 // the RTP time of the last frame keyFrame fed
 }
 
 func newFakeStream(t *testing.T) *fakeStream {

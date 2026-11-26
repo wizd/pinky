@@ -328,7 +328,8 @@ func (g *Gateway) waitBack(ctx context.Context, l *lease) bool {
 // RestartDeviceService restarts the computer's service a phone goes through,
 // when its provider can (driver.DeviceServiceRestarter: usbmuxd, which can
 // lose an iPhone on Wi-Fi), as the person asked on the phone's page. The
-// system asks for an administrator's password, showing reason; every phone of
+// system asks for an administrator's password, showing reason, unless the
+// person allowed restarts without one (SetQuietRestart); every phone of
 // the platform disconnects for a moment, and tasks on them wait as for any
 // short disconnection. It returns driver.ErrCanceled when the person
 // declines.
@@ -352,6 +353,9 @@ func (g *Gateway) RestartDeviceService(ctx context.Context, deviceID, reason str
 		g.log.Warn("restart the device service", "err", err)
 		return err
 	}
+	g.mu.Lock()
+	g.noteRestartLocked(p.Platform(), time.Now()) // none by itself right after (servicerestart.go)
+	g.mu.Unlock()
 	g.discoverSoon()
 	return nil
 }

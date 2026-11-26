@@ -31,8 +31,9 @@ type Config struct {
 	// VideoBitRate in bits per second; zero is scrcpy's default (8 Mbps),
 	// or 2.5 Mbps over Wi-Fi (see Device.baseOptions).
 	VideoBitRate int
-	// VideoCodec is "h264" or "h265"; empty picks H.265 over Wi-Fi and
-	// H.264 otherwise. A phone whose H.265 encoder fails uses H.264.
+	// VideoCodec is "h264" or "h265"; empty picks H.265 over Wi-Fi when a
+	// hardware encoder is available and H.264 otherwise. A phone whose
+	// H.265 encoder fails uses H.264.
 	VideoCodec string
 
 	// SettleMax is the settle limit when WaitSettled gets none (3 s).

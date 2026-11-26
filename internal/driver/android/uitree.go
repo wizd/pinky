@@ -342,7 +342,12 @@ func (c *converter) element(n *uiNode, path []string, parentLabel string) (scree
 		ID:     n.ResID,
 	}
 	if isInputNode(n) {
-		e.Content = inputContent(n)
+		if e.Content = inputContent(n); e.Content != "" {
+			e.Hint = cleanLabel(n.Hint)
+			if e.Hint == "" {
+				e.Hint = cleanLabel(n.Desc)
+			}
+		}
 	}
 	if n.Focused {
 		e.States = append(e.States, screen.StateFocused)

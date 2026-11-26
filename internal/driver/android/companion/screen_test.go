@@ -206,6 +206,12 @@ func TestScreenInputsAndPasswords(t *testing.T) {
 			t.Errorf("%q: content %q, want %q", s.Elements[i].Label, c, want)
 		}
 	}
+	// The hint stays the field's name once text stands in its place.
+	for i, want := range []string{"", "Note", "", ""} {
+		if h := s.Elements[i].Hint; h != want {
+			t.Errorf("%q: hint %q, want %q", s.Elements[i].Label, h, want)
+		}
+	}
 }
 
 func TestScreenKeyboardOccludes(t *testing.T) {

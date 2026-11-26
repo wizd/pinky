@@ -64,31 +64,57 @@ func TaskConnection(s string) (way string, ok bool) {
 	return "", false
 }
 
-// sharingRefusers are apps known to refuse to run while the screen is
-// shared (UIScreen.isCaptured), by bundle id (iOS's, and Android's where
-// it differs) and by the names people and the phone use for them,
-// lowercased. Seen in the field: docs/notes/field-test-iphone.md item 5.
-var sharingRefusers = map[string]string{
-	"com.dbs.sg.dbsmbanking": "DBS digibank", // the same id on iOS and Android
-	"digibank":               "DBS digibank",
-	"dbs digibank":           "DBS digibank",
-	"dbs":                    "DBS digibank",
-	"com.cmbchina.mpbbank":   "China Merchants Bank", // iOS
-	"cmb.pb":                 "China Merchants Bank", // Android
-	"招商银行":                   "China Merchants Bank",
-	"china merchants bank":   "China Merchants Bank",
-	"cmb":                    "China Merchants Bank",
+// sharingApp is an app a task moves to the helper for: its name, and why
+// it does not work while the screen is shared, as a clause after the name
+// ("refuses to run while the screen is shared").
+type sharingApp struct {
+	name, why string
+}
+
+const (
+	refusesToRun = "refuses to run while the screen is shared"
+	// iOS keeps the camera from apps while the screen is shared, and on
+	// iOS 27 an app using the camera stops CoreDevice's stream.
+	noCamera = "gets no picture while the screen is shared, as iOS keeps the camera from apps then"
+)
+
+var (
+	digibank = sharingApp{"DBS digibank", refusesToRun}
+	cmb      = sharingApp{"China Merchants Bank", refusesToRun}
+	camera   = sharingApp{"Camera", noCamera}
+)
+
+// sharingRefusers are apps that do not work while the screen is shared
+// (UIScreen.isCaptured), by bundle id (iOS's, and Android's where it
+// differs) and by the names people and the phone use for them, lowercased.
+// The banks were seen in the field (docs/notes/field-test-iphone.md item
+// 5); the system Camera shows black (#184).
+var sharingRefusers = map[string]sharingApp{
+	"com.dbs.sg.dbsmbanking": digibank, // the same id on iOS and Android
+	"digibank":               digibank,
+	"dbs digibank":           digibank,
+	"dbs":                    digibank,
+	"com.cmbchina.mpbbank":   cmb, // iOS
+	"cmb.pb":                 cmb, // Android
+	"招商银行":                   cmb,
+	"china merchants bank":   cmb,
+	"cmb":                    cmb,
+	"com.apple.camera":       camera,
+	"camera":                 camera,
+	"相机":                     camera,
+	"相機":                     camera,
+	"カメラ":                    camera,
 }
 
 // refusesSharing reports whether one of names (ids or names of an app) is
-// known to refuse screen sharing, and the app's name.
-func refusesSharing(names ...string) (string, bool) {
+// known not to work while the screen is shared, and which app it is.
+func refusesSharing(names ...string) (sharingApp, bool) {
 	for _, n := range names {
-		if name, ok := sharingRefusers[strings.ToLower(strings.TrimSpace(n))]; ok {
-			return name, true
+		if app, ok := sharingRefusers[strings.ToLower(strings.TrimSpace(n))]; ok {
+			return app, true
 		}
 	}
-	return "", false
+	return sharingApp{}, false
 }
 
 // switchingLine is the status line of a phone moving to another
@@ -101,11 +127,12 @@ func switchingLine(d *device) string {
 }
 
 // helperNeed is why a task moves to the helper without the agent asking:
-// an app that refuses screen sharing (app, its name), or something only the
-// helper does on an iPhone or iPad (what, as a sentence names it: "turning
-// the screen", "pinching"). The zero value is the agent asking.
+// an app that does not work while the screen is shared (app), or something
+// only the helper does on an iPhone or iPad (what, as a sentence names it:
+// "turning the screen", "pinching"). The zero value is the agent asking.
 type helperNeed struct {
-	app, what string
+	app  sharingApp
+	what string
 }
 
 // useConnection moves the task's phone to way (wayHelper, wayCoreDevice,
@@ -128,7 +155,7 @@ func (g *Gateway) useConnection(ctx context.Context, l *lease, way string, need 
 	keep := way != wayHelper && moved != "" && hasSwitchChangesLocked(l)
 	g.mu.Unlock()
 	asked := need == helperNeed{}
-	why := need.app
+	why := need.app.name
 	if !ok || platform != driver.IOS {
 		if asked && way != "" {
 			return nil, fmt.Sprintf("%s connects only one way, so the connection you asked for changes nothing.", d.name())
@@ -188,7 +215,7 @@ func (g *Gateway) useConnection(ctx context.Context, l *lease, way string, need 
 		}
 		note := fmt.Sprintf("Pinky could not move %s to Pinky on the iPhone: %s.", d.name(), reason)
 		if why != "" {
-			note += fmt.Sprintf(" %s refuses to run while the screen is shared, which CoreDevice does: tell the person it needs Pinky on the iPhone installed (Settings › Phones).", why)
+			note += fmt.Sprintf(" %s %s, which CoreDevice does: tell the person it needs Pinky on the iPhone installed (Settings › Phones).", why, need.app.why)
 		}
 		return nil, note
 	}
@@ -221,14 +248,14 @@ func (g *Gateway) useConnection(ctx context.Context, l *lease, way string, need 
 		}
 		note := fmt.Sprintf("Pinky could not move %s to Pinky on the iPhone (%s), so the task stays on CoreDevice.", d.name(), detail)
 		if why != "" {
-			note += fmt.Sprintf(" %s may refuse to run while the screen is shared.", why)
+			note += fmt.Sprintf(" %s may not work while the screen is shared.", why)
 		}
 		return nil, note
 	}
 	note := "Pinky moved this task to Pinky on the iPhone, which shares no screen"
 	switch {
 	case why != "":
-		note += fmt.Sprintf(", because %s refuses to run while the screen is shared", why)
+		note += fmt.Sprintf(", because %s %s", why, need.app.why)
 	case need.what != "":
 		note = fmt.Sprintf("Pinky moved this task to Pinky on the iPhone for %s, which only it does on this phone", need.what)
 	}
@@ -302,8 +329,67 @@ func (g *Gateway) switchTo(ctx context.Context, d *device, cc driver.ConnectionC
 	}()
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	for g.waitMovingLocked(ctx, d) {
+	// A call waits within its budget, leaving switchReserve for what it
+	// came for: an MCP client gives up on a call after about a minute,
+	// and a move with its discovery could take longer.
+	wctx := ctx
+	if dl, ok := budgetDeadline(ctx); ok {
+		var cancel context.CancelFunc
+		wctx, cancel = context.WithDeadline(ctx, dl.Add(-switchReserve))
+		defer cancel()
 	}
+	for g.waitMovingLocked(wctx, d) {
+	}
+	if wctx.Err() != nil && ctx.Err() == nil && d.taskWay == way && g.chosen[d.id] == "" &&
+		!d.online && !waitingLocked(d) && time.Now().Before(backBy(d)) {
+		// Out of the call's time with the phone still on its way: the
+		// move ends in the background, and the next call waits for it
+		// (gateOnce).
+		go g.finishSwitch(d, cc, way, target)
+		return errResult(ErrDeviceOffline, "%s", stillMovingMessage(d.name(), target))
+	}
+	return g.endSwitchLocked(d, way, target)
+}
+
+// switchReserve is what a call leaves of its budget after it waited for
+// its phone to move to another connection: the action it came for and the
+// read after it. Tests shorten it.
+var switchReserve = 15 * time.Second
+
+// stillMovingMessage tells an agent that the phone is still moving to
+// another connection for the task.
+func stillMovingMessage(name, target string) string {
+	return fmt.Sprintf("Pinky is moving %s to %s for this task, and it is not back yet. Nothing was done; try again in a few seconds.", name, wayName(target))
+}
+
+// finishSwitch ends a move to way that a call stopped waiting for: it
+// waits until the phone is back or switchWait passed, as the call would
+// have, and when the phone did not come up on the helper, moves it back to
+// the person's choice, as useConnection would have.
+func (g *Gateway) finishSwitch(d *device, cc driver.ConnectionChooser, way, target string) {
+	g.mu.Lock()
+	for g.waitMovingLocked(g.ctx, d) {
+	}
+	if g.ctx.Err() != nil {
+		g.mu.Unlock()
+		return
+	}
+	res := g.endSwitchLocked(d, way, target)
+	back := res == nil && way == wayHelper && d.taskWay == way && g.chosen[d.id] == "" &&
+		(!d.online || d.info.Backend != wayHelper)
+	g.mu.Unlock()
+	if back {
+		g.log.Warn("task connection: Pinky on the iPhone did not start", "device", d.id)
+		ctx, cancel := context.WithTimeout(g.ctx, switchWait)
+		defer cancel()
+		g.switchTo(ctx, d, cc, "")
+	}
+}
+
+// endSwitchLocked ends a move to way once the phone is back, the wait is
+// over, or it waits for the person, whose result it returns. The caller
+// holds g.mu.
+func (g *Gateway) endSwitchLocked(d *device, way, target string) *Result {
 	if d.taskWay != way || g.chosen[d.id] != "" {
 		// The person chose a connection meanwhile: their move is under
 		// way (forgetTaskWay), and its wait is theirs.
@@ -423,13 +509,13 @@ func (g *Gateway) launchConnection(ctx context.Context, l *lease, a Action, p *p
 		orig := p.launch.Original()
 		names = append(names, p.launch.ID, p.launch.Name, orig.ID, orig.Name)
 	}
-	name, ok := refusesSharing(names...)
+	app, ok := refusesSharing(names...)
 	if !ok {
 		return nil, ""
 	}
-	res, note := g.useConnection(ctx, l, wayHelper, helperNeed{app: name})
+	res, note := g.useConnection(ctx, l, wayHelper, helperNeed{app: app})
 	if res != nil && res.Status == StatusNeedsSetup {
-		res.Message += fmt.Sprintf(" Once the phone is ready, call phone_launch again to open %s.", name)
+		res.Message += fmt.Sprintf(" Once the phone is ready, call phone_launch again to open %s.", app.name)
 	}
 	return res, note
 }

@@ -156,6 +156,7 @@ func TestLostPhonePrivateAddress(t *testing.T) {
 // request for an administrator, and reads a declined one as canceled.
 func TestRestartDeviceService(t *testing.T) {
 	p := NewProvider()
+	p.quiet.path = t.TempDir() + "/pinky-usbmuxd" // not this computer's rule
 	var got []string
 	p.restartFn = func(_ context.Context, command, reason string) error {
 		got = append(got, command, reason)

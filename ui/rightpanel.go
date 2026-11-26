@@ -130,7 +130,14 @@ func (a *app) needCard(c *mg.Context, n gateway.NeedView, floating bool) {
 		case n.Kind == gateway.NeedHandoff:
 			a.handoffControls(c, n)
 		case n.Kind == gateway.NeedSetup:
-			// Done on the phone; the card goes once it is ready.
+			// Done on the phone, or for a phone the device service lost
+			// with the restart, unless the page beside shows that phone
+			// with its own; the card goes once the phone is ready.
+			if d := a.device(n.DeviceID); lostSetup(n) && d != nil && lostOnWiFi(*d) && a.sel != n.DeviceID {
+				mg.Box(c).Height(8)
+				a.restartButton(c, *d)
+				a.restartDialog(c, *d)
+			}
 		case newAgentNeed(n):
 			a.agentRequestControls(c, n)
 		case n.Unblock:

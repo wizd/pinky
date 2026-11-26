@@ -96,9 +96,10 @@ func (g *Gateway) recordStep(l *lease, step int, a Action, c Call, p *prep, res 
 	if res.Error != "" {
 		status = string(res.Error)
 	}
-	st := StepView{Text: describe(a, p), Tool: "phone_" + a.Tool, Args: a.args(c), Status: status, At: start,
+	sa, sc := shown(a, c, p)
+	st := StepView{Text: describe(a, p), Tool: "phone_" + a.Tool, Args: sa.args(sc), Status: status, At: start,
 		Elapsed: time.Since(start), Before: before, After: after}
-	if p != nil {
+	if p != nil && !(p.secret && a.Tool == "tap") { // not which key of a passcode
 		if p.target != nil {
 			st.Target = p.target.Bounds
 		}
@@ -108,6 +109,8 @@ func (g *Gateway) recordStep(l *lease, step int, a Action, c Call, p *prep, res 
 		case a.Tool == "swipe", p.drag != nil:
 			st.Point = p.from
 		}
+	}
+	if p != nil {
 		if len(p.exempted) > 0 && (res.Status == StatusSettled || res.Status == StatusUncertain) {
 			st.Text += "\n" + exemptedLine(p)
 		}
@@ -116,17 +119,20 @@ func (g *Gateway) recordStep(l *lease, step int, a Action, c Call, p *prep, res 
 	defer g.mu.Unlock()
 	if step >= 0 {
 		st.Index = step
-		g.updateStepLocked(l.task, st, c.Intent, screenText)
+		g.updateStepLocked(l.task, st, sc.Intent, screenText)
 		return step
 	}
-	return g.addStepLocked(l.task, st, c.Intent, screenText)
+	return g.addStepLocked(l.task, st, sc.Intent, screenText)
 }
 
 // recordRefusal records an action that policy or the screen refused.
 func (g *Gateway) recordRefusal(l *lease, c Call, a Action, p *prep, res *Result) {
 	if p == nil {
-		p = &prep{}
+		// Refused before the screen was read: any text may be a password.
+		p = &prep{secret: true}
 	}
+	sa, sc := shown(a, c, p)
+	c.Intent = sc.Intent
 	text := describe(a, p)
 	switch {
 	case res.Status == StatusBlocked:
@@ -140,8 +146,8 @@ func (g *Gateway) recordRefusal(l *lease, c Call, a Action, p *prep, res *Result
 	if res.Error != "" {
 		status = string(res.Error)
 	}
-	st := StepView{Text: text, Tool: "phone_" + a.Tool, Args: a.args(c), Status: status, At: time.Now()}
-	if p.target != nil {
+	st := StepView{Text: text, Tool: "phone_" + a.Tool, Args: sa.args(sc), Status: status, At: time.Now()}
+	if p.target != nil && !(p.secret && a.Tool == "tap") {
 		st.Target = p.target.Bounds
 	}
 	g.mu.Lock()

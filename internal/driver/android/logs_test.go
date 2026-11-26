@@ -165,6 +165,15 @@ func TestDebuggable(t *testing.T) {
 	if debuggable(out, "dev.pinky") {
 		t.Fatal("another package's flags")
 	}
+	// Android 10 and older write pkgFlags=.
+	old := strings.Replace(out, "    flags=[ DEBUGGABLE", "    pkgFlags=[ DEBUGGABLE", 1)
+	if old == out || !debuggable(old, "dev.pinky.crashtest") {
+		t.Fatal("debug build with pkgFlags not debuggable")
+	}
+	// DEBUGGABLE among the private flags does not count.
+	if debuggable(strings.Replace(release, "privateFlags=[ ", "privateFlags=[ DEBUGGABLE ", 1), "dev.pinky.crashtest") {
+		t.Fatal("private flags read as the package's flags")
+	}
 }
 
 func TestPackageUIDs(t *testing.T) {

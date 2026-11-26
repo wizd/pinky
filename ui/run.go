@@ -56,9 +56,9 @@ type Options struct {
 	Settings   *Settings
 	OnSettings func(old, s Settings)
 	// GatewaySettings reads again what the gateway keeps of Settings ›
-	// Safety (Preset, HideCodes, VirtualCredentials, ReadOnly and
-	// BlockedApps), which hand
-	// edits of rules.yaml and apps.yaml change while Pinky runs. since is
+	// Safety (Preset, HideCodes, VirtualCredentials, PhoneCredentials,
+	// ReadOnly and BlockedApps), which hand edits of rules.yaml and
+	// apps.yaml change while Pinky runs. since is
 	// the version of the policy it returned last, -1 at first; ok is false
 	// while the policy is still at it. The client calls it off the main
 	// thread every two seconds while Settings shows, and shows what it
@@ -183,8 +183,11 @@ type Settings struct {
 	// VirtualCredentials lets agents type passwords and one-time codes on
 	// virtual phones (policy.File.VirtualCredentials).
 	VirtualCredentials bool
-	KeepDays           int
-	Record             bool
+	// PhoneCredentials lets agents type passwords and one-time codes on
+	// phones, asking the person in each app (policy.File.PhoneCredentials).
+	PhoneCredentials bool
+	KeepDays         int
+	Record           bool
 	// SmallerRecordings makes each task's recording smaller when the task
 	// ends (internal/recording.Smaller); off keeps the phone's own stream.
 	SmallerRecordings bool
@@ -405,6 +408,13 @@ type app struct {
 	panelPage page   // the page syncPanel last saw, to sync again when it changes
 	sel       string // the selected phone, or allPhones
 	selShown  string // the selection the sidebar last scrolled into view
+
+	// unseen is true while the window being built isn't visible
+	// (hidden, minimized, or covered). Builds skip opening streams then,
+	// and the main window's sweep lets go of its mirrors so an unwatched
+	// iPhone can stop its stream and sleep.
+	unseen bool
+	hidAt  time.Time // when the main window last hid or minimized (mainHid)
 
 	mirrors map[string]*mirror
 	shots   map[string]*mg.Bitmap // approval screenshots by need ID
@@ -636,8 +646,8 @@ func (a *app) ready() {
 	})
 	// Hidden or minimized, the mirrors stop streaming; shown again, the
 	// view builds anew and opens them.
-	a.main.OnHide(a.closeMirrors)
-	a.main.OnMinimize(a.closeMirrors)
+	a.main.OnHide(a.mainHid)
+	a.main.OnMinimize(a.mainHid)
 	a.main.OnShow(a.main.Invalidate)
 	a.main.OnRestore(a.main.Invalidate)
 	a.main.OnFocus(func() { a.focused = true; a.regularApp(); a.syncPanel() })

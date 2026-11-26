@@ -39,9 +39,21 @@ type readListDevice struct {
 	// failAfter makes reads fail once that many swipes went out; waits
 	// counts WaitSettled calls.
 	failAfter, swipes, waits int
+	// ragged gives the lines differing widths, as a web page's text has;
+	// clock makes reads with OCR find the status bar's clock, as an
+	// iPhone's do; reads counts the reads other than those that check a
+	// finger's spot with all OCR text (OCRAll).
+	ragged, clock bool
+	reads         int
+	// still keeps each page's lines where the page before had its own:
+	// a swipe that moved the list by whole rows.
+	still bool
 }
 
 func (d *readListDevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*screen.Screen, error) {
+	if !opt.OCRAll {
+		d.reads++
+	}
 	if d.failAfter > 0 && d.swipes >= d.failAfter {
 		return nil, errors.New("screen read failed")
 	}
@@ -90,16 +102,27 @@ func (d *readListDevice) Observe(ctx context.Context, opt driver.ObserveOptions)
 		if d.reverse {
 			shift = d.page * 5
 		}
+		if d.still {
+			shift = 0
+		}
 		role := d.lineRole
 		if role == "" {
 			role = screen.RoleText
 		}
+		w := 700
+		if d.ragged {
+			w = 400 + (i%3)*200
+		}
 		s.Elements = append(s.Elements, screen.Element{
 			Role: role, Label: text,
-			Bounds: screen.Rect{X: 120, Y: 300 + i*step + shift, W: 700, H: 80},
+			Bounds: screen.Rect{X: 120, Y: 300 + i*step + shift, W: w, H: 80},
 		})
 	}
 	s.Elements = append(s.Elements, d.overlay...)
+	if opt.OCR && d.clock {
+		s.Elements = append(s.Elements, screen.Element{Role: screen.RoleText, Label: "9:41", Source: screen.SourceOCR,
+			Bounds: screen.Rect{X: 80, Y: 30, W: 110, H: 50}})
+	}
 	if opt.OCR && opt.OCRAll {
 		d.sawOCR = true
 		s.Elements = append(s.Elements, d.ocrOnly...)
@@ -416,6 +439,11 @@ func TestReadListContinuation(t *testing.T) {
 	}
 	if got := scanText(two.Scan); !strings.Contains(got, "fifth long title") {
 		t.Fatalf("continued content missing: text=%q scan=%+v", got, two.Scan)
+	}
+	// The continuation reads the screen the first call ended on again, and
+	// finds the next screen's overlap with it.
+	if got := scanText(two.Scan); strings.Contains(got, "third long title") || strings.Contains(got, "fourth long title") {
+		t.Fatalf("continuation repeats lines already read: text=%q scan=%+v", got, two.Scan)
 	}
 }
 
@@ -860,24 +888,14 @@ func TestReadListFallsBackToAColumnOfRows(t *testing.T) {
 	}
 }
 
-// The fallback takes only a column of like rows: a screen without a list
-// whose elements are few, narrow (a grid of icons) or of differing widths
-// (chat bubbles) still has no list to read.
+// The fallbacks take only a column of like rows, or a page of text rows:
+// a screen without a list whose elements are few, or a grid of buttons
+// (icons), still has no list to read.
 func TestReadListFindsNoColumnWithoutRows(t *testing.T) {
 	grid := make([]screen.Element, 0, 24)
 	for i := range 24 {
 		grid = append(grid, screen.Element{Role: screen.RoleButton, Label: fmt.Sprintf("App %d", i),
 			Bounds: screen.Rect{X: 60 + (i%4)*250, Y: 300 + (i/4)*300, W: 200, H: 220}})
-	}
-	bubbles := make([]screen.Element, 0, 10)
-	for i := range 10 {
-		w := 560 + (i%3)*150
-		x := 40
-		if i%2 == 1 {
-			x = 1040 - w
-		}
-		bubbles = append(bubbles, screen.Element{Role: screen.RoleText, Label: fmt.Sprintf("message number %d", i),
-			Bounds: screen.Rect{X: x, Y: 300 + i*180, W: w, H: 140}})
 	}
 	for name, c := range map[string]struct {
 		lines   []string
@@ -885,7 +903,6 @@ func TestReadListFindsNoColumnWithoutRows(t *testing.T) {
 	}{
 		"few rows":       {lines: []string{"first long title", "second long title", "third long title"}},
 		"a grid":         {overlay: grid},
-		"chat bubbles":   {overlay: bubbles},
 		"nothing at all": {},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -898,6 +915,105 @@ func TestReadListFindsNoColumnWithoutRows(t *testing.T) {
 				t.Fatalf("read without a list: %+v, %d swipes", res, dev.swipes)
 			}
 		})
+	}
+}
+
+// webPage is a page of text as a web view on an iPhone through
+// WebDriverAgent lists it: lines of differing widths, and no element for
+// the view or its scrolling.
+func webPage() [][]string {
+	lines := webLines()
+	return [][]string{lines[0:8], lines[4:12], lines[8:14]}
+}
+
+func webLines() []string {
+	lines := make([]string, 14)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("Bill item %d, paid at the corner shop", i+1)
+	}
+	return lines
+}
+
+// A web page with no list or scrollable element, and lines too unlike to
+// make a column of rows (a bank's bill page in a field test answered
+// not_found): the read scrolls the screen's content and says so.
+func TestReadListReadsAWebPageWithoutAList(t *testing.T) {
+	base := demo.NewDevice("iphone", "iPhone", driver.IOS)
+	dev := &readListDevice{Device: base, noList: true, ragged: true, lineStep: 180, pages: webPage()}
+	g := newDevGateway(t, base, dev)
+	s, _ := connect(t, g, "Read a bill")
+	res := s.ReadList(context.Background(), ReadListRequest{MaxScreens: 3, MaxMS: 5000, OCR: "off"})
+	if res.IsError() || res.Scan == nil || res.Scan.Pages != 3 || res.Scan.Swipes != 2 {
+		t.Fatalf("web page: %+v", res)
+	}
+	var got []string
+	for _, page := range res.Scan.Sections {
+		got = append(got, page.Lines...)
+	}
+	if want := webLines(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("lines = %#v, want %#v", got, want)
+	}
+	if !strings.Contains(res.Message, "scrolled the screen's content") {
+		t.Fatalf("the message does not say where the read scrolled: %s", res.Message)
+	}
+	// The swipes run between the bars at the top and bottom eighths.
+	for _, p := range dev.froms {
+		if p.Y < 2400/8 || p.Y > 2400*7/8 {
+			t.Errorf("a swipe started at %v, outside the screen's content", p)
+		}
+	}
+}
+
+// The home screen and other system UI are never read as a page, however
+// much text they show.
+func TestReadListLeavesTheHomeScreenAlone(t *testing.T) {
+	base := demo.NewDevice("iphone", "iPhone", driver.IOS)
+	dev := &readListDevice{Device: base, noList: true, ragged: true, lineStep: 180, pages: webPage(),
+		app: screen.App{ID: "com.apple.springboard", Name: "Home Screen"}}
+	g := newDevGateway(t, base, dev)
+	s, _ := connect(t, g, "Read")
+	res := s.ReadList(context.Background(), ReadListRequest{MaxScreens: 2, MaxMS: 5000, OCR: "off"})
+	if res.Error != ErrNotFound || dev.swipes != 0 {
+		t.Fatalf("home screen: %+v, %d swipes", res, dev.swipes)
+	}
+}
+
+func TestContentArea(t *testing.T) {
+	page := func(n, top int) *screen.Screen {
+		s := &screen.Screen{Width: 1080, Height: 2400}
+		for i := range n {
+			s.Elements = append(s.Elements, screen.Element{Role: screen.RoleText, Label: fmt.Sprintf("line %d", i),
+				Bounds: screen.Rect{X: 60, Y: top + i*200, W: 300 + (i%4)*150, H: 60}})
+		}
+		return s
+	}
+	if got, ok := contentArea(page(8, 400)); !ok || got != (screen.Rect{X: 0, Y: 300, W: 1080, H: 1800}) {
+		t.Fatalf("a page of text: %v, %v", got, ok)
+	}
+	// The keyboard takes the bottom of the screen: the content ends above it.
+	kb := page(8, 400)
+	kb.Keyboard, kb.KeyboardFrame = true, screen.Rect{X: 0, Y: 1600, W: 1080, H: 800}
+	if got, ok := contentArea(kb); !ok || got != (screen.Rect{X: 0, Y: 300, W: 1080, H: 1300}) {
+		t.Fatalf("above the keyboard: %v, %v", got, ok)
+	}
+	// Five lines, or lines bunched at the top (a short form), are no page.
+	if _, ok := contentArea(page(5, 400)); ok {
+		t.Fatal("five lines read as a page")
+	}
+	bunched := page(8, 400)
+	for i := range bunched.Elements {
+		bunched.Elements[i].Bounds.Y = 400 + i*100
+	}
+	if _, ok := contentArea(bunched); ok {
+		t.Fatal("lines over less than half the screen read as a page")
+	}
+	// Buttons are not text: a grid of them is no page.
+	buttons := page(8, 400)
+	for i := range buttons.Elements {
+		buttons.Elements[i].Role = screen.RoleButton
+	}
+	if _, ok := contentArea(buttons); ok {
+		t.Fatal("buttons read as a page")
 	}
 }
 

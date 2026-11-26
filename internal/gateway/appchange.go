@@ -26,7 +26,8 @@ import (
 // phone and for the app id and signer (standingAsk), so that a developer's
 // next builds go in without asking; an uninstall deletes data and asks
 // every time. Pinky's own apps, system apps, finance apps, password
-// managers and blocked apps are refused.
+// managers and blocked apps are refused. Read-only refuses all three but a
+// stop of a development build (devBuild).
 
 // AppRequest is phone_app.
 type AppRequest struct {
@@ -132,6 +133,9 @@ func (s *Session) App(ctx context.Context, req AppRequest) *Result {
 	if scope.Mode == ScopeApps {
 		in.Scoped, in.ScopeApps = true, scope.Apps
 	}
+	if op == policy.OpStop && (in.ReadOnly || g.policy.ReadOnly(d.id)) {
+		in.DevBuild = devBuild(ctx, dev, t)
+	}
 	v := g.policy.Evaluate(in)
 	switch v.Decision {
 	case policy.Deny:
@@ -202,6 +206,25 @@ func (g *Gateway) appTarget(ctx context.Context, l *lease, am driver.AppManager,
 		}
 	}
 	return t, nil
+}
+
+// devBuilder is the part of driver.AppLogger that tells a development
+// build from others.
+type devBuilder interface {
+	DevBuild(ctx context.Context, app driver.App) (bool, error)
+}
+
+// devBuild reports whether the driver says the app a stop acts on (a
+// clone as itself) is a development build: debuggable on Android, signed
+// with get-task-allow on an iPhone. Read-only lets an agent stop only
+// such a build. A driver that cannot tell, or fails to, makes it not one.
+func devBuild(ctx context.Context, dev driver.Device, t appTarget) bool {
+	db, ok := dev.(devBuilder)
+	if !ok {
+		return false
+	}
+	is, err := db.DevBuild(ctx, driver.App{ID: t.id, Name: t.name})
+	return err == nil && is
 }
 
 func systemApp(op policy.Op, name string) *Result {

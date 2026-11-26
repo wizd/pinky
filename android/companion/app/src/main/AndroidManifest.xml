@@ -161,7 +161,8 @@
 
         <!-- The ask panel over the app in front (AskActivity): a question
              about the screen from the floating button (QuickEntry), a new
-             task from a Quick Settings tile. Only Pinky opens it; its own
+             task from a Quick Settings tile. Only Pinky opens it (other
+             apps and Android reach it through the aliases below); its own
              task, so that it neither clears nor shows Pinky's screen. -->
         <activity
             android:name=".AskActivity"
@@ -193,6 +194,24 @@
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Pinky as the phone's digital assistant app (Settings › Apps ›
+             Default apps): Android's assistant role takes an app with an
+             activity for ASSIST, so holding the power button or the
+             assistant gesture opens the ask panel about the screen in front
+             (AskActivity, which tells this alias apart). No voice
+             interaction service: the panel is all it opens. -->
+        <activity-alias
+            android:name=".AssistPinky"
+            android:enabled="@bool/on_phone_ui"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:targetActivity=".AskActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity-alias>
 

@@ -76,6 +76,11 @@ type Background struct {
 	// the display has no window, which accessibility reports as it does a
 	// display it cannot see, so Observe shows it as empty.
 	started atomic.Bool
+	// read is set once the companion read the display's windows: Android
+	// lets accessibility see it, so a later read that finds it untracked
+	// means it has no window left (its app closed), not that Pinky cannot
+	// read it.
+	read atomic.Bool
 	// launch is the app last started on the display, when, and how many
 	// nudges its reads have sent since (nudgeAfterLaunch). Guarded by mu.
 	launch     launchTarget
@@ -161,7 +166,8 @@ func (d *Device) OpenDisplay(ctx context.Context, opt DisplayOptions) (*Backgrou
 		b.w, b.h = natW, natH
 	}
 	// The main display's stream settings: over Wi-Fi, a lower bit rate and
-	// H.265 (see baseOptions).
+	// H.265 when a hardware encoder is available (see baseOptions).
+	d.checkHEVCEncoder(ctx)
 	base := d.baseOptions()
 	if opt.MaxFPS == 0 {
 		opt.MaxFPS = int(base.MaxFPS)
@@ -452,6 +458,15 @@ func (b *Background) observeTree(ctx context.Context) (*screen.Screen, *companio
 				}
 				return s, nil, err
 			}
+			// Accessibility read the display before and stopped tracking
+			// it when its last window went: the app left it (Back from its
+			// first screen, a crash, Android stopping it). An empty
+			// display, or the gateway would move the task to the phone's
+			// own screen.
+			if b.read.Load() {
+				s, err := b.emptyScreen(ctx)
+				return s, nil, err
+			}
 			return nil, nil, err
 		}
 		if ctx.Err() == nil {
@@ -459,6 +474,7 @@ func (b *Background) observeTree(ctx context.Context) (*screen.Screen, *companio
 		}
 		return nil, nil, err
 	}
+	b.read.Store(true)
 	s := t.Screen(companion.ScreenOptions{})
 	s.CapturedAt = c.HostTime(t.Time)
 	if s.App.ID == "" && b.started.Load() {

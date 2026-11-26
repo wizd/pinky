@@ -115,7 +115,8 @@ func IsPinkyApp(app screen.App) bool {
 // appChangeLocked decides an install, uninstall or stop. Unlike the screen
 // steps, the agent cannot be watched doing them: the apps that hold money,
 // passwords or Pinky itself are refused outright, a task's unblock lifts
-// nothing, read-only refuses all three, and an install or uninstall always
+// nothing, read-only refuses installs, uninstalls and stops of anything but
+// a development build (Input.DevBuild), and an install or uninstall always
 // asks.
 func (e *Engine) appChangeLocked(in Input) Verdict {
 	app := in.Launch
@@ -166,8 +167,20 @@ func (e *Engine) appChangeLocked(in Input) Verdict {
 	}
 	if global := e.readOnlyLocked(in.Device); in.ReadOnly || global {
 		why, fix := readOnlyWhy(in, global)
-		return Verdict{Decision: Deny, Rule: RuleReadOnly,
-			Reason: why + ": agents cannot install, uninstall or stop apps. " + fix}
+		switch {
+		case in.Op == OpStop && !in.DevBuild:
+			return Verdict{Decision: Deny, Rule: RuleReadOnly,
+				Reason: fmt.Sprintf("%s: agents can stop only development builds of apps, and %s is not one. %s", why, appName(app), fix)}
+		case in.Op != OpStop:
+			return Verdict{Decision: Deny, Rule: RuleReadOnly,
+				Reason: why + ": agents cannot install or uninstall apps. " + fix}
+		case len(asks) > 0 && !onlyEvery(asks):
+			// A development build's stop runs as a step on the screen
+			// would: what the person's own rules ask about is refused,
+			// and "Every action" keeps asking.
+			return Verdict{Decision: Deny, Rule: RuleReadOnly,
+				Reason: fmt.Sprintf("%s, and this would need approval (%s). %s", why, asks[0], fix)}
+		}
 	}
 	if len(asks) == 0 {
 		return Verdict{Decision: Allow}

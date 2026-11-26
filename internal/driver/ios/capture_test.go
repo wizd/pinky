@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"testing"
+	"time"
 
 	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/screen"
@@ -157,5 +158,124 @@ func TestOCRPictureFromVideo(t *testing.T) {
 	}
 	if img, err := jpeg.Decode(bytes.NewReader(data)); err != nil || img.Bounds().Dy() != 2388 {
 		t.Fatalf("the picture for Vision: %v, %v", img.Bounds(), err)
+	}
+}
+
+// picture is a w x h picture of one color, with "text" (a dark pattern)
+// drawn in each of the given rectangles.
+func picture(w, h int, bg color.RGBA, text ...screen.Rect) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for i := 0; i < len(img.Pix); i += 4 {
+		img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = bg.R, bg.G, bg.B, bg.A
+	}
+	for _, r := range text {
+		for y := r.Y; y < r.Y+r.H; y++ {
+			for x := r.X; x < r.X+r.W; x++ {
+				if (x/3+y/5)%2 == 0 {
+					img.SetRGBA(x, y, color.RGBA{A: 255})
+				}
+			}
+		}
+	}
+	return img
+}
+
+// TestUncapturedLaunchWithBanner: after phone_launch on an iPhone 13 mini
+// (375 x 812 points, 1080 x 2340 pixels), with a notification banner
+// coming in, every element of the app was marked not_in_screenshot. The
+// read's picture is begun as soon as the read may take it, and its tree
+// comes seconds later: the picture can show the app's launch screen, one
+// flat color, and the tree the app as it came up. A picture begun before
+// the tree was in is checked again on one taken after it.
+func TestUncapturedLaunchWithBanner(t *testing.T) {
+	const w, h = 1080, 2340
+	scale := raxScale(raxElement{Frame: axpRect{0, 0, 375, 812}, HasFrame: true}, screenInfo{Width: w, Height: h, Scale: 3})
+	el := func(id uint64, typ int, label string, f axpRect) raxElement {
+		return raxElement{Object: &axpObject{PID: 5, ID: id}, Parent: 0, Type: typ, Label: label, Frame: f,
+			HasFrame: true, IsElement: true, Visible: true, Enabled: true}
+	}
+	root := raxElement{Object: &axpObject{PID: 5, ID: 100, IsApp: true}, Parent: -1, Label: "Clock", Frame: axpRect{0, 0, 375, 812}, HasFrame: true, Type: 1}
+	tree := []raxElement{
+		root,
+		el(1, xcButton, "Edit", axpRect{16, 50, 40, 40}), // under the banner
+		el(2, xcStaticText, "World Clock", axpRect{16, 100, 250, 41}),
+		el(3, xcStaticText, "Cupertino", axpRect{16, 170, 200, 30}),
+		el(4, xcStaticText, "Tokyo", axpRect{16, 250, 200, 30}),
+		el(5, xcStaticText, "London", axpRect{16, 330, 200, 30}),
+		el(6, xcButton, "Add", axpRect{320, 100, 40, 40}),
+	}
+	d := &Device{apps: &appCatalog{apps: []driver.App{{ID: "com.apple.MobileSMS", Name: "Messages"}}, at: time.Now()}}
+	ban := sbOverlay{key: [2]uint64{37, 600}, els: []raxElement{
+		sbEl(600, -1, 0, traitButton, "Messages, Anna, Lunch?", axpRect{8, 10, 359, 80}),
+	}}
+	_, covered, _, notes := d.overlayEvents(context.Background(), []sbOverlay{ban}, scale, w, h)
+	app, _, _ := raxScreenElements(tree, scale, w, h, "com.apple.mobiletimer", covered...)
+	// Notifications come first, as observeRAX lists them.
+	els := append(append([]screen.Element(nil), notes...), app...)
+	if len(notes) != 1 || len(app) != 5 {
+		t.Fatalf("notes %+v, app %+v; want the banner and the five elements it does not cover", notes, app)
+	}
+	var drawn []screen.Rect
+	for _, e := range els {
+		drawn = append(drawn, e.Bounds)
+	}
+	white := color.RGBA{255, 255, 255, 255}
+	launchScreen := picture(w, h, white, notes[0].Bounds) // the banner over the launch screen
+	appShown := picture(w, h, white, drawn...)
+
+	// The launch screen shows none of the app: on it alone every element
+	// looks blank, as on the phone.
+	if got := uncaptured(els, launchScreen, nil, w, h); len(got) != len(app) {
+		t.Fatalf("on the launch screen uncaptured = %v; want the app's %d elements", got, len(app))
+	}
+	// Taken before the tree was in, it is checked on a new picture, which
+	// shows the app.
+	took := 0
+	again := func() image.Image { took++; return appShown }
+	if got := uncapturedNow(els, launchScreen, nil, w, h, true, again); got != nil || took != 1 {
+		t.Fatalf("uncapturedNow = %v after %d new pictures; want none after one", got, took)
+	}
+	// A picture taken after the tree is trusted as it is, and a picture
+	// that shows everything needs no other.
+	if got := uncapturedNow(els, launchScreen, nil, w, h, false, again); len(got) != len(app) || took != 1 {
+		t.Errorf("a picture taken after the tree: %v, %d new pictures", got, took)
+	}
+	if got := uncapturedNow(els, appShown, nil, w, h, true, again); got != nil || took != 1 {
+		t.Errorf("a picture showing everything: %v, %d new pictures", got, took)
+	}
+	// Without a new picture, the first one stands.
+	if got := uncapturedNow(els, launchScreen, nil, w, h, true, func() image.Image { return nil }); len(got) != len(app) {
+		t.Errorf("no new picture: %v", got)
+	}
+
+	// A banner the picture missed (it came later) is not marked: banners
+	// are in every screenshot.
+	for _, i := range uncaptured(els, picture(w, h, white), nil, w, h) {
+		if els[i].ID == notes[0].ID {
+			t.Errorf("the banner was marked")
+		}
+	}
+
+	// What the app draws where screenshots do not reach stays marked on
+	// the new picture too: a passcode keypad, with the banner over it.
+	keys := []raxElement{root}
+	for i := range 6 {
+		keys = append(keys, el(uint64(10+i), xcButton, itoa(i+1), axpRect{X: 40 + float64(i%3)*100, Y: 400 + float64(i/3)*100, W: 80, H: 80}))
+	}
+	pad, _, _ := raxScreenElements(keys, scale, w, h, "sg.trust", covered...)
+	padEls := append(append([]screen.Element(nil), notes...), pad...)
+	bannerOnly := func() image.Image { return picture(w, h, white, notes[0].Bounds) }
+	if got := uncapturedNow(padEls, bannerOnly(), nil, w, h, true, bannerOnly); len(got) != len(pad) || padEls[got[0]].Label != "1" {
+		t.Errorf("hidden keypad: %v; want its %d keys", got, len(pad))
+	}
+}
+
+// pictureNow takes the video's frame over Wi-Fi, as OCR's picture does.
+func TestPictureNow(t *testing.T) {
+	d := &Device{info: driver.Info{ID: "iphone", Connection: "wifi"}, scr: screenInfo{Width: 1080, Height: 2340}}
+	frame := image.NewRGBA(image.Rect(0, 0, 1088, 2352))
+	opt := driver.ObserveOptions{OCR: true, Frame: func(context.Context) (image.Image, error) { return frame, nil }}
+	if img := d.pictureNow(context.Background(), opt); img == nil || img.Bounds().Dx() != 1080 || img.Bounds().Dy() != 2340 {
+		t.Fatalf("pictureNow = %v", img)
 	}
 }

@@ -127,6 +127,11 @@ type Input struct {
 	// and changed in Settings › Agents), so refusals say where it comes
 	// from. Without it, ReadOnly comes from the agent's own request.
 	ReadOnlyAccess bool
+	// DevBuild is set for OpStop when the driver says the app acted on is
+	// a development build: debuggable on Android, signed with
+	// get-task-allow on an iPhone. Read-only lets an agent stop such an
+	// app (appchange.go), so it can restart a build it installed itself.
+	DevBuild bool
 	// Virtual is set for a virtual phone, an emulator or a Simulator on this
 	// computer (File.VirtualCredentials).
 	Virtual bool

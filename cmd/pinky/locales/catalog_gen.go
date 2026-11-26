@@ -11933,6 +11933,26 @@ func (msgs Messages) FlyoutPasscode() string {
 	return Catalog.Format(msgs.locale, "flyoutPasscode", nil)
 }
 
+// FlyoutLost says "Restart the device service"
+// in the language the app shows.
+//
+// Menu bar flyout: what the Needs you row of an iPhone says after the
+// phone's name when the Mac's device service (usbmuxd) lost the phone on
+// Wi-Fi and an agent's task waits for someone at the computer to restart
+// the service.
+func FlyoutLost() string { return In(i18n.Locale()).FlyoutLost() }
+
+// FlyoutLost says "Restart the device service"
+// in the language of msgs.
+//
+// Menu bar flyout: what the Needs you row of an iPhone says after the
+// phone's name when the Mac's device service (usbmuxd) lost the phone on
+// Wi-Fi and an agent's task waits for someone at the computer to restart
+// the service.
+func (msgs Messages) FlyoutLost() string {
+	return Catalog.Format(msgs.locale, "flyoutLost", nil)
+}
+
 // FlyoutReview says "Review"
 // in the language the app shows.
 //
@@ -16877,6 +16897,50 @@ func (msgs Messages) GwSetupPasscodeTitle(phone string) string {
 	return Catalog.Format(msgs.locale, "gwSetupPasscodeTitle", map[string]any{"phone": phone})
 }
 
+// GwSetupLostDetail says "This computer's device service lost the phone on Wi-Fi, and only someone at the computer can restart it. {agent} is w…"
+// in the language the app shows.
+//
+// The second line of the card Pinky shows when an agent's task waits for a
+// phone that the Mac's device service (usbmuxd) lost on Wi-Fi: restarting
+// the service needs the computer's administrator password, so only someone
+// at the computer can do it. Shown only in other languages; in English the
+// gateway's own words show.
+func GwSetupLostDetail(agent string, task string) string {
+	return In(i18n.Locale()).GwSetupLostDetail(agent, task)
+}
+
+// GwSetupLostDetail says "This computer's device service lost the phone on Wi-Fi, and only someone at the computer can restart it. {agent} is w…"
+// in the language of msgs.
+//
+// The second line of the card Pinky shows when an agent's task waits for a
+// phone that the Mac's device service (usbmuxd) lost on Wi-Fi: restarting
+// the service needs the computer's administrator password, so only someone
+// at the computer can do it. Shown only in other languages; in English the
+// gateway's own words show.
+func (msgs Messages) GwSetupLostDetail(agent string, task string) string {
+	return Catalog.Format(msgs.locale, "gwSetupLostDetail", map[string]any{"agent": agent, "task": task})
+}
+
+// GwSetupLostTitle says "Restart the device service for {phone}"
+// in the language the app shows.
+//
+// The title of the card Pinky shows when an agent's task waits for a phone
+// that the Mac's device service (usbmuxd) lost on Wi-Fi; the card has the
+// Restart device service button. Shown only in other languages; in English
+// the gateway's own words show.
+func GwSetupLostTitle(phone string) string { return In(i18n.Locale()).GwSetupLostTitle(phone) }
+
+// GwSetupLostTitle says "Restart the device service for {phone}"
+// in the language of msgs.
+//
+// The title of the card Pinky shows when an agent's task waits for a phone
+// that the Mac's device service (usbmuxd) lost on Wi-Fi; the card has the
+// Restart device service button. Shown only in other languages; in English
+// the gateway's own words show.
+func (msgs Messages) GwSetupLostTitle(phone string) string {
+	return Catalog.Format(msgs.locale, "gwSetupLostTitle", map[string]any{"phone": phone})
+}
+
 // GwUnlockDetail says "{agent} is waiting for the phone to unlock · {task}"
 // in the language the app shows.
 //
@@ -17419,6 +17483,134 @@ func (msgs Messages) HelperInstalledToast(phone string) string {
 	return Catalog.Format(msgs.locale, "helperInstalledToast", map[string]any{"phone": phone})
 }
 
+// HelperLiteDone says "Done"
+// in the language the app shows.
+//
+// Button closing the dialog on LocalDevVPN that shows once Pinky installed
+// the lite version of Pinky on the iPhone.
+func HelperLiteDone() string { return In(i18n.Locale()).HelperLiteDone() }
+
+// HelperLiteDone says "Done"
+// in the language of msgs.
+//
+// Button closing the dialog on LocalDevVPN that shows once Pinky installed
+// the lite version of Pinky on the iPhone.
+func (msgs Messages) HelperLiteDone() string {
+	return Catalog.Format(msgs.locale, "helperLiteDone", nil)
+}
+
+// HelperLiteIntro says "Your Apple ID can't sign Pinky's own VPN (that takes a paid Apple Developer account), so Pinky installed the lite ver…"
+// in the language the app shows.
+//
+// Dialog after Pinky installed the lite version of Pinky on the iPhone
+// (built for a free Apple ID, without its own VPN): why, and that Pinky on
+// the iPhone needs the App Store app LocalDevVPN (a name, never translated)
+// to run tasks by itself. Numbered steps follow. phone is the iPhone's
+// name, or "the iPhone".
+func HelperLiteIntro(phone string) string { return In(i18n.Locale()).HelperLiteIntro(phone) }
+
+// HelperLiteIntro says "Your Apple ID can't sign Pinky's own VPN (that takes a paid Apple Developer account), so Pinky installed the lite ver…"
+// in the language of msgs.
+//
+// Dialog after Pinky installed the lite version of Pinky on the iPhone
+// (built for a free Apple ID, without its own VPN): why, and that Pinky on
+// the iPhone needs the App Store app LocalDevVPN (a name, never translated)
+// to run tasks by itself. Numbered steps follow. phone is the iPhone's
+// name, or "the iPhone".
+func (msgs Messages) HelperLiteIntro(phone string) string {
+	return Catalog.Format(msgs.locale, "helperLiteIntro", map[string]any{"phone": phone})
+}
+
+// HelperLiteStepAddresses says "In LocalDevVPN, open Settings › Network Configuration, set Tunnel IP to {tunnel} and Device IP to {device}, and save."
+// in the language the app shows.
+//
+// Second step in the LocalDevVPN dialog. Settings, Network Configuration,
+// Tunnel IP and Device IP are LocalDevVPN's own words, which it shows in
+// English on a phone in Simplified Chinese; keep them as LocalDevVPN shows
+// them in the language (Japanese: 設定 › ネットワーク設定,
+// トンネル IP, デバイス IP). tunnel and device are addresses.
+func HelperLiteStepAddresses(tunnel string, device string) string {
+	return In(i18n.Locale()).HelperLiteStepAddresses(tunnel, device)
+}
+
+// HelperLiteStepAddresses says "In LocalDevVPN, open Settings › Network Configuration, set Tunnel IP to {tunnel} and Device IP to {device}, and save."
+// in the language of msgs.
+//
+// Second step in the LocalDevVPN dialog. Settings, Network Configuration,
+// Tunnel IP and Device IP are LocalDevVPN's own words, which it shows in
+// English on a phone in Simplified Chinese; keep them as LocalDevVPN shows
+// them in the language (Japanese: 設定 › ネットワーク設定,
+// トンネル IP, デバイス IP). tunnel and device are addresses.
+func (msgs Messages) HelperLiteStepAddresses(tunnel string, device string) string {
+	return Catalog.Format(msgs.locale, "helperLiteStepAddresses", map[string]any{"tunnel": tunnel, "device": device})
+}
+
+// HelperLiteStepConnect says "Tap Connect in LocalDevVPN, then open Pinky on the iPhone and follow its steps."
+// in the language the app shows.
+//
+// Third step in the LocalDevVPN dialog. Connect is LocalDevVPN's button
+// (Japanese: 接続; English in Simplified Chinese).
+func HelperLiteStepConnect() string { return In(i18n.Locale()).HelperLiteStepConnect() }
+
+// HelperLiteStepConnect says "Tap Connect in LocalDevVPN, then open Pinky on the iPhone and follow its steps."
+// in the language of msgs.
+//
+// Third step in the LocalDevVPN dialog. Connect is LocalDevVPN's button
+// (Japanese: 接続; English in Simplified Chinese).
+func (msgs Messages) HelperLiteStepConnect() string {
+	return Catalog.Format(msgs.locale, "helperLiteStepConnect", nil)
+}
+
+// HelperLiteStepInstall says "On the iPhone, install LocalDevVPN from the App Store."
+// in the language the app shows.
+//
+// First step in the LocalDevVPN dialog after Pinky installed the lite
+// version of Pinky on the iPhone.
+func HelperLiteStepInstall() string { return In(i18n.Locale()).HelperLiteStepInstall() }
+
+// HelperLiteStepInstall says "On the iPhone, install LocalDevVPN from the App Store."
+// in the language of msgs.
+//
+// First step in the LocalDevVPN dialog after Pinky installed the lite
+// version of Pinky on the iPhone.
+func (msgs Messages) HelperLiteStepInstall() string {
+	return Catalog.Format(msgs.locale, "helperLiteStepInstall", nil)
+}
+
+// HelperLiteStore says "LocalDevVPN in the App Store"
+// in the language the app shows.
+//
+// Link in the LocalDevVPN dialog: opens LocalDevVPN's App Store page in the
+// browser.
+func HelperLiteStore() string { return In(i18n.Locale()).HelperLiteStore() }
+
+// HelperLiteStore says "LocalDevVPN in the App Store"
+// in the language of msgs.
+//
+// Link in the LocalDevVPN dialog: opens LocalDevVPN's App Store page in the
+// browser.
+func (msgs Messages) HelperLiteStore() string {
+	return Catalog.Format(msgs.locale, "helperLiteStore", nil)
+}
+
+// HelperLiteTitle says "One more step on {phone}: LocalDevVPN"
+// in the language the app shows.
+//
+// Title of the dialog after Pinky installed the lite version of Pinky on
+// the iPhone, which needs the App Store app LocalDevVPN on the phone. phone
+// is the iPhone's name, or "the iPhone".
+func HelperLiteTitle(phone string) string { return In(i18n.Locale()).HelperLiteTitle(phone) }
+
+// HelperLiteTitle says "One more step on {phone}: LocalDevVPN"
+// in the language of msgs.
+//
+// Title of the dialog after Pinky installed the lite version of Pinky on
+// the iPhone, which needs the App Store app LocalDevVPN on the phone. phone
+// is the iPhone's name, or "the iPhone".
+func (msgs Messages) HelperLiteTitle(phone string) string {
+	return Catalog.Format(msgs.locale, "helperLiteTitle", map[string]any{"phone": phone})
+}
+
 // HelperShowLog says "Show the log"
 // in the language the app shows.
 //
@@ -17615,6 +17807,26 @@ func (msgs Messages) LostConfirmMessage(phone string) string {
 	return Catalog.Format(msgs.locale, "lostConfirmMessage", map[string]any{"phone": phone})
 }
 
+// LostConfirmMessageQuiet says "Pinky restarts macOS's device service, usbmuxd, so that it looks for {phone} again. Every iPhone and iPad connected t…"
+// in the language the app shows.
+//
+// The message of the dialog that asks before Pinky restarts macOS's device
+// service, once the person allowed restarts without a password
+// (settingsPhonesQuietRestart). phone is the lost iPhone's name.
+func LostConfirmMessageQuiet(phone string) string {
+	return In(i18n.Locale()).LostConfirmMessageQuiet(phone)
+}
+
+// LostConfirmMessageQuiet says "Pinky restarts macOS's device service, usbmuxd, so that it looks for {phone} again. Every iPhone and iPad connected t…"
+// in the language of msgs.
+//
+// The message of the dialog that asks before Pinky restarts macOS's device
+// service, once the person allowed restarts without a password
+// (settingsPhonesQuietRestart). phone is the lost iPhone's name.
+func (msgs Messages) LostConfirmMessageQuiet(phone string) string {
+	return Catalog.Format(msgs.locale, "lostConfirmMessageQuiet", map[string]any{"phone": phone})
+}
+
 // LostConfirmTitle says "Restart the device service?"
 // in the language the app shows.
 //
@@ -17719,6 +17931,22 @@ func LostRestartNote() string { return In(i18n.Locale()).LostRestartNote() }
 // Under the Restart device service button.
 func (msgs Messages) LostRestartNote() string {
 	return Catalog.Format(msgs.locale, "lostRestartNote", nil)
+}
+
+// LostRestartNoteQuiet says "Every iPhone and iPad connected to this Mac, also on a cable, disconnects for a second or two. No password needed: yo…"
+// in the language the app shows.
+//
+// Under the Restart device service button, once the person allowed restarts
+// without a password (settingsPhonesQuietRestart).
+func LostRestartNoteQuiet() string { return In(i18n.Locale()).LostRestartNoteQuiet() }
+
+// LostRestartNoteQuiet says "Every iPhone and iPad connected to this Mac, also on a cable, disconnects for a second or two. No password needed: yo…"
+// in the language of msgs.
+//
+// Under the Restart device service button, once the person allowed restarts
+// without a password (settingsPhonesQuietRestart).
+func (msgs Messages) LostRestartNoteQuiet() string {
+	return Catalog.Format(msgs.locale, "lostRestartNoteQuiet", nil)
 }
 
 // LostRestarted says "Restarted the device service. {phone} shows up again in a few seconds."
@@ -18093,6 +18321,26 @@ func MirrorLockedTile() string { return In(i18n.Locale()).MirrorLockedTile() }
 // points wide.
 func (msgs Messages) MirrorLockedTile() string {
 	return Catalog.Format(msgs.locale, "mirrorLockedTile", nil)
+}
+
+// MirrorNotLiveTile says "Not live"
+// in the language the app shows.
+//
+// A small pill at the bottom of an iPhone's tile in All phones while the
+// tile shows the phone's last picture instead of its live screen (so that
+// the idle iPhone can lock). The tile can be 168 points wide; opening the
+// phone's page shows it live.
+func MirrorNotLiveTile() string { return In(i18n.Locale()).MirrorNotLiveTile() }
+
+// MirrorNotLiveTile says "Not live"
+// in the language of msgs.
+//
+// A small pill at the bottom of an iPhone's tile in All phones while the
+// tile shows the phone's last picture instead of its live screen (so that
+// the idle iPhone can lock). The tile can be 168 points wide; opening the
+// phone's page shows it live.
+func (msgs Messages) MirrorNotLiveTile() string {
+	return Catalog.Format(msgs.locale, "mirrorNotLiveTile", nil)
 }
 
 // MirrorNoPicture says "No picture: {detail}"
@@ -23457,6 +23705,24 @@ func (msgs Messages) RuleActionCommits() string {
 	return Catalog.Format(msgs.locale, "ruleActionCommits", nil)
 }
 
+// RuleActionCredentials says "typing passwords and codes"
+// in the language the app shows.
+//
+// What the Passwords and codes rule covers, inside "Always allow typing
+// passwords and codes in Dinely" on a phone where the person allows
+// passwords (Settings › Safety).
+func RuleActionCredentials() string { return In(i18n.Locale()).RuleActionCredentials() }
+
+// RuleActionCredentials says "typing passwords and codes"
+// in the language of msgs.
+//
+// What the Passwords and codes rule covers, inside "Always allow typing
+// passwords and codes in Dinely" on a phone where the person allows
+// passwords (Settings › Safety).
+func (msgs Messages) RuleActionCredentials() string {
+	return Catalog.Format(msgs.locale, "ruleActionCredentials", nil)
+}
+
 // RuleActionEveryAction says "every action"
 // in the language the app shows.
 //
@@ -23701,18 +23967,20 @@ func (msgs Messages) RuleCommits() string {
 	return Catalog.Format(msgs.locale, "ruleCommits", nil)
 }
 
-// RuleCredentials says "credentials"
+// RuleCredentials says "Passwords and codes"
 // in the language the app shows.
 //
-// The name of the built-in rule that denies typing into password and
-// one-time-code fields.
+// The name of the built-in rule about typing into password and
+// one-time-code fields, as approvals and steps name it: it refuses, or asks
+// on a phone where the person allows passwords (Settings › Safety).
 func RuleCredentials() string { return In(i18n.Locale()).RuleCredentials() }
 
-// RuleCredentials says "credentials"
+// RuleCredentials says "Passwords and codes"
 // in the language of msgs.
 //
-// The name of the built-in rule that denies typing into password and
-// one-time-code fields.
+// The name of the built-in rule about typing into password and
+// one-time-code fields, as approvals and steps name it: it refuses, or asks
+// on a phone where the person allows passwords (Settings › Safety).
 func (msgs Messages) RuleCredentials() string {
 	return Catalog.Format(msgs.locale, "ruleCredentials", nil)
 }
@@ -26427,6 +26695,96 @@ func (msgs Messages) SettingsPhonesWiFiDesc() string {
 	return Catalog.Format(msgs.locale, "settingsPhonesWiFiDesc", nil)
 }
 
+// SettingsPhonesQuietRestart says "Restart device service without a password"
+// in the language the app shows.
+//
+// Settings › Phones, on a Mac: the switch that lets Pinky restart macOS's
+// device service (usbmuxd) by itself, without the administrator password,
+// when it lost an iPhone on Wi-Fi that a task uses. Agents are told this
+// name, in English.
+func SettingsPhonesQuietRestart() string { return In(i18n.Locale()).SettingsPhonesQuietRestart() }
+
+// SettingsPhonesQuietRestart says "Restart device service without a password"
+// in the language of msgs.
+//
+// Settings › Phones, on a Mac: the switch that lets Pinky restart macOS's
+// device service (usbmuxd) by itself, without the administrator password,
+// when it lost an iPhone on Wi-Fi that a task uses. Agents are told this
+// name, in English.
+func (msgs Messages) SettingsPhonesQuietRestart() string {
+	return Catalog.Format(msgs.locale, "settingsPhonesQuietRestart", nil)
+}
+
+// SettingsPhonesQuietRestartDesc says "macOS's device service (usbmuxd) sometimes loses an iPhone or iPad on Wi-Fi for up to an hour. With this on, Pinky re…"
+// in the language the app shows.
+//
+// Settings › Phones: under settingsPhonesQuietRestart.
+func SettingsPhonesQuietRestartDesc() string {
+	return In(i18n.Locale()).SettingsPhonesQuietRestartDesc()
+}
+
+// SettingsPhonesQuietRestartDesc says "macOS's device service (usbmuxd) sometimes loses an iPhone or iPad on Wi-Fi for up to an hour. With this on, Pinky re…"
+// in the language of msgs.
+//
+// Settings › Phones: under settingsPhonesQuietRestart.
+func (msgs Messages) SettingsPhonesQuietRestartDesc() string {
+	return Catalog.Format(msgs.locale, "settingsPhonesQuietRestartDesc", nil)
+}
+
+// SettingsPhonesQuietRestartOnReason says "Pinky wants to let your account restart the device service (usbmuxd) without a password, so that it can bring back an…"
+// in the language the app shows.
+//
+// Shown in macOS's own request for an administrator's password when the
+// person turns settingsPhonesQuietRestart on.
+func SettingsPhonesQuietRestartOnReason() string {
+	return In(i18n.Locale()).SettingsPhonesQuietRestartOnReason()
+}
+
+// SettingsPhonesQuietRestartOnReason says "Pinky wants to let your account restart the device service (usbmuxd) without a password, so that it can bring back an…"
+// in the language of msgs.
+//
+// Shown in macOS's own request for an administrator's password when the
+// person turns settingsPhonesQuietRestart on.
+func (msgs Messages) SettingsPhonesQuietRestartOnReason() string {
+	return Catalog.Format(msgs.locale, "settingsPhonesQuietRestartOnReason", nil)
+}
+
+// SettingsPhonesQuietRestartOffReason says "Pinky wants to remove the rule that lets your account restart the device service (usbmuxd) without a password."
+// in the language the app shows.
+//
+// Shown in macOS's own request for an administrator's password when the
+// person turns settingsPhonesQuietRestart off.
+func SettingsPhonesQuietRestartOffReason() string {
+	return In(i18n.Locale()).SettingsPhonesQuietRestartOffReason()
+}
+
+// SettingsPhonesQuietRestartOffReason says "Pinky wants to remove the rule that lets your account restart the device service (usbmuxd) without a password."
+// in the language of msgs.
+//
+// Shown in macOS's own request for an administrator's password when the
+// person turns settingsPhonesQuietRestart off.
+func (msgs Messages) SettingsPhonesQuietRestartOffReason() string {
+	return Catalog.Format(msgs.locale, "settingsPhonesQuietRestartOffReason", nil)
+}
+
+// SettingsPhonesQuietRestartFailed says "Couldn't change how the device service restarts: {error}"
+// in the language the app shows.
+//
+// A notice when turning settingsPhonesQuietRestart on or off failed. error
+// is what went wrong.
+func SettingsPhonesQuietRestartFailed(error string) string {
+	return In(i18n.Locale()).SettingsPhonesQuietRestartFailed(error)
+}
+
+// SettingsPhonesQuietRestartFailed says "Couldn't change how the device service restarts: {error}"
+// in the language of msgs.
+//
+// A notice when turning settingsPhonesQuietRestart on or off failed. error
+// is what went wrong.
+func (msgs Messages) SettingsPhonesQuietRestartFailed(error string) string {
+	return Catalog.Format(msgs.locale, "settingsPhonesQuietRestartFailed", map[string]any{"error": error})
+}
+
 // SettingsPrivacyCannotDelete says "This gateway cannot delete its history"
 // in the language the app shows.
 //
@@ -28203,7 +28561,6 @@ func (msgs Messages) SettingsSafetyVirtualCredentials() string {
 // in the language the app shows.
 //
 // Settings › Safety: the line under Allow passwords on virtual phones.
-// Phones means real phones, as opposed to virtual ones.
 func SettingsSafetyVirtualCredentialsDesc() string {
 	return In(i18n.Locale()).SettingsSafetyVirtualCredentialsDesc()
 }
@@ -28212,9 +28569,50 @@ func SettingsSafetyVirtualCredentialsDesc() string {
 // in the language of msgs.
 //
 // Settings › Safety: the line under Allow passwords on virtual phones.
-// Phones means real phones, as opposed to virtual ones.
 func (msgs Messages) SettingsSafetyVirtualCredentialsDesc() string {
 	return Catalog.Format(msgs.locale, "settingsSafetyVirtualCredentialsDesc", nil)
+}
+
+// SettingsSafetyPhoneCredentials says "Allow passwords on phones"
+// in the language the app shows.
+//
+// Settings › Safety: the switch that lets agents type passwords and
+// one-time codes on real phones, asking the person in each app. Off by
+// default.
+func SettingsSafetyPhoneCredentials() string {
+	return In(i18n.Locale()).SettingsSafetyPhoneCredentials()
+}
+
+// SettingsSafetyPhoneCredentials says "Allow passwords on phones"
+// in the language of msgs.
+//
+// Settings › Safety: the switch that lets agents type passwords and
+// one-time codes on real phones, asking the person in each app. Off by
+// default.
+func (msgs Messages) SettingsSafetyPhoneCredentials() string {
+	return Catalog.Format(msgs.locale, "settingsSafetyPhoneCredentials", nil)
+}
+
+// SettingsSafetyPhoneCredentialsDesc says "Agents may type passwords and one-time codes their task gives them on your phones, to sign in with test accounts. Pin…"
+// in the language the app shows.
+//
+// Settings › Safety: the line under Allow passwords on phones. Phones
+// means real phones, as opposed to emulators and Simulators. Always allow
+// is the approval card's choice; the phone's own passcode is the one that
+// unlocks it.
+func SettingsSafetyPhoneCredentialsDesc() string {
+	return In(i18n.Locale()).SettingsSafetyPhoneCredentialsDesc()
+}
+
+// SettingsSafetyPhoneCredentialsDesc says "Agents may type passwords and one-time codes their task gives them on your phones, to sign in with test accounts. Pin…"
+// in the language of msgs.
+//
+// Settings › Safety: the line under Allow passwords on phones. Phones
+// means real phones, as opposed to emulators and Simulators. Always allow
+// is the approval card's choice; the phone's own passcode is the one that
+// unlocks it.
+func (msgs Messages) SettingsSafetyPhoneCredentialsDesc() string {
+	return Catalog.Format(msgs.locale, "settingsSafetyPhoneCredentialsDesc", nil)
 }
 
 // SettingsSafetyIntro says "Pinky checks every action before it reaches the phone. Agents can't change these settings."
@@ -35207,6 +35605,24 @@ func PhoneOpenWindow() string { return In(i18n.Locale()).PhoneOpenWindow() }
 // to the front.
 func (msgs Messages) PhoneOpenWindow() string {
 	return Catalog.Format(msgs.locale, "phoneOpenWindow", nil)
+}
+
+// PhoneWindowClose says "Close"
+// in the language the app shows.
+//
+// Tooltip and label of the × button at the end of the bar under the screen
+// in a phone's own window, which has no title bar: closes the window, as
+// ⌘W (Ctrl+W) does.
+func PhoneWindowClose() string { return In(i18n.Locale()).PhoneWindowClose() }
+
+// PhoneWindowClose says "Close"
+// in the language of msgs.
+//
+// Tooltip and label of the × button at the end of the bar under the screen
+// in a phone's own window, which has no title bar: closes the window, as
+// ⌘W (Ctrl+W) does.
+func (msgs Messages) PhoneWindowClose() string {
+	return Catalog.Format(msgs.locale, "phoneWindowClose", nil)
 }
 
 // PhoneWindowOnTop says "Keep on top"

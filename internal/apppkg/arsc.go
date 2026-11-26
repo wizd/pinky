@@ -82,7 +82,8 @@ func (t *table) value(id uint32) (typ uint8, data uint32, ok bool) {
 	best := -1
 	for _, c := range t.packages[pkg] {
 		b := c.b
-		if len(b) < 20 || b[8] != typeID {
+		// A ResTable_type header is 20 bytes before its config.
+		if c.header < 20 || b[8] != typeID {
 			continue
 		}
 		vt, vd, found := typeEntry(c, entry)

@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,6 +278,55 @@ func TestCheckupOpenFailed(t *testing.T) {
 		}
 		if len(c.checks) > 0 && v.Checks[2] != screen {
 			t.Errorf("%s: screen = %+v", c.name, v.Checks[2])
+		}
+	}
+}
+
+// TestOfflineSaysWhy: an agent that asks for a phone while none is online
+// hears which phones Pinky knows and what their status lines say, with what
+// to do about one not seen on Wi-Fi, and so does one that names the phone.
+func TestOfflineSaysWhy(t *testing.T) {
+	const notSeen = "keeps devices apart"
+	for _, c := range []struct {
+		name      string
+		info      driver.Info
+		want      []string
+		wantNamed string
+		explained bool
+	}{
+		{"not seen on Wi-Fi", driver.Info{ID: "phone", Platform: driver.IOS, Name: "Ada's iPhone", Connection: "wifi",
+			State: driver.StateOffline, Setup: driver.SetupNotOnWiFi, Detail: "Not seen on Wi-Fi"},
+			[]string{"Ada's iPhone (Not seen on Wi-Fi)"}, "Ada's iPhone is offline (Not seen on Wi-Fi).", true},
+		{"a reason of its driver's", driver.Info{ID: "phone", Platform: driver.Android, Name: "Pixel 9", Connection: "wifi",
+			State: driver.StateOffline, Setup: driver.SetupNetworkAway, Detail: "Not on this network now"},
+			[]string{"Pixel 9 (Offline · Not on this network now)"}, "Pixel 9 is offline (Not on this network now).", false},
+		{"no reason", driver.Info{ID: "phone", Platform: driver.IOS, Name: "Ada's iPhone", Connection: "usb", State: driver.StateOffline},
+			[]string{"Ada's iPhone (Offline)"}, "Ada's iPhone is offline.", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			g := checkupGateway(t, listedProvider{c.info})
+			waitIDs(t, g, "phone")
+			s := g.OpenSession(agent)
+			defer s.Close()
+			res := s.Connect(context.Background(), ConnectRequest{Task: "Any phone"})
+			mustError(t, res, ErrDeviceOffline, append(c.want, "No phone is connected to Pinky.", "Ask the person to connect one.")...)
+			if got := strings.Contains(res.Message, notSeen); got != c.explained {
+				t.Errorf("explained %v, want %v: %s", got, c.explained, res.Message)
+			}
+			res = s.Connect(context.Background(), ConnectRequest{Task: "That phone", Device: "phone"})
+			mustError(t, res, ErrDeviceOffline, c.wantNamed)
+			if got := strings.Contains(res.Message, notSeen); got != c.explained {
+				t.Errorf("named: explained %v, want %v: %s", got, c.explained, res.Message)
+			}
+		})
+	}
+
+	// None known, or only one found on Wi-Fi that may be someone else's.
+	const none = "No phone is connected to Pinky. Ask the person to connect one."
+	found := DeviceView{Info: driver.Info{Name: "Someone's iPhone", Setup: driver.SetupConfirmWiFi}, Status: DeviceNeedsSetup, StatusLine: "Found on Wi-Fi"}
+	for _, devs := range [][]DeviceView{nil, {found}} {
+		if got := NoPhoneMessage(devs); got != none {
+			t.Errorf("%d phones: %q", len(devs), got)
 		}
 	}
 }

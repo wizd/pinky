@@ -20,6 +20,7 @@ type helperFake struct {
 	err    error               // what InstallHelper fails with (SetHelperError)
 	teams  []driver.HelperTeam // the teams to choose from (SetHelperTeams)
 	unlock bool                // it waits for the phone to be unlocked (SetHelperUnlock)
+	lite   bool                // it builds the lite app, which needs LocalDevVPN (SetHelperLite)
 	hold   chan struct{}       // closed when held installs go on (HoldHelper)
 	runs   []HelperRun
 }
@@ -43,8 +44,9 @@ func (a *API) CanInstallHelper() bool {
 }
 
 // InstallHelper pretends to install the helper in a second or so at Speed:
-// it prepares, builds, waits for the phone to be unlocked when
-// SetHelperUnlock says so, and installs, reporting each step. It asks for
+// it prepares, builds (and says it built the lite app when SetHelperLite
+// says so), waits for the phone to be unlocked when SetHelperUnlock says
+// so, and installs, reporting each step. It asks for
 // a team when there are several and none was chosen, fails while building
 // with what SetHelperError set, and waits while building while HoldHelper
 // holds it. Once installed, the phone is online, its helper good for 7
@@ -74,7 +76,7 @@ func (a *API) InstallHelper(ctx context.Context, deviceID, team string, progress
 		}
 	}
 	h.runs = append(h.runs, HelperRun{DeviceID: deviceID, Team: team})
-	teams, fail, unlock, hold := h.teams, h.err, h.unlock, h.hold
+	teams, fail, unlock, lite, hold := h.teams, h.err, h.unlock, h.lite, h.hold
 	a.mu.Unlock()
 	step := func(s driver.HelperStep) error {
 		select {
@@ -105,6 +107,9 @@ func (a *API) InstallHelper(ctx context.Context, deviceID, team string, progress
 	}
 	if fail != nil {
 		return fail
+	}
+	if lite && progress != nil {
+		progress(driver.HelperLite)
 	}
 	if unlock {
 		if err := step(driver.HelperUnlock); err != nil {
@@ -158,6 +163,14 @@ func (a *API) SetHelperTeams(teams []driver.HelperTeam) {
 func (a *API) SetHelperUnlock(unlock bool) {
 	a.mu.Lock()
 	a.hlp.unlock = unlock
+	a.mu.Unlock()
+}
+
+// SetHelperLite makes InstallHelper build the lite app, as for a free
+// Apple ID: it reports driver.HelperLite once built.
+func (a *API) SetHelperLite(lite bool) {
+	a.mu.Lock()
+	a.hlp.lite = lite
 	a.mu.Unlock()
 }
 

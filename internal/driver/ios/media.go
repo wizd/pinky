@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -25,6 +26,22 @@ const rtpClock = 24000
 // changed, but the phone's RTCP sender reports keep coming every second.
 const videoSilence = 5 * time.Second
 
+// keyWaitLimit is how long the stream, once it showed a picture, may wait
+// for a key frame while the phone goes on sending video (keyWaitPackets or
+// more packets) before it counts as stalled: the phone answers a request
+// within about 70 ms, and the request is repeated every 600 ms, so this
+// many seconds of frames that cannot be shown mean it stopped answering.
+// The stream then fails, and the next view starts it again. A phone that
+// sends no video meanwhile (a still or dark screen) never stalls.
+var keyWaitLimit = 8 * time.Second
+
+const keyWaitPackets = 60
+
+// maxMisorder is how far behind the last packet a packet may come and
+// count as late (RFC 3550 A.1); one further behind may be the phone
+// numbering its packets anew (see track).
+const maxMisorder = 100
+
 // media is the long-lived display stream of one device. It runs for the
 // whole session, because HID input only works while a stream runs, and fans
 // its packets out to Stream subscribers.
@@ -35,6 +52,7 @@ type media struct {
 	ans streamAnswer
 	dst *net.UDPAddr // where RTCP goes
 
+	log      atomic.Pointer[slog.Logger] // what the stream noticed (setLog); none before
 	started  time.Time
 	lastRTP  atomic.Int64 // unix nanos of the last RTP packet
 	lastRTCP atomic.Int64 // unix nanos of the last RTCP packet from the phone
@@ -55,6 +73,8 @@ type media struct {
 	lastSR    uint32    // middle 32 bits of the last SR's NTP time
 	lastSRAt  time.Time // when it arrived
 	rxNeedKey bool      // a copy of needKey for the feedback loop
+	badSeq    uint16    // the number that, coming next, makes far-behind packets the new sequence
+	haveBad   bool
 
 	// Receiver state, owned by the receive loop.
 	dep         depacketizer
@@ -89,7 +109,28 @@ type media struct {
 	wire    wireStats // what came over the wire, for telling why no picture came
 	lastFIR time.Time // the last keyframe request
 
+	// For probes (media_probe.go). lastFrame is when the last frame came,
+	// atFrame what had come by then; srSent is the packet count of the
+	// phone's last sender report and srCount the reports (both under mu).
+	lastFrame atomic.Int64 // unix nanos
+	atFrame   frameCounts
+	srSent    uint32
+	srCount   int
+	lastPT    atomic.Uint32 // payload type of the last RTP packet
+	lastSSRC  atomic.Uint32 // its SSRC
+	probe     probe         // owned by feedback
+	input     atomic.Pointer[atomic.Int64]
+	probeHold atomic.Int64 // unix nanos before which no probe fails the stream
+	dark      atomic.Pointer[func() bool]
+
 	display int // the display id the stream was asked for
+}
+
+// frameCounts are what had come when the last frame came out.
+type frameCounts struct {
+	packets int    // RTP packets
+	units   int    // access units
+	srSent  uint32 // packets the phone's last sender report counted
 }
 
 type frameMark struct {
@@ -105,6 +146,7 @@ type mediaStats struct {
 	Frames     int
 	KeyFrames  int
 	Lost       int // RTP packets missing
+	Resyncs    int // times the phone's packet numbers jumped back and the stream followed them
 	Dropped    int // access units dropped as incomplete
 	FIRs       int
 	SRDelay    time.Duration // one-way delay estimated from RTCP SR, if any
@@ -226,7 +268,9 @@ func (m *media) close() {
 		return
 	}
 	close(m.done)
-	m.udp.Close()
+	if m.udp != nil { // tests make streams without one
+		m.udp.Close()
+	}
 	m.mu.Lock()
 	for s := range m.subs {
 		if !s.closed {
@@ -240,6 +284,10 @@ func (m *media) close() {
 
 // stop ends the stream on the device and closes everything.
 func (m *media) stop(ctx context.Context) error {
+	if m.svc == nil { // a test's stream
+		m.close()
+		return nil
+	}
 	err := stopMediaStreams(ctx, m.svc)
 	if err != nil {
 		// The start connection is gone; try a fresh one so the device does
@@ -302,6 +350,10 @@ func (m *media) onRTCP(b []byte) {
 			m.rxMu.Unlock()
 			m.srNTP = ntpTime(sec, frac)
 			m.srTS = binary.BigEndian.Uint32(b[16:20])
+			m.mu.Lock()
+			m.srSent = binary.BigEndian.Uint32(b[20:24]) // the sender's packet count
+			m.srCount++
+			m.mu.Unlock()
 		}
 		b = b[l:]
 	}
@@ -317,6 +369,8 @@ func ntpTime(sec, frac uint32) time.Time {
 func (m *media) onRTP(p rtpPacket, size int) {
 	now := time.Now()
 	m.lastRTP.Store(now.UnixNano())
+	m.lastPT.Store(uint32(p.PT))
+	m.lastSSRC.Store(p.SSRC)
 	m.mu.Lock()
 	m.stats.Packets++
 	m.stats.Bytes += int64(size)
@@ -367,23 +421,46 @@ func (m *media) onRTP(p rtpPacket, size int) {
 // The tunnel rides a reliable link, so loss only happens when a buffer
 // overflows under a burst. A frame that lost packets is dropped and the
 // stream skips to the next keyframe, which it asks for.
+//
+// A packet far behind the last one (more than maxMisorder) is no late
+// packet but a phone that numbers its packets anew. Dropping it as late,
+// as every packet after it, would leave the picture frozen with nothing to
+// say so: video and RTCP go on arriving. So when the packet after it comes
+// with the next number, the stream follows the new numbers, as RFC 3550
+// A.1 does, and treats the jump as a gap.
 func (m *media) track(p rtpPacket, now time.Time) (ok, gap bool) {
 	m.rxMu.Lock()
 	defer m.rxMu.Unlock()
 	if m.haveSeq {
 		d := p.Seq - (m.lastSeq + 1)
 		if d >= 0x8000 {
-			return false, false
-		}
-		if d != 0 {
+			behind := m.lastSeq - p.Seq
+			if behind <= maxMisorder || !m.haveBad || p.Seq != m.badSeq {
+				if behind > maxMisorder {
+					m.badSeq, m.haveBad = p.Seq+1, true
+				}
+				return false, false
+			}
+			from := m.lastSeq
+			m.haveBad = false
+			m.baseSeq, m.cycles, m.received, m.prior = uint32(p.Seq), 0, 0, lossPrior{}
+			m.mu.Lock()
+			m.stats.Resyncs++
+			m.mu.Unlock()
+			logTo(m.log.Load()).Info("iphone: the video stream's packet numbers jumped back; following them", "from", from, "to", p.Seq)
+			gap = true
+		} else if d != 0 {
 			gap = true
 			m.mu.Lock()
 			m.stats.Lost += int(d)
 			m.mu.Unlock()
-		}
-		if p.Seq < m.lastSeq {
+			if p.Seq < m.lastSeq {
+				m.cycles += 1 << 16
+			}
+		} else if p.Seq < m.lastSeq {
 			m.cycles += 1 << 16
 		}
+		m.haveBad = false
 	}
 	if !m.haveSeq {
 		m.baseSeq = uint32(p.Seq)
@@ -475,7 +552,10 @@ func (m *media) finishAU() {
 		m.stats.SRDelay = time.Since(sent)
 		m.stats.SRDelaySet = true
 	}
-	m.frameLog = append(m.frameLog, frameMark{at: time.Now(), size: len(data), key: key})
+	now := time.Now()
+	m.lastFrame.Store(now.UnixNano())
+	m.atFrame = frameCounts{packets: m.stats.Packets, units: m.wire.Units, srSent: m.srSent}
+	m.frameLog = append(m.frameLog, frameMark{at: now, size: len(data), key: key})
 	if len(m.frameLog) > 600 {
 		m.frameLog = append(m.frameLog[:0], m.frameLog[len(m.frameLog)-300:]...)
 	}
@@ -615,12 +695,17 @@ func (m *media) sendReceipt(ts uint32) {
 }
 
 // feedback sends receiver reports every second (the device sets an RTCP
-// timeout, 10 s on iOS 27, and stops the stream without them) and repeats
-// keyframe requests while someone waits for one.
+// timeout, 10 s on iOS 27, and stops the stream without them), repeats
+// keyframe requests while someone waits for one, and fails the stream when
+// that wait stalls (keyWaitLimit) or a probe finds it broken (probeTick).
 func (m *media) feedback() {
 	t := time.NewTicker(200 * time.Millisecond)
 	defer t.Stop()
-	var lastRR time.Time
+	var (
+		lastRR   time.Time
+		keyWait  time.Time // since when someone waits for a key frame
+		keyWaitN int       // the packets that had come then
+	)
 	for {
 		select {
 		case <-m.done:
@@ -634,6 +719,15 @@ func (m *media) feedback() {
 			m.fail(fmt.Errorf("nothing from the phone's video stream for %v", since.Round(time.Second)))
 			return
 		}
+		waiting := m.waitingForKey()
+		if !waiting {
+			keyWait = time.Time{}
+		} else if keyWait.IsZero() {
+			keyWait, keyWaitN = time.Now(), m.snapshot().Packets
+		} else if err := m.keyStalled(keyWait, keyWaitN); err != nil {
+			m.fail(err)
+			return
+		}
 		if m.dst == nil {
 			continue
 		}
@@ -641,14 +735,51 @@ func (m *media) feedback() {
 			lastRR = time.Now()
 			m.udp.WriteTo(m.receiverReport(), m.dst)
 		}
-		if m.waitingForKey() {
+		// A stream that gives no frame even when asked broke without a
+		// sign (media_probe.go).
+		if err := m.probeTick(time.Now()); err != nil {
+			m.fail(err)
+			return
+		}
+		if waiting {
 			m.mu.Lock()
-			due := time.Since(m.lastFIR) >= 600*time.Millisecond
+			due := time.Since(m.lastFIR) >= keyRepeat
 			m.mu.Unlock()
 			if due {
 				m.requestKeyFrame()
 			}
 		}
+	}
+}
+
+// keyStalled returns why the stream stalled when someone has waited for a
+// key frame since since, once the stream showed a picture, for
+// keyWaitLimit, while the phone sent at least keyWaitPackets packets after
+// from (the count then) and the last of them within the last second: the
+// phone sends video but no key frame to start showing it from. It logs
+// what the stream counted.
+func (m *media) keyStalled(since time.Time, from int) error {
+	waited := time.Since(since)
+	if waited < keyWaitLimit || time.Since(unixTime(m.lastRTP.Load())) > time.Second {
+		return nil
+	}
+	m.mu.Lock()
+	ready, s, waitedKey := m.isReady, m.stats, m.wire.WaitedKey
+	m.mu.Unlock()
+	if !ready || s.Packets-from < keyWaitPackets {
+		return nil
+	}
+	logTo(m.log.Load()).Warn("iphone: the video stream stalled: no key frame from the phone; starting it again",
+		"waited", waited.Round(100*time.Millisecond), "packets", s.Packets-from, "requests", s.FIRs, "frames", s.Frames,
+		"key_frames", s.KeyFrames, "lost", s.Lost, "dropped", s.Dropped, "waited_key", waitedKey, "resyncs", s.Resyncs)
+	return fmt.Errorf("the video stream stalled: no key frame from the phone for %v while it sent %d packets",
+		waited.Round(time.Second), s.Packets-from)
+}
+
+// setLog has the stream log what it notices to l.
+func (m *media) setLog(l *slog.Logger) {
+	if l != nil {
+		m.log.Store(l)
 	}
 }
 

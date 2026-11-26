@@ -312,6 +312,29 @@ func TestPosition(t *testing.T) {
 	}
 }
 
+// TestPicturePosition: the mirror's touches are in the video's pixels, so
+// a video smaller than the screen (an encoder that takes only a smaller
+// size, a display that renders below what wm size reports, as Honor's
+// smart resolution does) leaves them as they are, where position would
+// shrink them again and every touch would land toward the top left.
+func TestPicturePosition(t *testing.T) {
+	ctx := context.Background()
+	small := testLive(720, 1560, func(vw, vh int) (int, int) { return orient(1080, 2340, vw, vh) })
+	p, err := small.picturePosition(ctx, screen.Point{X: 600, Y: 1500})
+	if err != nil || p != (scrcpy.Position{X: 600, Y: 1500, Width: 720, Height: 1560}) {
+		t.Errorf("small video = %+v, %v", p, err)
+	}
+	p, _ = small.picturePosition(ctx, screen.Point{X: 900, Y: -4})
+	if p != (scrcpy.Position{X: 719, Y: 0, Width: 720, Height: 1560}) {
+		t.Errorf("outside the picture = %+v", p)
+	}
+	bg := &Background{w: 1080, h: 2400}
+	scaled := testLive(230, 512, bg.screenSize)
+	if p, _ = scaled.picturePosition(ctx, screen.Point{X: 115, Y: 256}); p.X != 115 || p.Y != 256 {
+		t.Errorf("scaled background display = %+v", p)
+	}
+}
+
 func TestStreamPush(t *testing.T) {
 	l := testLive(100, 100, nil)
 	st := &stream{l: l, ch: make(chan driver.Packet, 4), waitStart: true}

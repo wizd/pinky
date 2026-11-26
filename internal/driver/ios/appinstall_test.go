@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 
 	"howett.net/plist"
@@ -30,6 +33,21 @@ func TestAppBuildArgs(t *testing.T) {
 	}
 	if args := appBuildArgs("/kit", "/dd", "UDID", "T", "Pinky", true); !slices.Contains(args, "-allowProvisioningUpdates") {
 		t.Errorf("no provisioning updates: %v", args)
+	}
+}
+
+// TestLiteNextStep: after installing the lite build, the command line
+// says what the phone needs: LocalDevVPN from the App Store, with Pinky's
+// addresses, connected.
+func TestLiteNextStep(t *testing.T) {
+	if appSchemes[len(appSchemes)-1] != liteScheme {
+		t.Errorf("the lite build is not the last tried: %v", appSchemes)
+	}
+	s := liteNextStep("Sam's iPhone")
+	for _, want := range []string{"Sam's iPhone", "LocalDevVPN", LocalDevVPNStore, "Tunnel IP to 10.7.0.2/30", "Device IP to 10.7.0.1/32", "Connect"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("%q lacks %q", s, want)
+		}
 	}
 }
 
@@ -222,5 +240,84 @@ func TestIphoneKit(t *testing.T) {
 	t.Setenv(iphoneKitEnv, dir)
 	if kit, err := iphoneKit(ctx, srv.Client(), cache, t.TempDir()); err != nil || kit != dir {
 		t.Errorf("kit = %q, %v; want %q", kit, err, dir)
+	}
+}
+
+// TestIphoneKitChecksItsHash: with the release's kit hash known, a kit that
+// hashes otherwise is never unpacked. A cached one is fetched again; a
+// download is refused and not kept.
+func TestIphoneKitChecksItsHash(t *testing.T) {
+	ctx := context.Background()
+	oldVersion, oldURL, oldSum := PinkyVersion, iphoneKitURL, PinkyKitSHA256
+	t.Cleanup(func() { PinkyVersion, iphoneKitURL, PinkyKitSHA256 = oldVersion, oldURL, oldSum })
+	t.Setenv(iphoneKitEnv, "")
+
+	archive := kitArchive(t)
+	sum := sha256.Sum256(archive)
+	served := archive
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.Write(served)
+	}))
+	defer srv.Close()
+	PinkyVersion = "2026.1124.9"
+	iphoneKitURL = func(v string) string { return srv.URL + "/pinky-iphone-" + v + ".tar.gz" }
+	PinkyKitSHA256 = strings.ToUpper(hex.EncodeToString(sum[:])) // either case
+	cache := t.TempDir()
+	cached := filepath.Join(cache, "pinky-iphone-2026.1124.9.tar.gz")
+
+	// The release's kit: downloaded once, then taken from the cache.
+	for i := range 2 {
+		if _, err := iphoneKit(ctx, srv.Client(), cache, t.TempDir()); err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+	}
+	if hits != 1 {
+		t.Fatalf("downloaded %d times; want once", hits)
+	}
+
+	// A cached kit that changed is fetched again, and the release's is used.
+	tampered := kitArchive(t)
+	tampered = append(tampered[:len(tampered):len(tampered)], 0)
+	if err := os.WriteFile(cached, tampered, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := iphoneKit(ctx, srv.Client(), cache, t.TempDir()); err != nil {
+		t.Fatalf("after the cache changed: %v", err)
+	}
+	if hits != 2 {
+		t.Errorf("downloaded %d times; want the changed cache fetched again", hits)
+	}
+	if got, _ := os.ReadFile(cached); !bytes.Equal(got, archive) {
+		t.Error("the cache doesn't hold the release's kit again")
+	}
+
+	// A download that isn't the release's kit is refused and not kept.
+	os.Remove(cached)
+	served = tampered
+	dir := t.TempDir()
+	if _, err := iphoneKit(ctx, srv.Client(), cache, dir); err == nil || !strings.Contains(err.Error(), "not the one it was released with") {
+		t.Fatalf("a kit that isn't the release's: %v; want it refused", err)
+	}
+	if _, err := os.Stat(cached); !os.IsNotExist(err) {
+		t.Error("the refused kit was kept in the cache")
+	}
+	if left, _ := filepath.Glob(filepath.Join(cache, "*")); len(left) != 0 {
+		t.Errorf("the refused download left %v in the cache", left)
+	}
+	bad := sha256.Sum256(tampered)
+	if _, err := iphoneKit(ctx, srv.Client(), cache, dir); err == nil ||
+		!strings.Contains(err.Error(), hex.EncodeToString(bad[:])[:12]) || !strings.Contains(err.Error(), hex.EncodeToString(sum[:])[:12]) {
+		t.Errorf("the refusal doesn't name both hashes: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "kit")); !os.IsNotExist(err) {
+		t.Error("the refused kit was unpacked")
+	}
+
+	// A build that doesn't know the hash takes the kit as it comes, as before.
+	PinkyKitSHA256 = ""
+	if _, err := iphoneKit(ctx, srv.Client(), cache, t.TempDir()); err != nil {
+		t.Errorf("without a known hash: %v", err)
 	}
 }

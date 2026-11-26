@@ -236,6 +236,21 @@ func PinkyComputer() {
 	}
 }
 
+// retry wakes connectLoop from its wait between tries (PinkyRetry).
+var retry = make(chan struct{}, 1)
+
+// PinkyRetry has the core try to connect at once if it waits to try again:
+// the app saw the VPN that reflects the phone's connections come up
+// (LocalDevVPN, in the build without a tunnel of its own).
+//
+//export PinkyRetry
+func PinkyRetry() {
+	select {
+	case retry <- struct{}{}:
+	default:
+	}
+}
+
 // PinkyFree frees a string PinkyStart or PinkyCall returned.
 //
 //export PinkyFree
@@ -243,7 +258,7 @@ func PinkyFree(p *C.char) { C.free(unsafe.Pointer(p)) }
 
 // connectLoop keeps the phone connected: it connects, hands the Device to
 // the core, waits for the tunnel to close, and tries again, waiting longer
-// after each failure.
+// after each failure, unless PinkyRetry says to try now.
 func connectLoop(id rppair.Identity) {
 	wait := time.Second
 	for {
@@ -259,8 +274,13 @@ func connectLoop(id rppair.Identity) {
 			}
 			log.Warn("connect", "err", err, "retry", wait)
 			core.Disconnected(state, reason, err.Error())
-			time.Sleep(wait)
-			wait = min(wait*2, 30*time.Second)
+			select {
+			case <-time.After(wait):
+				wait = min(wait*2, 30*time.Second)
+			case <-retry:
+				log.Info("connect: trying again now")
+				wait = time.Second
+			}
 			continue
 		}
 		wait = time.Second

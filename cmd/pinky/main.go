@@ -30,8 +30,13 @@ import (
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "0.0.0-dev"
 
+// iphoneKitSHA256 is the SHA-256 of this release's iPhone app kit, set at
+// build time like version (scripts/dist.sh darwin, IPHONE_KIT).
+var iphoneKitSHA256 = ""
+
 func main() {
 	ios.PinkyVersion = version // the iPhone app kit of this release
+	ios.PinkyKitSHA256 = iphoneKitSHA256
 	cmd, args := commandOf(os.Args[1:])
 	err := dispatch(cmd, args)
 	if err == nil {

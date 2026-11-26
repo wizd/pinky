@@ -183,8 +183,34 @@ func (e *Engine) SetVirtualCredentials(on bool) error {
 	return e.saveRulesLocked()
 }
 
+// PhoneCredentials reports whether agents may type credentials on phones,
+// with the person's approval (File.PhoneCredentials).
+func (e *Engine) PhoneCredentials() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.file.PhoneCredentials
+}
+
+// SetPhoneCredentials lets agents type credentials on phones, asking the
+// person, or not, and saves the rules file.
+func (e *Engine) SetPhoneCredentials(on bool) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.syncLocked(&e.rulesDisk); err != nil {
+		return err
+	}
+	if e.file.PhoneCredentials == on {
+		return nil
+	}
+	e.file.PhoneCredentials = on
+	return e.saveRulesLocked()
+}
+
 // CredentialTypingAllowed reports whether the credentials rule is lifted
-// for a phone: a virtual one, while VirtualCredentials is on.
+// outright for a phone: a virtual one, while VirtualCredentials is on. On
+// a phone it never is: PhoneCredentials makes typing into a field it can
+// name ask (Evaluate), and an app's hidden passcode keypad or a password
+// field beside an unknown focus stay refused.
 func (e *Engine) CredentialTypingAllowed(virtual bool) bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -201,7 +227,9 @@ const rulesHeader = `# Pinky policy rules. Settings writes this file; you may ed
 # those rules no longer ask (never a deny or read-only mode; not with preset
 # 3). Settings > Safety lists them.
 # virtual_credentials: true lets agents type passwords and one-time codes on
-# emulators and Simulators, never on phones.
+# emulators and Simulators. phone_credentials: true lets them on phones, each
+# time asking you unless you always allow it in that app; never the phone's
+# own passcode.
 # The bundled defaults, with every field explained, are in Pinky's source:
 # internal/policy/defaults.yaml.
 

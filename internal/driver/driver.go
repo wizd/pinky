@@ -632,6 +632,13 @@ const (
 	HelperBuilding   HelperStep = "building"   // Xcode builds and signs it: a minute or two
 	HelperInstalling HelperStep = "installing" // installing it and starting it once; the phone may ask for its passcode
 	HelperUnlock     HelperStep = "unlock"     // Xcode waits for the phone to be unlocked
+	// HelperLite is news rather than a step: the app Pinky installs is its
+	// lite build, without a VPN of its own (the team cannot sign one, as a
+	// free Apple ID's cannot), which needs LocalDevVPN from the App Store to
+	// run tasks on the phone itself. It comes once Xcode has built that
+	// app, and the steps go on; clients tell the person once the install
+	// is done, and keep showing the step before it meanwhile.
+	HelperLite HelperStep = "lite"
 )
 
 // HelperTeam is a developer team the computer can sign the helper for.
@@ -839,6 +846,12 @@ type LogResult struct {
 	// From is when the lines start: the time asked for, or later when the
 	// phone has nothing older (an iPhone listens from the first call).
 	From time.Time
+	// Hidden counts lines that passed the query but were left out, apart
+	// from Max, as noise Pinky's own screen reads make in the app's log (an
+	// iPhone's accessibility string-table lookups). They all carry the tag
+	// HiddenTag, and a Filter that names it keeps them.
+	Hidden    int
+	HiddenTag string
 }
 
 // CrashReport is one crash of an app.
@@ -1430,13 +1443,36 @@ type PhoneTruster interface {
 // DeviceServiceRestarter is a Provider whose phones go through a service of
 // the computer that it can restart when that service lost a phone
 // (SetupDeviceService): usbmuxd on a Mac. The system asks an administrator
-// to allow it, and every phone of the platform, also on a cable,
-// disconnects for a moment.
+// to allow it, unless the person allowed restarts without a password
+// (QuietDeviceServiceRestarter), and every phone of the platform, also on
+// a cable, disconnects for a moment.
 type DeviceServiceRestarter interface {
 	// RestartDeviceService restarts the service. reason is shown in the
 	// system's request for an administrator's password. It returns
 	// ErrCanceled when the person declines.
 	RestartDeviceService(ctx context.Context, reason string) error
+}
+
+// QuietDeviceServiceRestarter is a DeviceServiceRestarter that the person
+// can allow, once, to restart the service without asking for an
+// administrator's password each time: on a Mac, a sudoers rule that lets
+// the person's account run exactly `/usr/bin/killall usbmuxd`. Allowing it
+// and taking it back each ask an administrator once. While it is allowed,
+// RestartDeviceService asks nobody, and the gateway may restart the
+// service by itself when it lost a phone an agent uses.
+type QuietDeviceServiceRestarter interface {
+	// QuietRestart reports whether the provider can restart the service
+	// without a password at all (supported: on a Mac), and whether the
+	// person allowed it (allowed). Allowed is false until they do.
+	QuietRestart() (supported, allowed bool)
+	// AllowQuietRestart allows (on) or stops allowing restarts without a
+	// password. The system asks an administrator, showing reason. It
+	// returns ErrCanceled when the person declines.
+	AllowQuietRestart(ctx context.Context, on bool, reason string) error
+	// RestartDeviceServiceQuietly restarts the service without asking
+	// anyone, and fails when that is not allowed. Every phone of the
+	// platform, also on a cable, disconnects for a moment.
+	RestartDeviceServiceQuietly(ctx context.Context) error
 }
 
 // ErrCanceled is a request the person declined, such as the system's
@@ -1527,6 +1563,12 @@ var (
 	// driver returns it from Observe and the actions until the agent stops
 	// working (WorkWatcher).
 	ErrStoppedOnPhone = errors.New("the person stopped this task on the phone")
+	// ErrConnDropped: the connection to the phone closed before the phone
+	// answered a request that is safe to send again (opening an app), and
+	// it did so again when the driver sent the request once more on a new
+	// connection. Whether the phone did it is not known, but the caller
+	// may simply try again.
+	ErrConnDropped = errors.New("the connection to the phone dropped before it answered")
 )
 
 // BusyError is ErrBusy with who holds the phone: By "phone" for Pinky on

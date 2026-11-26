@@ -3804,7 +3804,7 @@
   "@connectionAuto": {
     "description": "Settings › Phones, an iPhone's connection choice: the first choice, which goes by the iOS version."
   },
-  "connectionAutoDesc": "On iOS 27 and later, without Pinky on the iPhone. If Pinky on the iPhone is installed, a task moves to it for apps that refuse screen sharing (DBS digibank, China Merchants Bank) and comes back afterwards. Older iPhones use it when they have it.",
+  "connectionAutoDesc": "On iOS 27 and later, without Pinky on the iPhone. If Pinky on the iPhone is installed, a task moves to it for apps that refuse screen sharing (DBS digibank, China Merchants Bank) and for the Camera, and comes back afterwards. Older iPhones use it when they have it.",
   "@connectionAutoDesc": {
     "description": "Settings › Phones, an iPhone's connection choice: what Automatic does."
   },
@@ -4149,6 +4149,10 @@
   "flyoutPasscode": "Enter the passcode on the phone",
   "@flyoutPasscode": {
     "description": "Menu bar flyout: what the Needs you row of an iPhone says after the phone's name when iOS asks on the phone for its passcode before Pinky on the iPhone may control it."
+  },
+  "flyoutLost": "Restart the device service",
+  "@flyoutLost": {
+    "description": "Menu bar flyout: what the Needs you row of an iPhone says after the phone's name when the Mac's device service (usbmuxd) lost the phone on Wi-Fi and an agent's task waits for someone at the computer to restart the service."
   },
   "flyoutReview": "Review",
   "@flyoutReview": {
@@ -6390,6 +6394,30 @@
       }
     }
   },
+  "gwSetupLostDetail": "This computer's device service lost the phone on Wi-Fi, and only someone at the computer can restart it. {agent} is waiting · {task}",
+  "@gwSetupLostDetail": {
+    "description": "The second line of the card Pinky shows when an agent's task waits for a phone that the Mac's device service (usbmuxd) lost on Wi-Fi: restarting the service needs the computer's administrator password, so only someone at the computer can do it. Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "agent": {
+        "type": "String",
+        "example": "Claude Code"
+      },
+      "task": {
+        "type": "String",
+        "example": "Bookkeeping"
+      }
+    }
+  },
+  "gwSetupLostTitle": "Restart the device service for {phone}",
+  "@gwSetupLostTitle": {
+    "description": "The title of the card Pinky shows when an agent's task waits for a phone that the Mac's device service (usbmuxd) lost on Wi-Fi; the card has the Restart device service button. Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "iPhone 13 mini"
+      }
+    }
+  },
   "gwUnlockDetail": "{agent} is waiting for the phone to unlock · {task}",
   "@gwUnlockDetail": {
     "description": "The second line of the unlock card. Shown only in other languages; in English the gateway's own words show.",
@@ -6596,6 +6624,56 @@
       }
     }
   },
+  "helperLiteDone": "Done",
+  "@helperLiteDone": {
+    "description": "Button closing the dialog on LocalDevVPN that shows once Pinky installed the lite version of Pinky on the iPhone."
+  },
+  "helperLiteIntro": "Your Apple ID can't sign Pinky's own VPN (that takes a paid Apple Developer account), so Pinky installed the lite version of Pinky on the iPhone. Pinky on this computer can use {phone} as it is. For Pinky on the iPhone to run tasks on the phone by itself, it needs LocalDevVPN, a free app from the App Store:",
+  "@helperLiteIntro": {
+    "description": "Dialog after Pinky installed the lite version of Pinky on the iPhone (built for a free Apple ID, without its own VPN): why, and that Pinky on the iPhone needs the App Store app LocalDevVPN (a name, never translated) to run tasks by itself. Numbered steps follow. phone is the iPhone's name, or \"the iPhone\".",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "DIYgod's iPhone"
+      }
+    }
+  },
+  "helperLiteStepAddresses": "In LocalDevVPN, open Settings › Network Configuration, set Tunnel IP to {tunnel} and Device IP to {device}, and save.",
+  "@helperLiteStepAddresses": {
+    "description": "Second step in the LocalDevVPN dialog. Settings, Network Configuration, Tunnel IP and Device IP are LocalDevVPN's own words, which it shows in English on a phone in Simplified Chinese; keep them as LocalDevVPN shows them in the language (Japanese: 設定 › ネットワーク設定, トンネル IP, デバイス IP). tunnel and device are addresses.",
+    "placeholders": {
+      "tunnel": {
+        "type": "String",
+        "example": "10.7.0.2/30"
+      },
+      "device": {
+        "type": "String",
+        "example": "10.7.0.1/32"
+      }
+    }
+  },
+  "helperLiteStepConnect": "Tap Connect in LocalDevVPN, then open Pinky on the iPhone and follow its steps.",
+  "@helperLiteStepConnect": {
+    "description": "Third step in the LocalDevVPN dialog. Connect is LocalDevVPN's button (Japanese: 接続; English in Simplified Chinese)."
+  },
+  "helperLiteStepInstall": "On the iPhone, install LocalDevVPN from the App Store.",
+  "@helperLiteStepInstall": {
+    "description": "First step in the LocalDevVPN dialog after Pinky installed the lite version of Pinky on the iPhone."
+  },
+  "helperLiteStore": "LocalDevVPN in the App Store",
+  "@helperLiteStore": {
+    "description": "Link in the LocalDevVPN dialog: opens LocalDevVPN's App Store page in the browser."
+  },
+  "helperLiteTitle": "One more step on {phone}: LocalDevVPN",
+  "@helperLiteTitle": {
+    "description": "Title of the dialog after Pinky installed the lite version of Pinky on the iPhone, which needs the App Store app LocalDevVPN on the phone. phone is the iPhone's name, or \"the iPhone\".",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "DIYgod's iPhone"
+      }
+    }
+  },
   "helperShowLog": "Show the log",
   "@helperShowLog": {
     "description": "Link after installing Pinky on the iPhone failed: shows Xcode's log of the install in Finder."
@@ -6692,6 +6770,16 @@
       }
     }
   },
+  "lostConfirmMessageQuiet": "Pinky restarts macOS's device service, usbmuxd, so that it looks for {phone} again. Every iPhone and iPad connected to this Mac, also on a cable, disconnects for a second or two, and tasks on them wait. You allowed this without a password in Settings › Phones.",
+  "@lostConfirmMessageQuiet": {
+    "description": "The message of the dialog that asks before Pinky restarts macOS's device service, once the person allowed restarts without a password (settingsPhonesQuietRestart). phone is the lost iPhone's name.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "DIYgod's iPhone"
+      }
+    }
+  },
   "lostConfirmTitle": "Restart the device service?",
   "@lostConfirmTitle": {
     "description": "The dialog that asks before Pinky restarts macOS's device service."
@@ -6731,6 +6819,10 @@
   "lostRestartNote": "Every iPhone and iPad connected to this Mac, also on a cable, disconnects for a second or two. macOS asks for an administrator's password.",
   "@lostRestartNote": {
     "description": "Under the Restart device service button."
+  },
+  "lostRestartNoteQuiet": "Every iPhone and iPad connected to this Mac, also on a cable, disconnects for a second or two. No password needed: you allowed it in Settings › Phones.",
+  "@lostRestartNoteQuiet": {
+    "description": "Under the Restart device service button, once the person allowed restarts without a password (settingsPhonesQuietRestart)."
   },
   "lostRestarted": "Restarted the device service. {phone} shows up again in a few seconds.",
   "@lostRestarted": {
@@ -6881,6 +6973,10 @@
   "mirrorLockedTile": "Locked",
   "@mirrorLockedTile": {
     "description": "The same pill over a locked phone's tile in All phones, which can be 168 points wide."
+  },
+  "mirrorNotLiveTile": "Not live",
+  "@mirrorNotLiveTile": {
+    "description": "A small pill at the bottom of an iPhone's tile in All phones while the tile shows the phone's last picture instead of its live screen (so that the idle iPhone can lock). The tile can be 168 points wide; opening the phone's page shows it live."
   },
   "mirrorNoPicture": "No picture: {detail}",
   "@mirrorNoPicture": {
@@ -8894,6 +8990,10 @@
   "@ruleActionCommits": {
     "description": "What the Commits rule covers, inside \"Always allow commits in Dinely\"."
   },
+  "ruleActionCredentials": "typing passwords and codes",
+  "@ruleActionCredentials": {
+    "description": "What the Passwords and codes rule covers, inside \"Always allow typing passwords and codes in Dinely\" on a phone where the person allows passwords (Settings › Safety)."
+  },
   "ruleActionEveryAction": "every action",
   "@ruleActionEveryAction": {
     "description": "What the Every action rule covers, inside \"Always allow every action in Dinely\"."
@@ -8970,9 +9070,9 @@
   "@ruleCommits": {
     "description": "The name of the policy rule that asks before deletions, posts and other commits."
   },
-  "ruleCredentials": "credentials",
+  "ruleCredentials": "Passwords and codes",
   "@ruleCredentials": {
-    "description": "The name of the built-in rule that denies typing into password and one-time-code fields."
+    "description": "The name of the built-in rule about typing into password and one-time-code fields, as approvals and steps name it: it refuses, or asks on a phone where the person allows passwords (Settings › Safety)."
   },
   "ruleEveryAction": "Every action",
   "@ruleEveryAction": {
@@ -9794,6 +9894,32 @@
   "@settingsPhonesWiFiDesc": {
     "description": "Settings › Phones: under settingsPhonesWiFi."
   },
+  "settingsPhonesQuietRestart": "Restart device service without a password",
+  "@settingsPhonesQuietRestart": {
+    "description": "Settings › Phones, on a Mac: the switch that lets Pinky restart macOS's device service (usbmuxd) by itself, without the administrator password, when it lost an iPhone on Wi-Fi that a task uses. Agents are told this name, in English."
+  },
+  "settingsPhonesQuietRestartDesc": "macOS's device service (usbmuxd) sometimes loses an iPhone or iPad on Wi-Fi for up to an hour. With this on, Pinky restarts it by itself when that happens to a phone a task uses, without asking for the administrator password: at most once every 5 minutes, and not while a phone is in the middle of an action. Every iPhone and iPad connected to this Mac, also on a cable, disconnects for a second or two each time. Turning this on or off asks for the password once.",
+  "@settingsPhonesQuietRestartDesc": {
+    "description": "Settings › Phones: under settingsPhonesQuietRestart."
+  },
+  "settingsPhonesQuietRestartOnReason": "Pinky wants to let your account restart the device service (usbmuxd) without a password, so that it can bring back an iPhone this Mac loses on Wi-Fi.",
+  "@settingsPhonesQuietRestartOnReason": {
+    "description": "Shown in macOS's own request for an administrator's password when the person turns settingsPhonesQuietRestart on."
+  },
+  "settingsPhonesQuietRestartOffReason": "Pinky wants to remove the rule that lets your account restart the device service (usbmuxd) without a password.",
+  "@settingsPhonesQuietRestartOffReason": {
+    "description": "Shown in macOS's own request for an administrator's password when the person turns settingsPhonesQuietRestart off."
+  },
+  "settingsPhonesQuietRestartFailed": "Couldn't change how the device service restarts: {error}",
+  "@settingsPhonesQuietRestartFailed": {
+    "description": "A notice when turning settingsPhonesQuietRestart on or off failed. error is what went wrong.",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "example": "visudo: syntax error"
+      }
+    }
+  },
   "settingsPrivacyCannotDelete": "This gateway cannot delete its history",
   "@settingsPrivacyCannotDelete": {
     "description": "Settings › Privacy: the tooltip of the disabled Delete… button when the gateway cannot delete its history."
@@ -10376,9 +10502,17 @@
   "@settingsSafetyVirtualCredentials": {
     "description": "Settings › Safety: the switch that lets agents type passwords and one-time codes on virtual phones (emulators and Simulators on this computer). Off by default."
   },
-  "settingsSafetyVirtualCredentialsDesc": "Agents may type passwords and one-time codes on emulators and Simulators on this computer, to test sign-ins with test accounts. On phones they never can.",
+  "settingsSafetyVirtualCredentialsDesc": "Agents may type passwords and one-time codes on emulators and Simulators on this computer, to test sign-ins with test accounts.",
   "@settingsSafetyVirtualCredentialsDesc": {
-    "description": "Settings › Safety: the line under Allow passwords on virtual phones. Phones means real phones, as opposed to virtual ones."
+    "description": "Settings › Safety: the line under Allow passwords on virtual phones."
+  },
+  "settingsSafetyPhoneCredentials": "Allow passwords on phones",
+  "@settingsSafetyPhoneCredentials": {
+    "description": "Settings › Safety: the switch that lets agents type passwords and one-time codes on real phones, asking the person in each app. Off by default."
+  },
+  "settingsSafetyPhoneCredentialsDesc": "Agents may type passwords and one-time codes their task gives them on your phones, to sign in with test accounts. Pinky asks you each time, unless you always allow it in that app. Never the phone's own passcode.",
+  "@settingsSafetyPhoneCredentialsDesc": {
+    "description": "Settings › Safety: the line under Allow passwords on phones. Phones means real phones, as opposed to emulators and Simulators. Always allow is the approval card's choice; the phone's own passcode is the one that unlocks it."
   },
   "settingsSafetyIntro": "Pinky checks every action before it reaches the phone. Agents can't change these settings.",
   "@settingsSafetyIntro": {
@@ -12835,6 +12969,10 @@
   "phoneOpenWindow": "Open in a window",
   "@phoneOpenWindow": {
     "description": "Item of a phone's ⋯ menu under its mirror and of its right-click menu in the sidebar: opens a window that shows only the phone's live screen and its keys, to use the phone from there. Opened again, the window comes to the front."
+  },
+  "phoneWindowClose": "Close",
+  "@phoneWindowClose": {
+    "description": "Tooltip and label of the × button at the end of the bar under the screen in a phone's own window, which has no title bar: closes the window, as ⌘W (Ctrl+W) does."
   },
   "phoneWindowOnTop": "Keep on top",
   "@phoneWindowOnTop": {

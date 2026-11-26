@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	mg "github.com/egoist/mygo/ui"
@@ -29,6 +30,10 @@ const helperTimeout = 20 * time.Minute
 // Add phone found no entry for, which Xcode finds by itself.
 type helperState struct {
 	runs map[string]*helperRun
+	// liteOpen shows the dialog on what to do on the phone named liteName
+	// after Pinky installed its lite app there (liteDialog).
+	liteOpen bool
+	liteName string
 }
 
 type helperRun struct {
@@ -36,6 +41,9 @@ type helperRun struct {
 	cancel  context.CancelFunc
 	step    driver.HelperStep
 	name    string // the phone's name in the messages
+	// lite is the app being installed being the lite build, which needs
+	// LocalDevVPN on the phone (driver.HelperLite).
+	lite bool
 	// After a failure: why, in the person's words; Xcode's or the
 	// driver's own words, in small print; the install's log.
 	err, detail, log string
@@ -97,7 +105,13 @@ func (a *app) startHelperInstall(id, name, team string, done func()) {
 	go func() {
 		defer cancel()
 		err := hi.InstallHelper(ctx, id, team, func(s driver.HelperStep) {
-			a.post(func() { r.step = s })
+			a.post(func() {
+				if s == driver.HelperLite {
+					r.lite = true // news, not a step: the step before it goes on
+					return
+				}
+				r.step = s
+			})
 		})
 		stopped := errors.Is(err, context.Canceled)
 		a.post(func() {
@@ -109,6 +123,9 @@ func (a *app) startHelperInstall(id, name, team string, done func()) {
 			case err == nil:
 				delete(a.helper.runs, id)
 				a.toasts = append(a.toasts, locales.HelperInstalledToast(name))
+				if r.lite {
+					a.helper.liteOpen, a.helper.liteName = true, name
+				}
 				if done != nil {
 					done()
 				}
@@ -315,6 +332,55 @@ func (a *app) helperInstallingPage(c *mg.Context, d gateway.DeviceView) {
 		mg.Icon(c, icIphone).FontSize(iconHero).TextColor(p.ink2)
 		stateTitle(c, locales.CheckHelperTitle())
 		a.helperInstall(c, d.Info.ID, d.Info.Name, helperOpt{center: true})
+	})
+}
+
+// LocalDevVPN, which Pinky's lite iPhone app needs on the phone, and the
+// addresses to give it there: as internal/driver/ios says them on the
+// command line (LocalDevVPNStore and the rest) and Pinky on the iPhone
+// shows them (ios/app/App/LocalDevVPN.swift).
+const (
+	localDevVPNStore    = "https://apps.apple.com/app/localdevvpn/id6755608044"
+	localDevVPNTunnelIP = "10.7.0.2/30"
+	localDevVPNDeviceIP = "10.7.0.1/32"
+)
+
+// liteDialog says what to do on the phone after Pinky installed its lite
+// app there (driver.HelperLite): install LocalDevVPN from the App Store,
+// give it Pinky's addresses and connect it. Pinky on this computer needs
+// none of it; Pinky on the iPhone needs it to run tasks by itself.
+func (a *app) liteDialog(c *mg.Context) {
+	st := &a.helper
+	if !st.liteOpen {
+		return
+	}
+	p := pal(c)
+	title := locales.HelperLiteTitle(st.liteName)
+	sheet(c.Key("helper-lite"), &st.liteOpen, func() {
+		mg.Column(c).Width(500).Gap(14).Label(title).Children(func() {
+			mg.Text(c, title).FontSize(fsTitle3).FontWeight(fwSemibold).Role(mg.RoleHeading)
+			mg.Text(c, locales.HelperLiteIntro(st.liteName)).FontSize(fsSmall).LineHeight(1.4).TextColor(p.ink2)
+			mg.Column(c).Gap(8).Children(func() {
+				for i, step := range []string{
+					locales.HelperLiteStepInstall(),
+					locales.HelperLiteStepAddresses(localDevVPNTunnelIP, localDevVPNDeviceIP),
+					locales.HelperLiteStepConnect(),
+				} {
+					mg.Row(c).Gap(8).AlignItems(mg.Start).Children(func() {
+						mg.Text(c, strconv.Itoa(i+1)+".").FontSize(fsSmall).FontWeight(fwSemibold).TextColor(p.ink3)
+						mg.Text(c, step).FontSize(fsSmall).LineHeight(1.4).Grow(1).MinWidth(0).Selectable()
+					})
+				}
+			})
+			mg.Row(c).Gap(14).Justify(mg.End).AlignItems(mg.Center).Children(func() {
+				if linkButton(c, locales.HelperLiteStore()).Tooltip(localDevVPNStore).Clicked() {
+					openURL(c, localDevVPNStore, func(error) {})
+				}
+				if button(c, locales.HelperLiteDone(), btnOpt{kind: btnPrimary}).Clicked() {
+					st.liteOpen = false
+				}
+			})
+		})
 	})
 }
 

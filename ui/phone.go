@@ -250,7 +250,13 @@ func (a *app) phoneCenter(c *mg.Context, d gateway.DeviceView) {
 	// While an agent works on its own display in the background, the
 	// mirror shows that display, unless the person chose the phone's own
 	// screen; the agent's outline belongs on its display only.
-	m, bgTask := a.screenFor(d, t, false)
+	var m *mirror
+	bgTask := false
+	if a.pageStill(d, t) {
+		m = a.stillFor(d.Info.ID)
+	} else {
+		m, bgTask = a.screenFor(d, t, false)
+	}
 
 	// The banner has its own room above the mirror, which shrinks for it:
 	// over the phone's screen it would hide what the person wants to
@@ -724,6 +730,39 @@ func (a *app) tileStill(d gateway.DeviceView, t *gateway.TaskView) bool {
 	}
 	_, handoff := a.handoffFor(d.Info.ID)
 	return !handoff
+}
+
+// pageLookFor is how long a locked iPhone's page stays live after the
+// pointer leaves or the last input, so manual unlocking works without
+// flapping the stream on brief pointer passes.
+const pageLookFor = 10 * time.Second
+
+// pageStill reports whether the phone's page should show a still picture
+// instead of a live stream: a locked iPhone matching tileStill, with no
+// computer unlock pending and no recent pointer/input activity. This lets
+// a woken lock screen turn off instead of staying lit indefinitely.
+func (a *app) pageStill(d gateway.DeviceView, t *gateway.TaskView) bool {
+	if d.Status != gateway.DeviceLocked || a.unlocks[d.Info.ID] || !a.tileStill(d, t) {
+		return false
+	}
+	m := a.mirrors[d.Info.ID]
+	if m == nil {
+		return true
+	}
+	if m.pointerOn {
+		return false
+	}
+	wait := pageLookFor - time.Since(m.lookedAt)
+	if wait <= 0 {
+		return true
+	}
+	if !m.lookDue {
+		m.lookDue = true
+		time.AfterFunc(wait, func() {
+			a.post(func() { m.lookDue = false })
+		})
+	}
+	return false
 }
 
 // tileMore is the ⋯ button on a phone's tile in All phones, which shows

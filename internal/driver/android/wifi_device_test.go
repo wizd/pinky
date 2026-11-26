@@ -61,6 +61,7 @@ func TestDeviceWifiStream(t *testing.T) {
 			d.cfg.VideoBitRate = s.bitRate
 			d.mu.Lock()
 			d.noHEVC = !s.hevc
+			d.hevcChecked = true
 			d.mu.Unlock()
 			r, err := measureStream(ctx, d, s.fps, time.Duration(seconds)*time.Second)
 			if err != nil {

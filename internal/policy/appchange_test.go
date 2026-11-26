@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/DIYgod/pinky/internal/screen"
@@ -135,6 +136,88 @@ func TestAppChangeReadOnly(t *testing.T) {
 	}
 	if v := e.Evaluate(appIn3(OpStop, dinely)); v.Decision != Deny || v.Rule != RuleReadOnly {
 		t.Errorf("stop on a read-only phone, every action: %+v", v)
+	}
+}
+
+// Read-only lets an agent stop a development build and nothing more.
+func TestAppChangeReadOnlyDevBuild(t *testing.T) {
+	e := Default()
+	e.AddApps(CatPasswords, CategoryEntries{IDs: []string{"com.example.vault"}})
+	e.AddApps(CatBlocked, CategoryEntries{IDs: []string{"com.example.diary"}})
+	dev := func(op Op, app screen.App) Input {
+		in := appIn3(op, app)
+		in.ReadOnly, in.DevBuild = true, true
+		return in
+	}
+	if v := e.Evaluate(dev(OpStop, dinely)); v.Decision != Allow {
+		t.Errorf("read-only stop of a development build: %+v", v)
+	}
+	in := dev(OpStop, dinely)
+	in.DevBuild = false
+	if v := e.Evaluate(in); v.Decision != Deny || v.Rule != RuleReadOnly || !strings.Contains(v.Reason, "only development builds") ||
+		!strings.Contains(v.Reason, "Dinely is not one") {
+		t.Errorf("read-only stop of another build: %+v", v)
+	}
+	for _, op := range []Op{OpInstall, OpUninstall} {
+		if v := e.Evaluate(dev(op, dinely)); v.Decision != Deny || v.Rule != RuleReadOnly || !strings.Contains(v.Reason, "cannot install or uninstall") {
+			t.Errorf("read-only %s of a development build: %+v", op, v)
+		}
+	}
+	// The refusals before read-only still apply.
+	for _, c := range []struct {
+		app  screen.App
+		rule string
+	}{
+		{screen.App{ID: "app.pinky.companion.dev", Name: "Pinky"}, RulePinkyApps},
+		{screen.App{ID: "com.example.UITests.xctrunner"}, RulePinkyApps},
+		{launcher, RuleSystemApps},
+		{chase, RuleFinance},
+		{screen.App{ID: "com.example.vault", Name: "Vault"}, RulePasswords},
+		{screen.App{ID: "com.example.diary", Name: "Diary"}, RuleBlocked},
+	} {
+		if v := e.Evaluate(dev(OpStop, c.app)); v.Decision != Deny || v.Rule != c.rule {
+			t.Errorf("read-only stop of development build %s: %+v, want deny by %q", c.app.ID, v, c.rule)
+		}
+	}
+	in = dev(OpStop, whatsapp)
+	in.TaskApps = []string{"Dinely"}
+	if v := e.Evaluate(in); v.Decision != Deny || v.Rule != RuleTaskApps {
+		t.Errorf("read-only stop outside the task's apps: %+v", v)
+	}
+	in = dev(OpStop, whatsapp)
+	in.Scoped, in.ScopeApps = true, []string{"Dinely"}
+	if v := e.Evaluate(in); v.Decision != Deny || v.Rule != RuleAgentScope {
+		t.Errorf("read-only stop outside the agent's scope: %+v", v)
+	}
+	// Read-only mode on the phone lets it through too.
+	if err := e.SetReadOnly("pixel", true); err != nil {
+		t.Fatal(err)
+	}
+	in = appIn3(OpStop, dinely)
+	in.DevBuild = true
+	if v := e.Evaluate(in); v.Decision != Allow {
+		t.Errorf("stop of a development build on a read-only phone: %+v", v)
+	}
+	// "Every action" keeps asking, as for looking around.
+	if err := e.SetPreset(PresetEvery); err != nil {
+		t.Fatal(err)
+	}
+	if v := e.Evaluate(in); v.Decision != Ask || v.Rule != RuleEvery {
+		t.Errorf("stop of a development build on a read-only phone, every action: %+v", v)
+	}
+
+	// The person's own rules: a deny refuses, an ask is refused in
+	// read-only mode as any question is.
+	two := int(PresetPayments)
+	e = New(File{Preset: &two, Rules: []Rule{
+		{Name: "No Dinely", Match: Match{App: StringList{"com.dinely.app"}}, Decision: Deny},
+		{Name: "Chats", Match: Match{Category: StringList{CatMessaging}}, Decision: Ask},
+	}}, nil)
+	if v := e.Evaluate(dev(OpStop, dinely)); v.Decision != Deny || v.Rule != "No Dinely" {
+		t.Errorf("read-only stop of a development build under a deny rule: %+v", v)
+	}
+	if v := e.Evaluate(dev(OpStop, whatsapp)); v.Decision != Deny || v.Rule != RuleReadOnly || !strings.Contains(v.Reason, "would need approval (Chats)") {
+		t.Errorf("read-only stop of a development build under an ask rule: %+v", v)
 	}
 }
 

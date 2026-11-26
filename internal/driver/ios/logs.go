@@ -167,6 +167,35 @@ func entryLine(e ostrace.LogEntry) driver.LogLine {
 	return l
 }
 
+// Pinky's own screen reads flood the app's log: reading the accessibility
+// tree makes the app look up its Accessibility string tables, and CFBundle
+// logs every lookup ("Bundle: <private>, key: <private>, value: (null),
+// table: Accessibility…"), thousands of lines a minute. The follower keeps
+// them apart and AppLogs leaves them out (LogResult.Hidden) unless the
+// query's filter names CFBundle and is found in their tag.
+const (
+	readNoiseSubsystem = "com.apple.CFBundle"
+	readNoiseCategory  = "strings"
+	readNoiseTag       = readNoiseSubsystem + ":" + readNoiseCategory
+	readNoiseTable     = "table: Accessibility"
+)
+
+// readNoise reports whether an entry is one of the string-table lookups
+// Pinky's screen reads cause.
+func readNoise(e ostrace.LogEntry) bool {
+	return e.Label != nil && e.Label.Subsystem == readNoiseSubsystem && e.Label.Category == readNoiseCategory &&
+		strings.Contains(e.Message, readNoiseTable)
+}
+
+// wantsNoise reports whether a filter asks for the lines readNoise leaves
+// out: it names CFBundle and is found in their tag ("CFBundle",
+// "com.apple.CFBundle:strings"). A wider filter such as "com.apple" does
+// not bring them back.
+func wantsNoise(filter string) bool {
+	f := strings.ToLower(filter)
+	return strings.Contains(f, "cfbundle") && strings.Contains(strings.ToLower(readNoiseTag), f)
+}
+
 // entryLevel maps os_log's types to log levels: debug, info (default and
 // info), error, and fatal for a fault.
 func entryLevel(l ostrace.LogLevel) driver.LogLevel {
@@ -214,9 +243,13 @@ type appFollower struct {
 	lookedAt time.Time
 	lines    []driver.LogLine // in the order they came
 	trimmed  time.Time        // the newest line dropped for room
-	streams  map[int]logStream
-	missing  map[int]time.Time // followed processes no longer listed, since when
-	stopped  bool
+	// noise holds the lines readNoise picks out, apart so that they never
+	// push the app's own lines out; noiseTrimmed is lines' trimmed for it.
+	noise        []driver.LogLine
+	noiseTrimmed time.Time
+	streams      map[int]logStream
+	missing      map[int]time.Time // followed processes no longer listed, since when
+	stopped      bool
 }
 
 func newFollower(dir string, src logSource) *appFollower {
@@ -384,7 +417,7 @@ func (f *appFollower) read(pid int, s logStream) {
 			f.mu.Unlock()
 			continue
 		}
-		f.addLocked(entryLine(e))
+		f.addLocked(entryLine(e), readNoise(e))
 		f.mu.Unlock()
 	}
 	s.Close()
@@ -396,40 +429,70 @@ func (f *appFollower) read(pid int, s logStream) {
 	f.mu.Unlock()
 }
 
-// addLocked keeps a line, dropping the oldest quarter when full.
-func (f *appFollower) addLocked(l driver.LogLine) {
+// addLocked keeps a line, among the noise when noise is set (readNoise).
+func (f *appFollower) addLocked(l driver.LogLine, noise bool) {
 	if f.stopped {
 		return
 	}
-	f.lines = append(f.lines, l)
-	if len(f.lines) <= followMaxLines {
-		return
+	if noise {
+		f.noise = keepLine(f.noise, &f.noiseTrimmed, l)
+	} else {
+		f.lines = keepLine(f.lines, &f.trimmed, l)
 	}
-	n := len(f.lines) - followMaxLines*3/4
-	for _, old := range f.lines[:n] {
-		if old.Time.After(f.trimmed) {
-			f.trimmed = old.Time
-		}
-	}
-	f.lines = append([]driver.LogLine(nil), f.lines[n:]...)
 }
 
-// query returns the lines the follower has that pass q, oldest first.
+// keepLine adds a line, dropping the oldest quarter when full and keeping
+// the time of the newest line dropped in trimmed.
+func keepLine(lines []driver.LogLine, trimmed *time.Time, l driver.LogLine) []driver.LogLine {
+	lines = append(lines, l)
+	if len(lines) <= followMaxLines {
+		return lines
+	}
+	n := len(lines) - followMaxLines*3/4
+	for _, old := range lines[:n] {
+		if old.Time.After(*trimmed) {
+			*trimmed = old.Time
+		}
+	}
+	return append([]driver.LogLine(nil), lines[n:]...)
+}
+
+// query returns the lines the follower has that pass q, oldest first. The
+// noise Pinky's screen reads make is left out and counted, unless q's
+// filter asks for it (wantsNoise).
 func (f *appFollower) query(q driver.LogQuery) driver.LogResult {
+	pass := func(l driver.LogLine) bool { return (q.Since.IsZero() || !l.Time.Before(q.Since)) && q.Keep(l) }
+	withNoise := wantsNoise(q.Filter)
 	f.mu.Lock()
 	var kept []driver.LogLine
 	for _, l := range f.lines {
-		if (q.Since.IsZero() || !l.Time.Before(q.Since)) && q.Keep(l) {
+		if pass(l) {
 			kept = append(kept, l)
+		}
+	}
+	hidden := 0
+	for _, l := range f.noise {
+		switch {
+		case !pass(l):
+		case withNoise:
+			kept = append(kept, l)
+		default:
+			hidden++
 		}
 	}
 	from := f.start
 	if f.trimmed.After(from) {
 		from = f.trimmed
 	}
+	if withNoise && f.noiseTrimmed.After(from) {
+		from = f.noiseTrimmed
+	}
 	f.mu.Unlock()
 	sort.SliceStable(kept, func(i, j int) bool { return kept[i].Time.Before(kept[j].Time) })
-	res := driver.LogResult{Lines: kept, From: from}
+	res := driver.LogResult{Lines: kept, From: from, Hidden: hidden}
+	if hidden > 0 {
+		res.HiddenTag = readNoiseTag
+	}
 	if q.Max > 0 && len(kept) > q.Max {
 		res.Dropped = len(kept) - q.Max
 		res.Lines = kept[res.Dropped:]
@@ -449,7 +512,7 @@ func (f *appFollower) stop() {
 	for _, s := range f.streams {
 		s.Close()
 	}
-	f.streams, f.lines = map[int]logStream{}, nil
+	f.streams, f.lines, f.noise = map[int]logStream{}, nil, nil
 	f.mu.Unlock()
 	f.wg.Wait()
 }

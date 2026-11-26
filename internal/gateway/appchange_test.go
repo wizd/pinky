@@ -50,6 +50,17 @@ func (x *extraDev) InstallPackage(ctx context.Context, paths []string) error {
 	return x.Device.InstallPackage(ctx, paths)
 }
 
+// DevBuild reports the apps devBuilds marks, as a driver reads them.
+func (x *extraDev) DevBuild(_ context.Context, app driver.App) (bool, error) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	x.devAsked = append(x.devAsked, app.ID)
+	if x.devErr != nil {
+		return false, x.devErr
+	}
+	return x.devBuilds[app.ID], nil
+}
+
 func (x *extraDev) scripted(paths []string) (driver.Package, bool) {
 	if len(paths) != 1 {
 		return driver.Package{}, false
@@ -315,7 +326,8 @@ func TestPhoneAppRefuses(t *testing.T) {
 		t.Fatalf("steps %q", steps)
 	}
 
-	// Read-only mode refuses all three; a watch-only agent may do none.
+	// Read-only mode refuses all three (but a stop of a development build,
+	// TestPhoneAppReadOnlyDevBuild); a watch-only agent may do none.
 	if err := g.SetReadOnly("pixel", true); err != nil {
 		t.Fatal(err)
 	}
@@ -333,6 +345,85 @@ func TestPhoneAppRefuses(t *testing.T) {
 	g.SetAgentScope(agent.Name, Scope{Mode: ScopeWatchOnly})
 	if res := s.App(ctx, AppRequest{Action: "stop", App: "Chatter"}); res.Error != ErrScopeDenied {
 		t.Fatalf("watch-only stop: %+v", res)
+	}
+}
+
+// Read-only lets an agent stop a development build, so it can restart a
+// build it installed itself; nothing else it does to apps.
+func TestPhoneAppReadOnlyDevBuild(t *testing.T) {
+	ctx := context.Background()
+	x := newExtraDev("pixel", "Pixel 9")
+	x.pkgs = map[string]driver.Package{"dinely": {ID: demo.Dinely, Name: "Dinely", Version: "2.0"}}
+	x.devBuilds = map[string]bool{demo.Dinely: true, "com.android.settings": true, "com.google.android.apps.walletnfcrel": true}
+	g := newExtraGateway(t, x)
+	s, _ := connect(t, g, "Test the build")
+	putFile(t, g, "dinely.apk", "dinely")
+
+	// Outside read-only, a stop does not ask the driver.
+	mustStatus(t, s.App(ctx, AppRequest{Action: "stop", App: "Chatter"}), StatusSettled)
+	if len(x.devAsked) != 0 {
+		t.Fatalf("asked the driver outside read-only: %v", x.devAsked)
+	}
+
+	if err := g.SetReadOnly("pixel", true); err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, s.Act(ctx, Call{}, Action{Tool: "launch", App: "Dinely"}), StatusSettled)
+	res := s.App(ctx, AppRequest{Action: "stop", App: "Dinely"})
+	mustStatus(t, res, StatusSettled)
+	if res.Screen == nil || res.Screen.App.ID == demo.Dinely {
+		t.Fatalf("read-only stop of a development build: %+v", res)
+	}
+	res = s.App(ctx, AppRequest{Action: "stop", App: "Chatter"})
+	if res.Status != StatusBlocked || res.Rule != policy.RuleReadOnly || !strings.Contains(res.Message, "only development builds") {
+		t.Fatalf("read-only stop of another build: %+v", res)
+	}
+	// Installs and uninstalls stay refused, of a development build too.
+	for _, req := range []AppRequest{{Action: "uninstall", App: "Dinely"}, {Action: "install", Paths: []string{"dinely.apk"}}} {
+		if res := s.App(ctx, req); res.Status != StatusBlocked || res.Rule != policy.RuleReadOnly {
+			t.Errorf("read-only %s of a development build: %+v", req.Action, res)
+		}
+	}
+	// The refusals before read-only still apply to a development build.
+	for _, c := range []struct {
+		app, rule string
+	}{{"Settings", policy.RuleSystemApps}, {"Google Wallet", policy.RuleFinance}} {
+		if res := s.App(ctx, AppRequest{Action: "stop", App: c.app}); res.Status != StatusBlocked || res.Rule != c.rule {
+			t.Errorf("read-only stop of %s: %+v, want blocked by %q", c.app, res, c.rule)
+		}
+	}
+	// A driver that cannot tell makes it not a development build.
+	x.mu.Lock()
+	x.devErr = driver.ErrUnsupported
+	x.mu.Unlock()
+	if res := s.App(ctx, AppRequest{Action: "stop", App: "Dinely"}); res.Status != StatusBlocked || res.Rule != policy.RuleReadOnly {
+		t.Fatalf("read-only stop when the driver cannot tell: %+v", res)
+	}
+	x.mu.Lock()
+	x.devErr = nil
+	x.mu.Unlock()
+	if len(g.Needs()) != 0 || x.installed[demo.Dinely] != "" || !installed(t, x, demo.Dinely) {
+		t.Fatalf("asked %v, installed %v", g.Needs(), x.installed)
+	}
+
+	// A read-only task, and an agent with read-only access, alike.
+	if err := g.SetReadOnly("pixel", false); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s2 := g.OpenSession(agent)
+	t.Cleanup(s2.Close)
+	mustStatus(t, s2.Connect(ctx, ConnectRequest{Task: "Look at the build", ReadOnly: true}), StatusSettled)
+	mustStatus(t, s2.App(ctx, AppRequest{Action: "stop", App: "Dinely"}), StatusSettled)
+	if res := s2.App(ctx, AppRequest{Action: "stop", App: "Chatter"}); res.Status != StatusBlocked || res.Rule != policy.RuleReadOnly {
+		t.Fatalf("read-only task, stop of another build: %+v", res)
+	}
+	s2.Close()
+	g.SetAgentScope(agent.Name, Scope{Mode: ScopeReadOnly})
+	s3, _ := connect(t, g, "Look again")
+	mustStatus(t, s3.App(ctx, AppRequest{Action: "stop", App: "Dinely"}), StatusSettled)
+	if res := s3.App(ctx, AppRequest{Action: "uninstall", App: "Dinely"}); res.Status != StatusBlocked || res.Rule != policy.RuleReadOnly {
+		t.Fatalf("read-only agent, uninstall: %+v", res)
 	}
 }
 

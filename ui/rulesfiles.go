@@ -103,7 +103,7 @@ func (a *app) watchGatewaySettings(c *mg.Context) {
 // replaced.
 func (a *app) takeGatewaySettings(g Settings) {
 	for _, s := range []*Settings{&a.settings, &a.reported} {
-		s.Preset, s.HideCodes, s.VirtualCredentials, s.ReadOnly = g.Preset, g.HideCodes, g.VirtualCredentials, g.ReadOnly
+		s.Preset, s.HideCodes, s.VirtualCredentials, s.PhoneCredentials, s.ReadOnly = g.Preset, g.HideCodes, g.VirtualCredentials, g.PhoneCredentials, g.ReadOnly
 		s.BlockedApps = append([]BlockedApp(nil), g.BlockedApps...)
 	}
 }

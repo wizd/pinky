@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -114,6 +115,52 @@ func TestPhoneFilesPullReplacesLinks(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, "notes.txt")); string(b) != "from the phone" {
 		t.Fatalf("pulled %q", b)
+	}
+}
+
+// A name that starts or ends with a space is a name of its own, both ways:
+// the phone's "notes.txt " does not land on "notes.txt", and a local
+// " plan.md" goes to the phone instead of stopping the push.
+func TestPhoneFilesNamesWithSpaces(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows drops spaces at the end of a name, so "notes.txt " is
+		// "notes.txt" there whatever Pinky does.
+		t.Skip("Windows has no names that end with a space")
+	}
+	ctx := context.Background()
+	x := newExtraDev("pixel", "Pixel 9")
+	then := time.Date(2026, 11, 1, 9, 30, 0, 0, time.Local)
+	x.files["notes.txt"] = memFile{data: []byte("plain"), mtime: then}
+	x.files["notes.txt "] = memFile{data: []byte("trailing"), mtime: then}
+	g := newExtraGateway(t, x)
+	s, _ := connect(t, g, "Copy notes")
+	dir := g.FilesDir("pixel")
+
+	mustStatus(t, s.Files(ctx, FilesRequest{Action: "pull"}), StatusSettled)
+	for name, want := range map[string]string{"notes.txt": "plain", "notes.txt ": "trailing"} {
+		if b, err := os.ReadFile(filepath.Join(dir, name)); string(b) != want {
+			t.Errorf("local %q: %q, %v; want %q", name, b, err, want)
+		}
+	}
+	res := s.Files(ctx, FilesRequest{Action: "pull"})
+	mustStatus(t, res, StatusSettled)
+	if len(res.Files) != 0 {
+		t.Errorf("the second pull copied %+v again", res.Files)
+	}
+
+	writeLocal(t, dir, " plan.md", "# plan", then)
+	writeLocal(t, dir, "z.txt", "last", then)
+	done := make(chan *Result, 1)
+	go func() { done <- s.Files(ctx, FilesRequest{Action: "push"}) }()
+	n := waitNeedKind(t, g, NeedApproval)
+	if err := g.Decide(n.ID, AllowOnce, ""); err != nil {
+		t.Fatal(err)
+	}
+	mustStatus(t, <-done, StatusSettled)
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if string(x.files[" plan.md"].data) != "# plan" || string(x.files["z.txt"].data) != "last" {
+		t.Fatalf("phone files after the push: %v", x.files)
 	}
 }
 

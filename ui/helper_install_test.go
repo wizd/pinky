@@ -14,6 +14,7 @@ import (
 
 	"github.com/DIYgod/pinky/cmd/pinky/locales"
 	"github.com/DIYgod/pinky/internal/driver"
+	"github.com/DIYgod/pinky/internal/driver/ios"
 	"github.com/DIYgod/pinky/internal/gateway"
 	"github.com/DIYgod/pinky/ui/fakeapi"
 )
@@ -179,6 +180,69 @@ func TestIPhoneHelperInstallTeams(t *testing.T) {
 	installed(t, ta, id, name)
 	if runs := ta.api.HelperRuns(); len(runs) != 2 || runs[1].Team != teams[1].ID {
 		t.Errorf("installs %+v", runs)
+	}
+}
+
+// TestIPhoneHelperInstallLite: once Pinky installed its lite app (a free
+// Apple ID's), a dialog says what to do on the phone: install LocalDevVPN
+// from the App Store, give it Pinky's addresses and connect it. The steps
+// the install showed meanwhile are the usual ones.
+func TestIPhoneHelperInstallLite(t *testing.T) {
+	ta, id := installApp(t)
+	var opened string
+	openURL = func(_ *mg.Context, u string, done func(error)) { opened = u; done(nil) }
+	ta.api.SetHelperLite(true)
+	ta.api.SetIPhone(id, driver.Info{State: driver.StateNeedsSetup, Setup: driver.SetupInstallHelper})
+	ta.sync()
+	name := ta.iphoneView(t).Info.Name
+	ta.selectPhone(id)
+	tt := mg.NewTester(ta.view, 1280, 820)
+	tt.Frame()
+	if err := tt.Click(locales.HelperInstall()); err != nil {
+		t.Fatal(err)
+	}
+	// Without frames, which would let go of the toasts installed looks at.
+	ta.waitFor(t, "the lite app built", func() bool { r := ta.helper.runs[id]; return r == nil || r.lite })
+	if r := ta.helper.runs[id]; r != nil && r.step == driver.HelperLite {
+		t.Errorf("HelperLite shown as a step")
+	}
+	installed(t, ta, id, name)
+	if !ta.helper.liteOpen || ta.helper.liteName != name {
+		t.Fatalf("no LocalDevVPN dialog: open %v, name %q", ta.helper.liteOpen, ta.helper.liteName)
+	}
+	tt.Frame()
+	for _, want := range []string{locales.HelperLiteTitle(name), locales.HelperLiteIntro(name), locales.HelperLiteStepInstall(),
+		locales.HelperLiteStepAddresses("10.7.0.2/30", "10.7.0.1/32"), locales.HelperLiteStepConnect()} {
+		if !hasText(tt, want) {
+			t.Errorf("the dialog lacks %q: %q", want, tt.Texts())
+		}
+	}
+	// The same app and addresses as the command line says.
+	if localDevVPNStore != ios.LocalDevVPNStore || localDevVPNTunnelIP != ios.LocalDevVPNTunnelIP || localDevVPNDeviceIP != ios.LocalDevVPNDeviceIP {
+		t.Errorf("LocalDevVPN differs from internal/driver/ios's")
+	}
+	if err := tt.Click(locales.HelperLiteStore()); err != nil || opened != localDevVPNStore {
+		t.Errorf("the App Store link: %v, opened %q", err, opened)
+	}
+	if err := tt.Click(locales.HelperLiteDone()); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if ta.helper.liteOpen || hasText(tt, locales.HelperLiteTitle(name)) {
+		t.Errorf("the dialog stays: %q", tt.Texts())
+	}
+
+	// The full app needs nothing more.
+	ta.api.SetHelperLite(false)
+	ta.api.SetIPhone(id, driver.Info{State: driver.StateNeedsSetup, Setup: driver.SetupInstallHelper})
+	ta.sync()
+	tt.Frame()
+	if err := tt.Click(locales.HelperInstall()); err != nil {
+		t.Fatal(err)
+	}
+	ta.waitFor(t, "the second install to end", func() bool { return ta.helper.runs[id] == nil })
+	if ta.helper.liteOpen {
+		t.Errorf("the LocalDevVPN dialog after the full app")
 	}
 }
 

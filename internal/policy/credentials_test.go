@@ -106,6 +106,31 @@ func TestCredentialFieldContent(t *testing.T) {
 	}
 }
 
+// TestCredentialFieldHint: Android shows what a field holds in place of its
+// hint, and a password field whose text the person or the app shows is no
+// password field to the system anymore. Its hint still names it.
+func TestCredentialFieldHint(t *testing.T) {
+	for _, c := range []struct {
+		label, content, hint string
+		want                 bool
+	}{
+		{"hunter2", "hunter2", "Password", true},
+		{"48", "48", "Verification code", true},
+		{"hunter2", "hunter2", "", false},
+		{"my password is on the desk", "my password is on the desk", "Text message", false},
+		{"DE89 3704", "DE89 3704", "Barcode", false},
+		{"alice", "alice", "User name", false},
+		// A hint that is the text itself names nothing.
+		{"password", "password", "password", false},
+		{"Verification code", "Verification code", "Verification code", false},
+	} {
+		e := &screen.Element{Role: screen.RoleInput, Label: c.label, Content: c.content, Hint: c.hint, States: []string{screen.StateEditable}}
+		if got := IsCredentialField(e); got != c.want {
+			t.Errorf("label %q, content %q, hint %q: credential %v, want %v", c.label, c.content, c.hint, got, c.want)
+		}
+	}
+}
+
 // TestCredentialFieldIDAsLabel checks fields without a name, which drivers
 // label by their identifier (the end of an Android resource id, an iOS
 // accessibility identifier): it counts by whole words, like any identifier,

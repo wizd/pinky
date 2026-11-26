@@ -45,8 +45,10 @@ func (a IOSApp) ForSimulator() bool {
 	return false
 }
 
-// maxPlist bounds an Info.plist or profile read into memory.
-const maxPlist = 4 << 20
+// maxPlist bounds an Info.plist or profile read into memory. Real ones are
+// tens of kilobytes. The plist parser recurses once per level of nesting,
+// and about 3 MB of "(" overflows its stack, a crash no recover catches.
+const maxPlist = 1 << 20
 
 // ReadIOSApp reads a .app folder or an .ipa.
 func ReadIOSApp(file string) (IOSApp, error) {

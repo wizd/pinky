@@ -134,6 +134,12 @@ type device struct {
 	touch    *touchState
 	// wake is closed and replaced on every state change, to wake waiting calls.
 	wake chan struct{}
+	// quietRestart is whether the person allowed restarts of the device
+	// service without a password, as last seen while the service had lost
+	// the phone, and serviceRestarted when Pinky last restarted it by
+	// itself for the phone (servicerestart.go).
+	quietRestart     bool
+	serviceRestarted time.Time
 	// opened is set once the gateway opened the phone. One it never
 	// opened is forgotten a while after its provider stops listing it
 	// (discover, unopenedGrace).

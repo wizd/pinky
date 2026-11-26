@@ -263,13 +263,27 @@ func (g *Gateway) Needs() []NeedView {
 }
 
 // setupNeedLocked is the Needs you card of a task whose phone waits for
-// the person to do a step on the phone itself: for now the passcode iOS
-// asks before the WebDriverAgent helper may control the phone, a prompt
-// that goes away by itself unless someone sees it in time. The caller
-// holds g.mu.
+// a step only the person can do, which Pinky shows (and the app notifies)
+// whether or not the agent hands over: the passcode iOS asks on the phone
+// before the WebDriverAgent helper may control it, a prompt that goes away
+// by itself unless someone sees it in time; and a phone the computer's
+// device service lost on Wi-Fi, which comes back only when someone at the
+// computer restarts the service with an administrator's password. The
+// caller holds g.mu.
 func setupNeedLocked(d *device) (NeedView, bool) {
 	l := d.lease
-	if l == nil || l.ended || !waitingLocked(d) || d.info.Setup != driver.SetupPasscode {
+	if l == nil || l.ended || !waitingLocked(d) {
+		return NeedView{}, false
+	}
+	switch d.info.Setup {
+	case driver.SetupPasscode:
+	case driver.SetupDeviceService:
+		return NeedView{ID: setupNeedPrefix + d.id, Kind: NeedSetup, DeviceID: d.id, DeviceName: d.name(),
+			Agent: l.session.agent.Name, TaskID: l.task.id, Title: "Restart the device service for " + d.name(),
+			Detail: fmt.Sprintf("This computer's device service lost the phone on Wi-Fi, and only someone at the computer can restart it. %s is waiting · %s",
+				l.session.agent.Name, l.task.title),
+			Created: time.Now()}, true
+	default:
 		return NeedView{}, false
 	}
 	return NeedView{ID: setupNeedPrefix + d.id, Kind: NeedSetup, DeviceID: d.id, DeviceName: d.name(),

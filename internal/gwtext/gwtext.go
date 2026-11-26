@@ -891,6 +891,17 @@ func giveRecordings(s string) (string, bool) {
 	return "", false
 }
 
+// lostSetupTitle starts the title of the card of a task that waits for a
+// phone the computer's device service lost (gateway setupNeedLocked).
+const lostSetupTitle = "Restart the device service for "
+
+// LostSetup reports whether a Needs you card is a task waiting for a phone
+// the computer's device service lost on Wi-Fi, rather than for a step on
+// the phone.
+func LostSetup(n gateway.NeedView) bool {
+	return n.Kind == gateway.NeedSetup && strings.HasPrefix(n.Title, lostSetupTitle)
+}
+
 // needTitle is a Needs you card's title.
 func needTitle(n gateway.NeedView) string {
 	if !translated() {
@@ -906,6 +917,9 @@ func needTitle(n gateway.NeedView) string {
 		if name, ok := strings.CutPrefix(n.Title, "Enter the passcode on "); ok {
 			return locales.GwSetupPasscodeTitle(name)
 		}
+		if name, ok := strings.CutPrefix(n.Title, lostSetupTitle); ok {
+			return locales.GwSetupLostTitle(name)
+		}
 		return n.Title
 	case n.Kind == gateway.NeedHandoff, n.Rule == "Agent request":
 		return n.Title // the agent's own words
@@ -916,6 +930,7 @@ func needTitle(n gateway.NeedView) string {
 var (
 	reUnlockDetail = re(`^(.+) is waiting for the phone to unlock · (.*)$`)
 	reSetupDetail  = re(`^iOS asks for it on the phone before (?:Pinky on the iPhone|Pinky for iPhone|the WebDriverAgent helper) can control it, and stops asking after a while\. (.+) is waiting · (.*)$`)
+	reLostDetail   = re(`^This computer's device service lost the phone on Wi-Fi, and only someone at the computer can restart it\. (.+) is waiting · (.*)$`)
 	reAgentWants   = re(`^(.+) wants to connect for “(.*)”\.(?: Allowing gives it (\S+) access\.)?$`)
 	reFilesDetail  = re(`^(.+) · into the phone's Pinky folder(: .*)?$`)
 	reSettingsBack = re(`^(.+) · Pinky puts it back when the task ends$`)
@@ -931,6 +946,9 @@ func needDetail(n gateway.NeedView) string {
 	}
 	if m := reSetupDetail.FindStringSubmatch(n.Detail); m != nil && n.Kind == gateway.NeedSetup {
 		return locales.GwSetupPasscodeDetail(m[1], m[2])
+	}
+	if m := reLostDetail.FindStringSubmatch(n.Detail); m != nil && n.Kind == gateway.NeedSetup {
+		return locales.GwSetupLostDetail(m[1], m[2])
 	}
 	if m := reAgentWants.FindStringSubmatch(n.Detail); m != nil && newAgentNeed(n) {
 		d := locales.GwAgentWants(m[1], m[2])

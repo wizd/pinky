@@ -387,8 +387,9 @@ type viewer struct {
 	cond     *sync.Cond
 	queue    []driver.Packet
 	size     int
-	skip     bool // dropped packets: wait for a key frame
-	finished bool // no more packets will come
+	skip     bool      // dropped packets: wait for a key frame
+	askedAt  time.Time // when it last asked the phone for one
+	finished bool      // no more packets will come
 	closed   bool
 	once     sync.Once
 }
@@ -410,6 +411,12 @@ func (v *viewer) push(tp timedPacket) {
 	}
 	if v.skip {
 		if !p.KeyFrame {
+			// Ask again with every packet passed over (the phone's stream
+			// takes one request in 500 ms): an iPhone sends no key frame
+			// unless asked and ignores a request right after one, so a
+			// single request could leave this viewer frozen while the
+			// phone's screen moves.
+			v.askKeyFrameLocked()
 			return
 		}
 		v.skip = false
@@ -419,9 +426,8 @@ func (v *viewer) push(tp timedPacket) {
 		v.queue, v.size = nil, 0
 		if !p.KeyFrame {
 			v.skip = true
-			if kr, ok := v.h.src.(keyFrameRequester); ok {
-				go kr.RequestKeyFrame()
-			}
+			v.h.g.log.Info("video: a viewer fell behind; waiting for a key frame", "stream", v.h.key)
+			v.askKeyFrameLocked()
 			return
 		}
 		v.queueConfigLocked()
@@ -429,6 +435,18 @@ func (v *viewer) push(tp timedPacket) {
 	v.queue = append(v.queue, p)
 	v.size += len(p.Data)
 	v.cond.Signal()
+}
+
+// askKeyFrameLocked asks the phone for a key frame, at most every 500 ms
+// from this viewer. Callers hold v.mu.
+func (v *viewer) askKeyFrameLocked() {
+	if time.Since(v.askedAt) < 500*time.Millisecond {
+		return
+	}
+	if kr, ok := v.h.src.(keyFrameRequester); ok {
+		v.askedAt = time.Now()
+		go kr.RequestKeyFrame()
+	}
 }
 
 func (v *viewer) queueConfigLocked() {

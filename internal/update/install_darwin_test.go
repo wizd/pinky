@@ -458,14 +458,19 @@ func TestSwapAfterAZombie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	work := st.(*stagedBundle).work
 	if err := st.Swap(StartOptions{}); err != nil {
 		t.Fatal(err)
 	}
+	// The helper removes the work folder last: until then it still writes
+	// to the folders the test's cleanup removes.
 	waitUntil(t, "the swap after the zombie", 10*time.Second, func() bool {
-		// Between the helper's two renames there is no bundle there.
-		info, err := readBundleInfo(installed)
-		return err == nil && info.Version == "2026.1107.2"
+		_, err := os.Stat(work)
+		return os.IsNotExist(err)
 	})
+	if v := installedVersion(t, installed); v != "2026.1107.2" {
+		t.Errorf("installed %s", v)
+	}
 }
 
 // swapThatFails swaps with a helper that cannot do its work, and returns

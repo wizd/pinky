@@ -480,7 +480,7 @@ func (p *Provider) waitConnected(ctx context.Context, serial string, trust bool)
 	for {
 		entries, err := p.cfg.Client.Devices(ctx)
 		if err != nil {
-			if ctx.Err() != nil {
+			if timeUp(ctx, err) {
 				// The time ran out during the listing rather than
 				// between two: the phone did not come online all the same.
 				return gone()
@@ -511,6 +511,18 @@ func (p *Provider) waitConnected(ctx context.Context, serial string, trust bool)
 			return gone()
 		}
 	}
+}
+
+// timeUp reports whether err comes from ctx's time running out. A dial
+// bound by ctx's deadline can time out an instant before ctx says it is
+// done ("i/o timeout" while ctx.Err() is still nil), which made
+// TestSetAwayAtNoADB fail now and then on a busy computer.
+func timeUp(ctx context.Context, err error) bool {
+	if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	dl, ok := ctx.Deadline()
+	return ok && !time.Now().Before(dl)
 }
 
 // connectErr words a failed connection at an address: refused means the

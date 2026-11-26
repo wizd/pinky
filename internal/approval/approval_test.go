@@ -14,7 +14,9 @@ func TestDecideWhileWaiting(t *testing.T) {
 	var changes atomic.Int32
 	c := New(Options{Timeout: time.Second, OnChange: func() { changes.Add(1) }})
 	a := c.Open(Request{Kind: KindAction, Binding: bind, Rule: "Payments"})
+	decided := make(chan struct{})
 	go func() {
+		defer close(decided)
 		time.Sleep(20 * time.Millisecond)
 		if err := c.Decide(a.ID, AllowOnce, "ok"); err != nil {
 			t.Error(err)
@@ -27,6 +29,9 @@ func TestDecideWhileWaiting(t *testing.T) {
 	if _, err := c.Wait(context.Background(), a.ID, time.Second); !errors.Is(err, ErrUsed) {
 		t.Fatalf("second use: %v", err)
 	}
+	// Decide wakes the waiting call before it runs OnChange, outside its
+	// lock: count once it has returned.
+	<-decided
 	if changes.Load() < 2 {
 		t.Fatalf("OnChange ran %d times", changes.Load())
 	}

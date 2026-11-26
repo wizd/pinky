@@ -4,16 +4,25 @@ import Foundation
 /// Canned states for looking at the screens in the Simulator, which runs
 /// no packet tunnel and so never gets a core of its own: a debug build
 /// launched with -pinkyDemo <scenario> shows that scenario and talks to no
-/// core (ios/README.md). Scenarios: setup (unpaired), model (the last setup
-/// step), ready, running, asks, ended, computer, steer (running, with a
-/// message the model read and one it has not), continue (stopped at a
-/// limit with a message left unread, so it can go on).
+/// core (ios/README.md). Scenarios: setup (unpaired), vpn (paired, the VPN
+/// off: in the lite build, LocalDevVPN; -pinkyDemoTunnelIP 10.7.1.1 shows
+/// it on with another Tunnel IP), model (the last setup step), ready,
+/// running, asks, ended, computer, steer (running, with a message the model
+/// read and one it has not), continue (stopped at a limit with a message
+/// left unread, so it can go on).
 enum Demo {
     static let scenario = UserDefaults.standard.string(forKey: "pinkyDemo")
 
     /// Whether the scenario has the model's key: all but the setup ones.
-    static var hasKey: Bool { !["setup", "model"].contains(scenario ?? "") }
+    static var hasKey: Bool { !["setup", "vpn", "model"].contains(scenario ?? "") }
     static var paired: Bool { scenario != "setup" }
+    /// Whether the VPN is on: in all but the setup ones.
+    static var vpnOn: Bool { !["setup", "vpn"].contains(scenario ?? "") }
+    /// LocalDevVPN as the vpn scenario shows it in the lite build.
+    static var localDevVPN: LocalDevVPN.Status {
+        if vpnOn { return .on }
+        return UserDefaults.standard.string(forKey: "pinkyDemoTunnelIP").map { .otherAddress($0) } ?? .off
+    }
 
     private static let zh = Locale.preferredLanguages.first?.hasPrefix("zh") == true
     private static func w(_ en: String, _ zh: String) -> String { Demo.zh ? zh : en }
@@ -22,7 +31,7 @@ enum Demo {
     private static let minute: Int64 = 60_000
 
     static var state: CoreState? {
-        guard let s = scenario, s != "setup" else { return nil }
+        guard let s = scenario, vpnOn else { return nil }
         var st = CoreState(device: DeviceState(ready: true, name: "iPhone"), preset: 1, computer: nil, agent: nil,
                            task: nil, needs: [])
         let task = w("Work out 128 × 46 in Calculator and tell me the result",

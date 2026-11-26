@@ -319,9 +319,15 @@ func (g *Gateway) gate(l *lease, approvalID string, action bool) *Result {
 // phone may have been unlocked since, by a script or by hand, and the
 // gateway reads the lock state only every few seconds (pollLocks).
 func (g *Gateway) gateOnce(l *lease, approvalID string, action, fresh bool) *Result {
+	// The wait leaves the call time to act within its budget: a phone
+	// moving to another connection for the task may take a minute
+	// (switchWait).
+	wctx, cancel := context.WithTimeout(l.ctx, max(g.opt.CallBudget-switchReserve, g.opt.CallBudget/2))
+	defer cancel()
+	g.recoverLost(wctx, l) // the device service lost it (servicerestart.go)
 	g.mu.Lock()
 	d := l.dev
-	for !l.ended && g.waitMovingLocked(l.ctx, d) {
+	for !l.ended && g.waitMovingLocked(wctx, d) {
 		// It was moving between its cable and Wi-Fi, or Pinky was opening
 		// it again (wifi.go).
 	}
@@ -334,6 +340,10 @@ func (g *Gateway) gateOnce(l *lease, approvalID string, action, fresh bool) *Res
 		return statusResult(StatusStopped, "The lease ended (%s). End the task, or call phone_connect again.", l.endedBy)
 	case waitingLocked(d):
 		res := setupResultLocked(d, fmt.Sprintf("%s is connected but waits for a step before Pinky can use it. Nothing was done.", d.name()))
+		g.mu.Unlock()
+		return res
+	case !d.online && d.switching != "":
+		res := errResult(ErrDeviceOffline, "%s", stillMovingMessage(d.name(), d.switching))
 		g.mu.Unlock()
 		return res
 	case !d.online:
@@ -451,6 +461,12 @@ type prep struct {
 	settleFull bool
 	// follow follows a home screen's page under a drag (dragfollow.go).
 	follow *dragFollow
+	// secret is set when the action may enter a password, a one-time code
+	// or a passcode: typing into such a field, typing where Pinky cannot
+	// tell the field and the screen has one, or a tap on an app's hidden
+	// passcode keypad. What Pinky keeps and shows of it hides the text and
+	// the key (secret.go).
+	secret bool
 }
 
 // personAllowed reports whether an action that runs with verdict v runs
@@ -476,7 +492,7 @@ func (g *Gateway) act(ctx context.Context, l *lease, c Call, a Action) *Result {
 		if ctx.Err() != nil {
 			return errResult(ErrInternal, "The call was cancelled. Nothing was done.")
 		}
-		return errResult(ErrInternal, "Another action on the phone was still running when the call's %s ran out. Nothing was done. Observe, then try again.", human(g.opt.CallBudget))
+		return busyOutOfTime(g.opt.CallBudget)
 	}
 	// Check again under the device's action lock: another call may have
 	// opened an approval, or the person may have taken over, meanwhile.
@@ -854,6 +870,9 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 		p.input.Scoped, p.input.ScopeApps = true, scope.Apps
 	}
 
+	// Until the field is known, any password or code field on the screen
+	// may be the one typed into.
+	p.secret = a.Tool == "type" && (cur == nil || credentialOnScreen(cur))
 	if rule, blocked := g.policy.Blocked(fg); blocked && !fgAllowed && a.Tool != "launch" && !(a.Tool == "key" && a.Key == "home") {
 		p.desc = describe(a, p)
 		res := &Result{Status: StatusBlocked, Rule: rule,
@@ -900,7 +919,10 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 			p.target = hitTest(cur, p.point)
 		}
 		p.hasPt = true
-		if pad, ok := policy.HiddenKeypad(cur); ok && pad.Contains(p.point) && !g.policy.CredentialTypingAllowed(virtual) {
+		pad, onPad := policy.HiddenKeypad(cur)
+		onPad = onPad && pad.Contains(p.point)
+		p.secret = onPad
+		if onPad && !g.policy.CredentialTypingAllowed(virtual) {
 			// The app's own passcode keypad, which the person watching
 			// cannot see: a tap on it enters their passcode.
 			p.input.Target = p.target
@@ -913,6 +935,10 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 		if a.Ref > 0 {
 			e, res := byRef(a.Ref)
 			if res != nil {
+				// The field is not known, so the text may be a password, as
+				// for a type refused before the screen is read: the ref may
+				// be of a password field that is gone.
+				p.secret = true
 				return p, res
 			}
 			// An app that draws its own search box shows only its
@@ -920,11 +946,14 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 			// that focuses the box. A search button would search instead.
 			placeholder := e.Role != screen.RoleButton && e.Role != screen.RoleLink && policy.IsSearchField(e)
 			if e.Role != screen.RoleInput && !e.Has(screen.StateEditable) && !e.Has(screen.StateFocused) && !placeholder {
+				p.secret = true // nothing is typed, and the text may be a password all the same
 				return p, errResult(ErrInvalidArgument, "[%d] is a %s, not a text field. Nothing was done.", a.Ref, e.Role)
 			}
 			p.target, p.point, p.hasPt = e, e.Bounds.Center(), true
+			p.secret = policy.IsCredentialField(e)
 		} else if f, ok := cur.Focused(); ok {
 			p.target = &f
+			p.secret = policy.IsCredentialField(&f)
 		} else if credentialOnScreen(cur) && !g.policy.CredentialTypingAllowed(virtual) {
 			// The focused field is unknown and might be the password field.
 			return p, &Result{Status: StatusBlocked, Rule: policy.RuleCredentials,
@@ -1051,6 +1080,9 @@ const hiddenKeypadRefusal = "This tap is on the app's passcode keypad, which it 
 	"Call phone_handoff so the person can enter the passcode."
 
 func credentialOnScreen(s *screen.Screen) bool {
+	if s == nil {
+		return false
+	}
 	for i := range s.Elements {
 		e := &s.Elements[i]
 		if (e.Role == screen.RoleInput || e.Has(screen.StateEditable)) && policy.IsCredentialField(e) {
@@ -1364,9 +1396,17 @@ func (g *Gateway) ask(ctx context.Context, l *lease, c Call, a Action, p *prep, 
 	case p.hasPt:
 		point = p.point
 	}
+	if p.secret && a.Tool == "tap" {
+		// A key of the app's hidden passcode keypad: the card shows neither
+		// which nor where, as its step does not (secret.go).
+		target, point = screen.Rect{}, screen.Point{}
+	}
+	// What the card and history show: the text typed into a password
+	// field hidden (secret.go). The binding keeps the action itself.
+	sa, sc := shown(a, c, p)
 	detail := l.session.agent.Name
-	if c.Intent != "" {
-		detail += " · " + c.Intent
+	if sc.Intent != "" {
+		detail += " · " + sc.Intent
 	} else {
 		detail += " · " + l.task.title
 	}
@@ -1375,7 +1415,7 @@ func (g *Gateway) ask(ctx context.Context, l *lease, c Call, a Action, p *prep, 
 		app = appLabel(p.input.Launch) // the card is about the app to open
 	}
 	info := g.approvals.Open(approval.Request{
-		Kind: approval.KindAction, Binding: g.binding(l, a), Rule: v.Rule, Title: approvalTitle(a, p, v),
+		Kind: approval.KindAction, Binding: g.binding(l, a), Rule: v.Rule, Title: approvalTitle(sa, p, v),
 		Detail: detail, App: app, Agent: l.session.agent.Name, TaskID: l.task.id,
 		DeviceName: l.dev.name(), Screenshot: shot, Target: target, Point: point, To: to, Point2: point2, To2: to2, Path: path, Data: takeSnapshot(cur, p, v),
 	})
@@ -1383,7 +1423,11 @@ func (g *Gateway) ask(ctx context.Context, l *lease, c Call, a Action, p *prep, 
 		return info, res
 	}
 	before := g.shotID(g.keepImage(l.dev, cur, shot, false))
-	g.openStep(l, info, "phone_"+a.Tool, a.args(c), "Waiting for you: "+p.desc, target, p.point, before)
+	point = p.point
+	if p.secret && a.Tool == "tap" {
+		target, point = screen.Rect{}, screen.Point{} // which key of the passcode
+	}
+	g.openStep(l, info, "phone_"+a.Tool, sa.args(sc), "Waiting for you: "+p.desc, target, point, before)
 	return info, nil
 }
 
@@ -1429,9 +1473,12 @@ func approvalTitle(a Action, p *prep, v policy.Verdict) string {
 	label := ""
 	switch {
 	case p.decider != nil:
-		label = p.decider.Label
+		label = shownLabel(p.decider)
 	case p.target != nil:
-		label = p.target.Label
+		label = shownLabel(p.target)
+	}
+	if p.secret && a.Tool == "tap" && label != "" {
+		label = secretKey // a key of the passcode keypad
 	}
 	switch {
 	case v.Has(policy.Payment) && label != "":
@@ -1621,9 +1668,24 @@ func (g *Gateway) pendingResult(l *lease, info approval.Info) *Result {
 	if info.Kind == approval.KindHandoff {
 		what = "hand control back"
 	}
-	return &Result{Status: StatusPending, ApprovalID: info.ID, Rule: info.Rule,
-		Message: fmt.Sprintf("Still waiting for the person to %s (%s). Nothing was done yet. Repeat the same call with approval_id %q; the person has %s left.",
-			what, info.Title, info.ID, approval.Human(left))}
+	msg := fmt.Sprintf("Still waiting for the person to %s (%s). Nothing was done yet. Repeat the same call with approval_id %q; the person has %s left.",
+		what, info.Title, info.ID, approval.Human(left))
+	g.mu.Lock()
+	lost := info.Kind == approval.KindHandoff && waitingLocked(l.dev) && l.dev.info.Setup == driver.SetupDeviceService
+	quiet := l.dev.quietRestart
+	g.mu.Unlock()
+	switch {
+	case lost && quiet:
+		// Pinky restarts the service by itself (servicerestart.go).
+		msg += " The phone still waits for the computer's device service, which Pinky restarts by itself without a password, as the person allowed: " +
+			"the handoff ends once the phone is back. If it stays lost for minutes, release the phone with phone_release and use another one, or end the task."
+	case lost:
+		// Only a person at the computer can bring the phone back; an agent
+		// nobody watches would wait out the whole handoff.
+		msg += " The phone still waits for the computer's device service to be restarted, which needs a person at the computer and its administrator password. " +
+			"If nobody is at the computer, as in a scheduled or unattended run, stop waiting: release the phone with phone_release and use another one, or end the task."
+	}
+	return &Result{Status: StatusPending, ApprovalID: info.ID, Rule: info.Rule, Message: msg}
 }
 
 func (g *Gateway) withdrawnResult(l *lease, out approval.Outcome) *Result {
@@ -1888,6 +1950,17 @@ func (g *Gateway) executeOn(ctx context.Context, l *lease, c Call, a Action, p *
 	if n, ok := dev.(driver.InputNoter); ok && (a.Tool == "type" || a.Tool == "key") {
 		inputNote = n.TakeInputNote()
 	}
+	if c.unread {
+		// The settle owed since the input went out stays owed: the call
+		// that reads the screen next waits it out first (settleOwed).
+		g.mu.Lock()
+		d.inputAt = time.Now()
+		g.mu.Unlock()
+		res := &Result{Status: StatusUncertain, unread: true,
+			Message: "The swipe was sent; phone_read_list reads the screen it led to when it continues."}
+		g.recordStep(l, step, a, c, p, res, start, before, "", "")
+		return res
+	}
 	limit := g.opt.SettleMax
 	if !p.settleFull {
 		limit = a.settleLimit(limit)
@@ -1923,6 +1996,10 @@ func (g *Gateway) executeOn(ctx context.Context, l *lease, c Call, a Action, p *
 	g.mu.Unlock()
 	res := g.screenResult(l, next, false)
 	res.Status = StatusSettled
+	if next.TreeTooSlow {
+		// Not uncertain: the phone took the input, only its tree is slow.
+		res.Message = strings.TrimSpace("The action was delivered to the phone; the screen after it is read without its elements. " + res.Message)
+	}
 	if unread {
 		// GitHub issue #30: not an empty settled screen, but what it is.
 		res.Status = StatusUncertain
@@ -1959,7 +2036,7 @@ func (g *Gateway) executeOn(ctx context.Context, l *lease, c Call, a Action, p *
 		// not have changed yet: its picture would pass for the result.
 		shot = nil
 	}
-	text := body(res.Screen)
+	text := body(hideTyped(res.Screen))
 	if _, blocked := g.policy.Blocked(next.App); blocked {
 		text = "" // allowed for the task: history keeps the steps only
 	}
@@ -2190,6 +2267,10 @@ func (g *Gateway) actionError(l *lease, err error) *Result {
 	case errors.Is(err, driver.ErrOffline):
 		g.setOffline(l.dev, "")
 		return statusResult(StatusUncertain, "The phone dropped during the action, which may or may not have happened. Observe when it is back before anything else; do not repeat it blindly.")
+	case errors.Is(err, driver.ErrConnDropped):
+		// The driver sends only requests that are safe to repeat again
+		// (opening an app), and it already did once.
+		return statusResult(StatusUncertain, "The phone did not answer (%v). This action is safe to repeat: look at the screen, and if it did not happen, simply try again.", err)
 	case errors.Is(err, context.DeadlineExceeded):
 		return statusResult(StatusUncertain, "The phone did not answer in time (%v), so the action may or may not have happened. Observe before anything else; do not repeat it blindly.", err)
 	}
@@ -2556,9 +2637,20 @@ func (g *Gateway) screenResult(l *lease, raw *screen.Screen, full bool) *Result 
 		res.Message = unsettledMessage
 	} else if raw.AppHidden {
 		res.Message = appHiddenMessage
+	} else if raw.TreeTooSlow {
+		res.Message = treeTooSlowMessage
 	}
 	return res
 }
+
+// treeTooSlowMessage goes with a read whose element tree the phone did not
+// give in time (screen.Screen.TreeTooSlow): Pinky on the iPhone on a
+// screen whose tree takes it tens of seconds, such as a long list.
+const treeTooSlowMessage = "Pinky on the iPhone did not give this screen's elements in time (some screens, such as long lists " +
+	"in some apps, take it tens of seconds), so this read has no refs: only the app, the lock state and any text OCR read " +
+	"from a picture of the screen. Tap by x and y, ask for a screenshot (phone_observe screenshot: true) to see the screen, " +
+	"or use phone_key (back, home) to leave the page; keys work as usual. For the next few minutes, reads of this app " +
+	"ask the phone for fewer of its elements, or none, so that they come sooner."
 
 // appHiddenMessage goes with a read where the phone gave Pinky's
 // accessibility service no window of the app in front, so that the
@@ -2869,7 +2961,13 @@ func question(a Action, p *prep) string { return sayAction(a, p, true) }
 func sayAction(a Action, p *prep, ask bool) string {
 	label := ""
 	if p != nil && p.target != nil && p.target.Label != "" {
-		label = "“" + clip(p.target.Label, 60) + "”"
+		label = "“" + clip(shownLabel(p.target), 60) + "”"
+	}
+	if p != nil && p.secret {
+		a = hideSecret(a)
+		if a.Tool == "tap" && label != "" {
+			label = "“" + secretKey + "”" // a key of the passcode keypad
+		}
 	}
 	tense := func(past, imperative string) string {
 		if ask {

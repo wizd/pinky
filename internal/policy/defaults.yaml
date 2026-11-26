@@ -25,8 +25,9 @@
 # does not even get their screen, and their notifications are hidden.
 #
 # Built in and not editable here: typing into password and one-time-code
-# fields is always denied (rule: credentials), and apps you block in Settings
-# (the "blocked" category in apps.yaml) are denied (rule: Blocked by you).
+# fields is denied (rule: credentials) unless virtual_credentials or
+# phone_credentials below allow it, and apps you block in Settings (the
+# "blocked" category in apps.yaml) are denied (rule: Blocked by you).
 #
 # always_allow (at the end of the file once there is one) keeps your "Always
 # allow" answers to approvals. Each entry lifts, in one app, the rule the
@@ -55,8 +56,14 @@ read_only_devices: []
 mask_codes: true
 
 # Let agents type passwords and one-time codes on virtual phones (emulators
-# and Simulators on this computer), for testing sign-ins. Phones never.
+# and Simulators on this computer), for testing sign-ins.
 virtual_credentials: false
+
+# Let agents type passwords and one-time codes their task gives them on
+# phones, for signing in with test accounts. Each time asks you (rule:
+# credentials) unless you always allow it in that app. Never the phone's own
+# passcode, whatever this says.
+phone_credentials: false
 
 rules:
   - name: Finance apps

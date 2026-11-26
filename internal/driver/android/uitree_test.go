@@ -145,6 +145,12 @@ func TestConvertInputsAndRoles(t *testing.T) {
 			t.Errorf("%q: content %q, want %q", els[i].Label, els[i].Content, want)
 		}
 	}
+	// The hint stays the field's name once text stands in its place.
+	for i, want := range []string{"", "Title", ""} {
+		if els[i].Hint != want {
+			t.Errorf("%q: hint %q, want %q", els[i].Label, els[i].Hint, want)
+		}
+	}
 	want := strings.Join([]string{
 		`[0] input "Search" @540,150 focused editable`,    // empty field: its hint
 		`[0] input "hello world" @540,270 editable`,       // content, whitespace collapsed

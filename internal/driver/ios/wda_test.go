@@ -3,6 +3,7 @@ package ios
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -427,6 +428,11 @@ type fakeWDA struct {
 	locked      bool          // /wda/locked
 	homeRefused string        // /wda/homescreen fails with this message; "" answers OK
 	sourceDelay time.Duration // before /source answers; set before the first request
+	// sourceHold, when set before the request, holds /source until it is
+	// closed or the request ends: a tree the phone takes forever to build.
+	sourceHold chan struct{}
+	sourcesIn  int    // /source requests received, counted before they are held
+	png        []byte // /screenshot's picture; nil fails it
 	shots       int           // /screenshot requests
 	shotAt      time.Time     // the last one
 	sourceAt    time.Time     // when /source last answered
@@ -434,8 +440,20 @@ type fakeWDA struct {
 }
 
 func (f *fakeWDA) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasSuffix(r.URL.Path, "/source") && f.sourceDelay > 0 {
-		time.Sleep(f.sourceDelay) // a phone's tree takes long; other requests go on
+	if strings.HasSuffix(r.URL.Path, "/source") {
+		f.mu.Lock()
+		f.sourcesIn++
+		hold := f.sourceHold
+		f.mu.Unlock()
+		if hold != nil {
+			select {
+			case <-hold:
+			case <-r.Context().Done():
+			}
+		}
+		if f.sourceDelay > 0 {
+			time.Sleep(f.sourceDelay) // a phone's tree takes long; other requests go on
+		}
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -491,6 +509,10 @@ func (f *fakeWDA) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "GET /screenshot":
 		f.shots++
 		f.shotAt = time.Now()
+		if f.png != nil {
+			fmt.Fprintf(w, `{"value":%q}`, base64.StdEncoding.EncodeToString(f.png))
+			return
+		}
 		w.WriteHeader(500) // the read goes on without OCR's text
 		fmt.Fprint(w, `{"value":{"error":"unknown error","message":"no picture in tests"}}`)
 	case "GET /element/active":

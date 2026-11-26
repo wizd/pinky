@@ -414,6 +414,10 @@ func linesResult(lr driver.LogResult, label string, since, now time.Time, listen
 	if left := lr.Dropped + cut; left > 0 {
 		res.Message += fmt.Sprintf(" %s left out: these are the newest. Narrow with since, filter or level to see others.", count(left, "older line"))
 	}
+	if lr.Hidden > 0 {
+		res.Message += fmt.Sprintf(" %s that Pinky's own screen reads make the system write in the app's log (%s) left out, not counted in limit; filter %q shows them.",
+			count(lr.Hidden, "line"), lr.HiddenTag, lr.HiddenTag)
+	}
 	if listens && lr.From.After(since) {
 		res.Message += fmt.Sprintf(" This phone keeps no log history Pinky can read: Pinky listens to %s from %s, the first phone_logs call for it in this task. Make the app do what you want to see, then call phone_logs again.", label, when(lr.From, now))
 	}

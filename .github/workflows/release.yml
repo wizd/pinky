@@ -310,6 +310,15 @@ jobs:
         with:
           name: companion
           path: ${{ runner.temp }}/companion
+      # The iPhone app kit, from which desktop Pinky builds Pinky's iPhone
+      # app with the person's team to host WebDriverAgent
+      # (internal/driver/ios/appinstall.go). Packed before the apps, which
+      # carry its SHA-256 and build no other kit.
+      - name: Pack the iPhone app kit
+        run: |
+          command -v xcodegen >/dev/null || brew install --quiet xcodegen
+          mkdir -p "$RUNNER_TEMP/dist"
+          ios/build.sh kit "$RUNNER_TEMP/dist/pinky-iphone-${TAG#v}.tar.gz" "${TAG#v}"
       - name: Build, sign and notarize
         env:
           STRICT: "1"
@@ -318,14 +327,26 @@ jobs:
           GH_TOKEN: ${{ github.token }} # scripts/adb.sh, when github.com's release downloads fail
         run: |
           go run ./scripts/release stamp "${TAG#v}"
-          scripts/dist.sh darwin "$RUNNER_TEMP/dist"
-      # The iPhone app kit, from which desktop Pinky builds Pinky's iPhone
-      # app with the person's team to host WebDriverAgent
-      # (internal/driver/ios/appinstall.go).
-      - name: Pack the iPhone app kit
+          IPHONE_KIT="$RUNNER_TEMP/dist/pinky-iphone-${TAG#v}.tar.gz" scripts/dist.sh darwin "$RUNNER_TEMP/dist"
+      # The apps refuse any other kit only if they carry this one's hash. Go
+      # writes the -ldflags into the binary's build info even when -X sets
+      # nothing, so the hash must be there more often than "=<hash>" is:
+      # once more, as the value of main.iphoneKitSHA256.
+      - name: Check that the apps carry the iPhone app kit's SHA-256
         run: |
-          command -v xcodegen >/dev/null || brew install --quiet xcodegen
-          ios/build.sh kit "$RUNNER_TEMP/dist/pinky-iphone-${TAG#v}.tar.gz" "${TAG#v}"
+          sum=$(shasum -a 256 "$RUNNER_TEMP/dist/pinky-iphone-${TAG#v}.tar.gz" | cut -d' ' -f1)
+          case $sum in *[!0-9a-f]* | '') echo "::error::no SHA-256 for the iPhone app kit"; exit 1 ;; esac
+          for arch in arm64 amd64; do
+            dir="$RUNNER_TEMP/check-kit-$arch"
+            ditto -x -k "$RUNNER_TEMP/dist/pinky-${TAG#v}-darwin-$arch.zip" "$dir"
+            bin="$dir/Pinky.app/Contents/MacOS/Pinky"
+            all=$(grep -a -o "$sum" "$bin" | wc -l)
+            flags=$(grep -a -o "=$sum" "$bin" | wc -l)
+            if [ "$all" -le "$flags" ]; then
+              echo "::error::Pinky.app for $arch doesn't carry the iPhone app kit's SHA-256 ($sum) in main.iphoneKitSHA256"
+              exit 1
+            fi
+          done
       - name: Check that the apps' adb runs a server
         run: |
           for arch in arm64 amd64; do

@@ -2,7 +2,7 @@
 <h1 align="center">Pinky</h1>
 <p align="center"><b>macOS、Windows、Linux から、あなたが見守る中で、どんな AI エージェントにも iPhone や Android スマートフォンを使わせられます。</b></p>
 <p align="center"><a href="https://github.com/DIYgod/pinky/releases/latest">ダウンロード</a> · <a href="#はじめに">はじめに</a> · <a href="#よくある質問">よくある質問</a> · <a href="https://discord.gg/S27b7SHjng">Discord</a></p>
-<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · 日本語 · <a href="README.tr.md">Türkçe</a></p>
+<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · 日本語 · <a href="README.tr.md">Türkçe</a> · <a href="README.vi.md">Tiếng Việt</a></p>
 <p align="center"><sub>この README はコミュニティによる翻訳です。最新の内容は英語版の <a href="README.md">README.md</a> を参照してください。</sub></p>
 <p align="center"><img src="assets/readme/demo.gif" width="760" alt="Claude Code がメッセージに返信を入力し、Pinky は許可されるまで送信のタップを保留し、そのあとでテキストが送られる"><br><sub>Android 16 エミュレーターでの、Claude Code の実際の実行です。Pinky はデフォルトで支払いの前に確認します。この実行では、メッセージの前にも確認するようにしています。</sub></p>
 

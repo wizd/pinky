@@ -2,6 +2,7 @@ package ios
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -41,7 +42,9 @@ import (
 // or else by the Wi-Fi address in the name, "<Wi-Fi MAC>@<link-local
 // address>-supportsRP-26"), and lists a phone seen there for lostAfter in a
 // row with SetupDeviceService. RestartDeviceService restarts usbmuxd through
-// macOS's request for an administrator's password, only when the person asks.
+// macOS's request for an administrator's password when the person asks, or
+// without one once the person allowed that (quietrestart.go), which also
+// lets the gateway restart it by itself for a phone an agent uses.
 
 const (
 	// lostAfter is how long a missing phone must show up on the network
@@ -348,35 +351,52 @@ func readPairInfo(udid string) (netmux.PairInfo, error) {
 }
 
 // RestartDeviceService implements driver.DeviceServiceRestarter on macOS:
-// it quits usbmuxd, which launchd starts again, through macOS's request for
-// an administrator's password (osascript's "with administrator
-// privileges"), with reason in it. Every iPhone and iPad drops for a second
-// or two, on a cable too.
+// it quits usbmuxd, which launchd starts again. While the person allows it
+// without a password (quietrestart.go), it does so through sudo, asking
+// nobody; otherwise, or when sudo refuses, through macOS's request for an
+// administrator's password (osascript's "with administrator privileges"),
+// with reason in it. Every iPhone and iPad drops for a second or two, on a
+// cable too.
 func (p *Provider) RestartDeviceService(ctx context.Context, reason string) error {
 	if runtime.GOOS != "darwin" && p.restartFn == nil {
 		return fmt.Errorf("restarting the device service: %w", driver.ErrUnsupported)
 	}
-	run := p.restartFn
-	if run == nil {
-		run = runAsAdmin
+	if p.quiet.installed() {
+		err := p.restartQuietly(ctx)
+		if err == nil {
+			p.logger().Info("iphone: restarted usbmuxd at the person's request, without a password")
+			p.afterRestart()
+			return nil
+		}
+		if !errors.Is(err, errNeedsPassword) {
+			return err
+		}
+		p.logger().Warn("iphone: sudo refused to restart usbmuxd without a password; asking for it", "err", err)
 	}
 	p.logger().Info("iphone: restarting usbmuxd at the person's request")
-	if err := run(ctx, "/usr/bin/killall usbmuxd", reason); err != nil {
-		return err
+	if err := p.runAdmin(ctx, restartCommand, reason); err != nil {
+		return fmt.Errorf("restarting the device service: %w", err)
 	}
+	p.afterRestart()
+	return nil
+}
+
+// afterRestart forgets what usbmuxd listed before it restarted: every phone
+// reattaches.
+func (p *Provider) afterRestart() {
 	p.mu.Lock()
 	for id := range p.known {
-		delete(p.known, id) // every phone reattaches
+		delete(p.known, id)
 	}
 	p.mu.Unlock()
 	p.lost.mu.Lock()
 	p.lost.seen = map[string]time.Time{}
 	p.lost.mu.Unlock()
-	return nil
 }
 
 // runAsAdmin runs a shell command as root through macOS's request for an
-// administrator's password, showing reason in it.
+// administrator's password, showing reason in it. It returns
+// driver.ErrCanceled when the person declines.
 func runAsAdmin(ctx context.Context, command, reason string) error {
 	script := fmt.Sprintf("do shell script %s with administrator privileges with prompt %s", appleScriptString(command), appleScriptString(reason))
 	out, err := exec.CommandContext(ctx, "/usr/bin/osascript", "-e", script).CombinedOutput()
@@ -384,9 +404,9 @@ func runAsAdmin(ctx context.Context, command, reason string) error {
 		return nil
 	}
 	if strings.Contains(string(out), "-128") || strings.Contains(strings.ToLower(string(out)), "user canceled") {
-		return fmt.Errorf("restarting the device service: %w", driver.ErrCanceled)
+		return driver.ErrCanceled
 	}
-	return fmt.Errorf("restarting the device service: %v: %s", err, strings.TrimSpace(string(out)))
+	return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
 }
 
 // appleScriptString quotes s as an AppleScript string literal.

@@ -2,7 +2,7 @@
 <h1 align="center">Pinky</h1>
 <p align="center"><b>Yapay zekâ iPhone’unuzu ya da Android telefonunuzu kullansın, siz de sürecin içinde olun: macOS, Windows ya da Linux’tan herhangi bir ajan veya doğrudan telefonda Pinky’nin kendisi.</b></p>
 <p align="center"><a href="https://github.com/DIYgod/pinky/releases/latest">İndir</a> · <a href="#başlarken">Başlarken</a> · <a href="#sss">SSS</a> · <a href="https://discord.gg/S27b7SHjng">Discord</a></p>
-<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · Türkçe</p>
+<p align="center"><a href="README.md">English</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.ja.md">日本語</a> · Türkçe · <a href="README.vi.md">Tiếng Việt</a></p>
 <p align="center"><sub>Bu README bir topluluk çevirisidir. En güncel içerik için İngilizce <a href="README.md">README.md</a> dosyasına bakın.</sub></p>
 <p align="center"><img src="assets/readme/demo.gif" width="760" alt="Claude Code, Mesajlar’da bir yanıt yazıyor; Pinky, Gönder dokunuşunu izin verilene kadar bekletiyor, ardından metin gönderiliyor"><br><sub>Bir Android 16 emülatöründe Claude Code’un gerçek bir çalışması. Pinky varsayılan olarak ödemelerden önce sorar; bu çalışmada mesajlardan önce de soruyor.</sub></p>
 

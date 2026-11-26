@@ -44,8 +44,11 @@ type readCursor struct {
 	direction string
 	page      int
 	previous  []viewportLine
-	pinned    []viewportLine
-	expires   time.Time
+	// raw is the whole screen the call ended on: the next call's first
+	// read of it must lose every line, previous keeps only some.
+	raw     []viewportLine
+	pinned  []viewportLine
+	expires time.Time
 }
 
 // listID is how a read finds its list again on the next screen: its path
@@ -164,7 +167,7 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 		cursor = c
 		st.req.Direction = c.direction
 		st.req.Area = c.area
-		st.previous, st.raw, st.pinned = c.previous, c.previous, c.pinned
+		st.previous, st.raw, st.pinned = c.previous, c.raw, c.pinned
 		st.view.StartScreen = c.page
 	}
 	if st.req.Direction == "" {
@@ -173,13 +176,22 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 	req = st.req
 	view := st.view
 
-	first, res := g.firstListScreen(ctx, l, req, cursor)
+	first, slowest, res := g.firstListScreen(ctx, l, req, cursor)
 	if res != nil {
+		if cursor != nil && res.outOfTime {
+			// The phone did not answer in time: nothing was read, and the
+			// continuation holds for another try.
+			view.Stop, view.Truncated = "deadline", true
+			view.Continuation = g.putCursor(l, cursor)
+			view.notes = append(view.notes, fmt.Sprintf(
+				"The phone did not finish reading the screen within the call's %s, so nothing was read.", human(g.opt.CallBudget)))
+			return readListResult(l, view)
+		}
 		view.Stop = readListStop(res)
 		return withScan(res, view)
 	}
 	st.app = first.App
-	list, column, res := startList(first, req, cursor)
+	list, found, res := startList(first, req, cursor, g.policy.IsSystem(first.App))
 	if res != nil {
 		return withScan(res, view)
 	}
@@ -191,10 +203,17 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 		return withScan(errResult(ErrNotFound,
 			"No list was found on this screen. Pass ref with the list or scrollable element to read, or scroll_area with the part of the screen that scrolls."), view)
 	}
-	if column != nil {
-		// A column of rows is read as the scroll area it covers.
-		st.req.Area = column
+	if found.area != nil {
+		// A column of rows, or the screen's content, is read as the
+		// scroll area it covers.
+		st.req.Area = found.area
 		req = st.req
+		if found.content {
+			a := *found.area
+			view.notes = append(view.notes, fmt.Sprintf(
+				"No list or scrollable element was found, so the read scrolled the screen's content (scroll_area x %d, y %d, w %d, h %d). Pass ref or scroll_area to read another part.",
+				a.X, a.Y, a.W, a.H))
+		}
 	}
 	if cursor != nil && !sameApp(cursor.app, first.App) {
 		return withScan(errResult(ErrInvalidArgument,
@@ -211,18 +230,31 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 		return readListResult(l, view)
 	}
 
-	// longest is the longest swipe so far, with its settling and read: the
-	// next starts only while the call has time for one like it.
+	// longest is the longest swipe so far, with its settling and read, and
+	// slowest the slowest read of the screen: the next swipe starts only
+	// while the call has time for one like the longest and for the reads
+	// it needs (swipeNeeds), so a slow phone's read is not cut short.
 	var longest time.Duration
 	noNew := 0
+	// unread: the last swipe went out, but the screen it led to was not
+	// read in time; the continuation reads it first.
+	unread := false
+loop:
 	for view.Stop == "" && view.Pages < req.MaxScreens {
-		if left, ok := budgetLeft(ctx); ok && left < max(longest, minBatchStep) {
-			view.Stop, view.Truncated = "deadline", true
-			break
-		}
-		if time.Until(deadline) < longest {
-			view.Stop, view.Truncated = "deadline", true
-			break
+		need := g.swipeNeeds(l, longest, slowest)
+		left, bounded := budgetLeft(ctx)
+		blind := false
+		if (bounded && left < max(need, minBatchStep)) || time.Until(deadline) < need {
+			// No time for a swipe and the read after it. On a phone whose
+			// reads take a good part of the call, the swipe still goes out
+			// while there is time for it, and the next call reads its
+			// screen: else a continuation whose first read takes most of
+			// the call would never get further.
+			if !g.slowRead(slowest) || (bounded && left < minBatchStep) || time.Until(deadline) < minBatchStep {
+				view.Stop, view.Truncated = "deadline", true
+				break
+			}
+			blind = true
 		}
 		a := Action{Tool: "swipe", Direction: req.Direction, DurationMS: readListSwipeMS,
 			list: &listSwipe{area: req.Area, travel: req.ScrollPercent}}
@@ -230,13 +262,35 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 			a.Ref = st.list.Ref
 		}
 		a.list.lane = g.listLane(ctx, l, a, first)
-		// A swipe after this call's first starts from the read that ended
-		// the one before, as a phone_batch step does; the first reads the
-		// screen afresh.
-		c := Call{Device: req.Device, Intent: req.Intent, Progress: req.Progress, reuse: view.Swipes > 0, noAsk: true}
+		// Each swipe starts from the read that ended the one before, or
+		// for the first, from the read of the first screen, as a
+		// phone_batch step does: on a slow phone another read of the same
+		// screen costs as much as the swipe and its read together.
+		c := Call{Device: req.Device, Intent: req.Intent, Progress: req.Progress, reuse: true, noAsk: true, unread: blind}
 		began := time.Now()
 		r := g.act(ctx, l, c, a)
-		longest = max(longest, time.Since(began))
+		if !blind {
+			longest = max(longest, time.Since(began))
+		}
+		switch {
+		case r.unread:
+			view.Swipes++
+			unread = true
+			view.Stop, view.Truncated = "deadline", true
+			break loop
+		case r.outOfTime && r.IsError():
+			// The call ran out of time before the swipe went out.
+			view.Stop, view.Truncated = "deadline", true
+			break loop
+		case r.outOfTime:
+			// It went out, and the phone answered too slowly to read the
+			// screen after it: the continuation reads that screen, and
+			// tells by the overlap whether the swipe skipped anything.
+			view.Swipes++
+			unread = true
+			view.Stop, view.Truncated = "deadline", true
+			break loop
+		}
 		if r.IsError() || r.Status != StatusSettled {
 			// Not sent (refused, an approval open, the person took
 			// over), or it may have been and its result is unknown.
@@ -252,6 +306,11 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 				Message: "A blocked app came to the front while reading the list, so the read stopped there."}, view)
 		}
 		if next, res = g.listScreenAfter(ctx, l, req.OCR, next); res != nil {
+			if res.outOfTime {
+				unread = true
+				view.Stop, view.Truncated = "deadline", true
+				break
+			}
 			view.Stop = readListStop(res)
 			return withScan(res, view)
 		}
@@ -285,14 +344,26 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 		}
 		settled := r.Settle != "timeout"
 		raw := collectListViewport(next, nextList)
+		outOfTime := false
 		for try := 0; !settled && try < 2; try++ {
 			// A live video or animation can keep the pixels moving after
 			// the text is final: the list's own text holding still is
-			// enough.
+			// enough. Not when the call has no time for another read: the
+			// screen as read is kept, and the continuation goes on from it.
+			if left, ok := budgetLeft(ctx); ok && left < slowest {
+				outOfTime = true
+				break
+			}
 			if !sleepCtx(ctx, g.opt.PollInterval, nil) {
 				break
 			}
+			began := time.Now()
 			again, res := g.readListScreenOCR(ctx, l, retry)
+			slowest = max(slowest, time.Since(began))
+			if res != nil && res.outOfTime {
+				outOfTime = true
+				break
+			}
 			if res != nil {
 				view.Stop = readListStop(res)
 				return withScan(res, view)
@@ -318,6 +389,8 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 		first = next
 		g.readProgress(req, start, view)
 		switch {
+		case !settled && outOfTime:
+			view.Stop, view.Truncated = "deadline", true
 		case !settled:
 			view.Stop, view.Truncated = "unsettled", true
 		case st.endsHere():
@@ -333,38 +406,110 @@ func (g *Gateway) readList(ctx context.Context, l *lease, req ReadListRequest) *
 		view.Truncated = true
 		view.Continuation = g.keepCursor(l, st)
 	}
+	if view.Stop == "deadline" && g.slowRead(slowest) {
+		view.notes = append(view.notes, g.slowNote(slowest, view, cursor != nil, unread))
+	} else if unread {
+		view.notes = append(view.notes, "The last swipe went out, but there was no time left to read the screen it led to: the continuation reads it first.")
+	}
 	return readListResult(l, view)
+}
+
+// slowRead reports whether reading the screen once took a tenth of the
+// call's budget or more (4.5 s of 45 s): an iPhone through WebDriverAgent
+// over Wi-Fi took 20–40 s in a field test.
+func (g *Gateway) slowRead(d time.Duration) bool {
+	return g.opt.CallBudget > 0 && d*10 >= g.opt.CallBudget
+}
+
+// swipeNeeds is how much time a read's next swipe needs: as long as its
+// longest swipe so far, with settling and the read after it, and at least
+// the slowest read of the call for each read it takes, so a phone whose
+// reads take most of the call is not cut off in the middle of one. Besides
+// the read after it, a swipe reads the screen it starts from when it
+// cannot start from the last read (the swipe before did not settle), and
+// reads it again with OCR, on phones that read text, when that read has
+// none (ocrForVerdict).
+func (g *Gateway) swipeNeeds(l *lease, longest, slowest time.Duration) time.Duration {
+	g.mu.Lock()
+	after := l.after
+	if time.Since(l.afterAt) >= reuseAge {
+		after = nil
+	}
+	g.mu.Unlock()
+	reads := slowest
+	if after == nil {
+		reads += slowest
+	}
+	if !hasOCR(after) && g.readsText(l.dev) {
+		reads += slowest
+	}
+	return max(longest, reads)
+}
+
+// slowNote says why a read on a slow phone stopped at its deadline, and
+// what the continuation does.
+func (g *Gateway) slowNote(slowest time.Duration, view *ScanView, continued, unread bool) string {
+	took := fmt.Sprintf("Reading the screen took up to %s of the call's %s", human(slowest), human(g.opt.CallBudget))
+	switch {
+	case unread:
+		return took + ", so the last swipe went out without time to read the screen it led to: the continuation reads it first, a screen or two per call."
+	case continued && view.Pages == 0 && view.Swipes == 0:
+		return took + ", which left no time for a swipe, so this call read nothing new. The phone answers too slowly for phone_read_list now: " +
+			"pass continuation to try again, or scroll with phone_swipe and read with phone_observe."
+	}
+	return took + ", so the call fit fewer screens."
 }
 
 // firstListScreen reads the screen the read starts from, under the action
 // lock and once any settle an earlier action owes is waited out, so it
-// never shows the screen from before that action took effect.
-func (g *Gateway) firstListScreen(ctx context.Context, l *lease, req ReadListRequest, cursor *readCursor) (*screen.Screen, *Result) {
+// never shows the screen from before that action took effect. It returns
+// how long the read took, and leaves the read for the first swipe to start
+// from (Call.reuse).
+//
+// With ocr "auto" it reads once with the text OCR finds and the tree
+// misses, as the pipeline reads the screen after each swipe, and drops
+// that text again where the tree says enough about the list (autoOCR).
+// Reading the tree first and again with OCR where it says too little cost
+// two reads, which take 20–40 s each on an iPhone through WebDriverAgent
+// over Wi-Fi.
+func (g *Gateway) firstListScreen(ctx context.Context, l *lease, req ReadListRequest, cursor *readCursor) (*screen.Screen, time.Duration, *Result) {
 	g.readyScreen(ctx, l)
 	d := l.dev
 	if !lockAct(ctx, d) {
 		if ctx.Err() != nil {
-			return nil, errResult(ErrInternal, "The call was cancelled. Nothing was done.")
+			return nil, 0, errResult(ErrInternal, "The call was cancelled. Nothing was done.")
 		}
-		return nil, errResult(ErrInternal, "Another action on the phone was still running when the call's %s ran out. Nothing was done. Observe, then try again.", human(g.opt.CallBudget))
+		return nil, 0, busyOutOfTime(g.opt.CallBudget)
 	}
 	defer d.act.Unlock()
 	if res := g.gate(l, "", true); res != nil {
-		return nil, res
+		return nil, 0, res
 	}
 	g.settleOwed(ctx, d)
-	s, res := g.readListScreen(ctx, l, req.OCR)
+	mode := ocrAuto
+	switch req.OCR {
+	case "off":
+		mode = ocrOff
+	case "all":
+		mode = ocrAll
+	}
+	began := time.Now()
+	s, raw, res := g.readListRaw(ctx, l, mode)
+	took := time.Since(began)
 	if res != nil {
-		return nil, res
+		return nil, took, res
 	}
 	if req.OCR == "auto" {
-		if list, _, _ := startList(s, req, cursor); list.Role == "" || viewportNeedsOCR(s, list) {
-			if s, res = g.readListScreenOCR(ctx, l, ocrAuto); res != nil {
-				return nil, res
-			}
+		if list, _, _ := startList(s, req, cursor, g.policy.IsSystem(s.App)); list.Role != "" {
+			s, _ = autoOCR(s, list)
 		}
 	}
-	return s, nil
+	g.mu.Lock()
+	if !d.settleDue.After(time.Now()) {
+		l.after, l.afterAt = raw, time.Now()
+	}
+	g.mu.Unlock()
+	return s, took, nil
 }
 
 // readListScreen reads the screen as the agent may see it, with the OCR
@@ -379,22 +524,29 @@ func (g *Gateway) readListScreen(ctx context.Context, l *lease, ocr string) (*sc
 }
 
 func (g *Gateway) readListScreenOCR(ctx context.Context, l *lease, mode readOCR) (*screen.Screen, *Result) {
+	view, _, res := g.readListRaw(ctx, l, mode)
+	return view, res
+}
+
+// readListRaw reads the screen, and returns it as the agent may see it and
+// as the driver read it, which the action pipeline judges swipes against.
+func (g *Gateway) readListRaw(ctx context.Context, l *lease, mode readOCR) (view, raw *screen.Screen, res *Result) {
 	if res := g.gate(l, "", false); res != nil {
-		return nil, res
+		return nil, nil, res
 	}
 	raw, err := g.observeOCR(ctx, l.dev, mode)
 	if err != nil {
-		return nil, g.readError(l, err)
+		return nil, nil, g.readError(l, err)
 	}
 	if raw.Locked {
-		return nil, statusResult(StatusLocked, "The phone is locked. Call phone_handoff so the person can unlock it.")
+		return nil, nil, statusResult(StatusLocked, "The phone is locked. Call phone_handoff so the person can unlock it.")
 	}
 	view, rule := g.agentView(l, raw)
 	if rule != "" {
-		return nil, &Result{Status: StatusBlocked, Rule: rule,
+		return nil, nil, &Result{Status: StatusBlocked, Rule: rule,
 			Message: "The foreground app is blocked by the person's rules, so the list is hidden."}
 	}
-	return view, nil
+	return view, raw, nil
 }
 
 // listScreenAfter is the screen a swipe settled on, as the pipeline read
@@ -517,7 +669,23 @@ func (st *readState) take(s *screen.Screen, first bool) bool {
 		view.Pages++
 	}
 	view.Overlap += overlap
-	st.previous, st.raw, st.full = tail(current, readListKeep), tail(raw, readListKeep), full
+	if len(current) > 0 || len(raw) == 0 {
+		// Every line of a screen that did not move stays at its place, so
+		// filterPinned leaves none: the screen before is still the one to
+		// find the next screen's overlap with. A continuation's first read
+		// of the screen the last call ended on is such a screen; forgetting
+		// it took the whole next screen as new.
+		// The next screen overlaps this one at its bottom when the read
+		// goes forward and at its top when it goes back: keep that end.
+		st.previous = tail(current, readListKeep)
+		if req.Direction == "down" && len(current) > readListKeep {
+			st.previous = current[:readListKeep]
+		}
+	}
+	// The whole last screen: the next one is filtered against it, and a
+	// screen that did not move (the end of a page that shows more lines
+	// than readListKeep) must lose every line.
+	st.raw, st.full = raw, full
 	return true
 }
 
@@ -669,21 +837,86 @@ func largestList(s *screen.Screen) screen.Element {
 	return largest
 }
 
+// listGuess is where a read found its list when no element marks one: the
+// area to read as a scroll_area, and whether it is the screen's content
+// (contentArea) rather than a column of rows.
+type listGuess struct {
+	area    *screen.Rect
+	content bool
+}
+
 // startList finds the list a read starts on (listOn). With no ref, scroll
 // area or continuation, on a screen with no list or scrollable element
-// big enough, it falls back to a column of rows (rowColumn), returned
-// with its bounds as the area to read as a scroll_area: iOS 27 lists
-// Settings' rows but no element for the list that holds them (GitHub
-// issue #148).
-func startList(s *screen.Screen, req ReadListRequest, cursor *readCursor) (screen.Element, *screen.Rect, *Result) {
+// big enough, it falls back to a column of rows (rowColumn), and then,
+// outside launchers and system UI (system), to the screen's content
+// (contentArea), returned as the area to read as a scroll_area: iOS 27
+// lists Settings' rows but no element for the list that holds them
+// (GitHub issue #148), and a web view through WebDriverAgent shows its
+// page's text but no element for the view or its scrolling.
+func startList(s *screen.Screen, req ReadListRequest, cursor *readCursor, system bool) (screen.Element, listGuess, *Result) {
 	list, res := listOn(s, req.Ref, cursorList(cursor), req.Area)
 	if res != nil || list.Role != "" || req.Ref > 0 || req.Area != nil || cursor != nil {
-		return list, nil, res
+		return list, listGuess{}, res
 	}
 	if r, ok := rowColumn(s); ok {
-		return screen.Element{Role: screen.RoleList, Bounds: r}, &r, nil
+		return screen.Element{Role: screen.RoleList, Bounds: r}, listGuess{area: &r}, nil
 	}
-	return list, nil, nil
+	if system {
+		return list, listGuess{}, nil
+	}
+	if r, ok := contentArea(s); ok {
+		return screen.Element{Role: screen.RoleList, Bounds: r}, listGuess{area: &r, content: true}, nil
+	}
+	return list, listGuess{}, nil
+}
+
+// contentArea is the part of a screen a read scrolls when nothing on it
+// marks a list: the screen's width between its top and bottom eighths,
+// where the status, navigation, tab and tool bars lie, less the keyboard
+// and any system bar the driver reports over it. A web view on an iPhone
+// through WebDriverAgent lists its page's text and links but no element
+// for the view or its scrolling, and lines of differing width make no
+// column of rows (a bank's bill page in a field test). It counts only when
+// at least readListMinRows rows of text or links lie in it, from the tree
+// or OCR, spread over half its height or more: a page of text, not a grid
+// of buttons, a dialog, a short form or an empty screen.
+func contentArea(s *screen.Screen) (screen.Rect, bool) {
+	if s == nil || s.Width <= 0 || s.Height <= 0 {
+		return screen.Rect{}, false
+	}
+	area, _ := clearPart(s, screen.Rect{X: 0, Y: s.Height / 8, W: s.Width, H: s.Height * 3 / 4})
+	if area.W < 100 || area.H < 200 || area.W*area.H*readListMinArea < s.Width*s.Height {
+		return screen.Rect{}, false
+	}
+	var lines []screen.Rect
+	for _, e := range s.Elements {
+		b := e.Bounds
+		if e.Hidden || b.Empty() || strings.TrimSpace(e.Label) == "" || !area.Contains(b.Center()) {
+			continue
+		}
+		if e.Source == screen.SourceOCR || e.Role == screen.RoleText || e.Role == screen.RoleLink {
+			lines = append(lines, b)
+		}
+	}
+	sort.SliceStable(lines, func(i, j int) bool { return lines[i].Center().Y < lines[j].Center().Y })
+	// One row each: a label and its value side by side count once.
+	var rows []screen.Rect
+	for _, b := range lines {
+		if n := len(rows); n > 0 {
+			last := rows[n-1]
+			if b.Center().Y-last.Center().Y < min(b.H, last.H)/2 {
+				continue
+			}
+		}
+		rows = append(rows, b)
+	}
+	if len(rows) < readListMinRows {
+		return screen.Rect{}, false
+	}
+	if spread := rows[len(rows)-1].Center().Y - rows[0].Center().Y; spread*2 < area.H {
+		return screen.Rect{}, false
+	}
+	return area, true
 }
 
 // readListMinRows is how many rows a column needs to be read as a list.
@@ -857,6 +1090,9 @@ func readListResult(l *lease, view *ScanView) *Result {
 	if view.gap != "" {
 		res.Message += " " + view.gap
 	}
+	for _, note := range view.notes {
+		res.Message += " " + note
+	}
 	if view.Continuation != "" {
 		res.Message += " Pass continuation to read on from here."
 	}
@@ -922,14 +1158,20 @@ func readListCanContinue(stop string) bool {
 // keepCursor keeps where the read stopped on the lease and returns the
 // opaque continuation that names it.
 func (g *Gateway) keepCursor(l *lease, st *readState) string {
+	return g.putCursor(l, &readCursor{app: st.app, list: st.id, area: st.req.Area, direction: st.req.Direction,
+		page:     st.view.StartScreen + st.view.Pages,
+		previous: append([]viewportLine(nil), st.previous...),
+		raw:      append([]viewportLine(nil), st.raw...),
+		pinned:   append([]viewportLine(nil), st.pinned...)})
+}
+
+// putCursor keeps c on the lease for readListCursorLife under a new opaque
+// id, and returns the id.
+func (g *Gateway) putCursor(l *lease, c *readCursor) string {
 	var b [12]byte
 	_, _ = rand.Read(b[:])
 	id := "rl_" + base64.RawURLEncoding.EncodeToString(b[:])
-	c := &readCursor{app: st.app, list: st.id, area: st.req.Area, direction: st.req.Direction,
-		page:     st.view.StartScreen + st.view.Pages,
-		previous: append([]viewportLine(nil), st.previous...),
-		pinned:   append([]viewportLine(nil), st.pinned...),
-		expires:  time.Now().Add(readListCursorLife)}
+	c.expires = time.Now().Add(readListCursorLife)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if l.readLists == nil {

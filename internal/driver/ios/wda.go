@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	goios "github.com/danielpaulus/go-ios/ios"
@@ -50,8 +51,14 @@ type wdaClient struct {
 	// returned func after it: it counts the phone as used (rest_wda.go).
 	enter func() func()
 
-	mu  sync.Mutex
-	sid string // the WebDriver session
+	mu    sync.Mutex
+	sid   string // the WebDriver session
+	depth int    // snapshotMaxDepth as last set in the session; 0 none yet
+
+	// inputAt is when the last request that may change the screen went
+	// out (anything but a read or a setting), unix nanos: a tree read
+	// that began before it shows the screen from before (wda_tree.go).
+	inputAt atomic.Int64
 }
 
 // wdaDialError is a connection to WDA's port on the phone that could not be
@@ -183,7 +190,16 @@ func (c *wdaClient) call(ctx context.Context, hc *http.Client, method, path stri
 	if c.enter != nil {
 		defer c.enter()()
 	}
+	if isInput(method, path) {
+		c.inputAt.Store(time.Now().UnixNano())
+	}
 	return c.send(ctx, hc, method, path, body, out)
+}
+
+// isInput reports whether a request may change what the screen shows:
+// anything but a read (GET), a new session or its settings.
+func isInput(method, path string) bool {
+	return method != http.MethodGet && method != http.MethodDelete && path != "/session" && !strings.HasSuffix(path, "/appium/settings")
 }
 
 // send is call without counting a use, for ending the session when idle.
@@ -292,10 +308,11 @@ func (c *wdaClient) waitReady(ctx context.Context) (wdaStatus, error) {
 }
 
 // wdaSettings are the session settings Pinky uses. Snapshots stop at a
-// depth that covers real apps; the MJPEG picture is the screen at half size,
+// depth that covers real apps (less for an app whose tree is too slow,
+// wda_tree.go); the MJPEG picture is the screen at half size,
 // enough for the mirror and light for the encoder.
 var wdaSettings = map[string]any{
-	"snapshotMaxDepth":             60,
+	"snapshotMaxDepth":             wdaDepth,
 	"mjpegServerFramerate":         15,
 	"mjpegServerScreenshotQuality": 50,
 	"mjpegScalingFactor":           50,
@@ -344,10 +361,39 @@ func (c *wdaClient) session(ctx context.Context) (string, error) {
 		return "", errors.New("WebDriverAgent: no session id")
 	}
 	c.sid = out.SessionID
+	c.depth = 0
 	if err := c.call(ctx, c.hc, http.MethodPost, "/session/"+c.sid+"/appium/settings", map[string]any{"settings": wdaSettings}, nil); err != nil {
 		return "", err
 	}
+	c.depth = wdaDepth
 	return c.sid, nil
+}
+
+// wdaDepth is the snapshot depth of wdaSettings, which reads use unless
+// their app's tree is too slow (wda_tree.go).
+const wdaDepth = 60
+
+// setDepth sets how deep WDA's snapshots go, unless the session has it
+// already.
+func (c *wdaClient) setDepth(ctx context.Context, depth int) error {
+	sid, err := c.session(ctx)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	same := c.sid == sid && c.depth == depth
+	c.mu.Unlock()
+	if same {
+		return nil
+	}
+	err = c.do(ctx, c.hc, http.MethodPost, "/appium/settings", map[string]any{"settings": map[string]any{"snapshotMaxDepth": depth}}, nil)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.depth = 0 // not known (failed, or a new session took it): set it again next time
+	if err == nil && c.sid == sid {
+		c.depth = depth
+	}
+	return err
 }
 
 // do runs a session request, starting a new session once when WDA lost its
@@ -435,12 +481,12 @@ func (b *wdaBool) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// source reads the page source. The tree of a busy screen takes seconds
+// on a phone, and tens of seconds on some (wda_tree.go): the caller bounds
+// it.
 func (c *wdaClient) source(ctx context.Context) (*wdaNode, error) {
 	var root wdaNode
-	// The tree of a busy screen takes seconds on a phone.
-	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	if err := c.do(cctx, c.long, http.MethodGet, "/source?format=json", nil, &root); err != nil {
+	if err := c.do(ctx, c.long, http.MethodGet, "/source?format=json", nil, &root); err != nil {
 		return nil, err
 	}
 	return &root, nil

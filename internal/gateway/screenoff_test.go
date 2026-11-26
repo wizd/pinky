@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -15,6 +16,9 @@ import (
 // otherwise seem to be connecting. Wake turns the screen on, and the
 // phone is idle again.
 func TestWatchedScreenOffShows(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("needs ffmpeg for the demo phone's video")
+	}
 	saved := idleLockEvery
 	idleLockEvery = 10 * time.Millisecond
 	t.Cleanup(func() { idleLockEvery = saved })
@@ -59,6 +63,9 @@ func TestWatchedScreenOffShows(t *testing.T) {
 // mirror watches, and a locked phone says Locked, not Screen off: the lock
 // screen shows when it wakes.
 func TestScreenOffNeedsWatcherAndNoLock(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("needs ffmpeg for the demo phone's video")
+	}
 	saved := idleLockEvery
 	idleLockEvery = 10 * time.Millisecond
 	t.Cleanup(func() { idleLockEvery = saved })

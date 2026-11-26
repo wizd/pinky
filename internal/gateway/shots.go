@@ -317,15 +317,22 @@ func (g *Gateway) writeShotLocked(p *bgShot) string {
 		return p.id
 	}
 	img := p.img
-	var boxes []image.Rectangle
+	// Password and code fields with text in them (secret.go), whatever
+	// else covered the picture.
+	b := img.Bounds()
+	boxes, unplaced := credentialPlaces(b.Dx(), b.Dy(), p.reads...)
+	if unplaced {
+		p.img = nil
+		return ""
+	}
 	if !p.covered {
-		b := img.Bounds()
-		var unplaced bool
 		// Blocked apps' notifications and cards (hidden.go).
-		if boxes, unplaced = hiddenPlaces(b.Dx(), b.Dy(), p.reads...); unplaced {
+		var hidden []image.Rectangle
+		if hidden, unplaced = hiddenPlaces(b.Dx(), b.Dy(), p.reads...); unplaced {
 			p.img = nil
 			return ""
 		}
+		boxes = append(boxes, hidden...)
 		if g.policy.HideCodes() {
 			var codes []image.Rectangle
 			if codes, unplaced = codePlaces(b.Dx(), b.Dy(), p.reads...); unplaced {

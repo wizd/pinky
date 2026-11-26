@@ -280,6 +280,9 @@ func needShort(n gateway.NeedView) string {
 	case gateway.NeedUnlock:
 		return locales.FlyoutLocked()
 	case gateway.NeedSetup:
+		if lostSetup(n) {
+			return locales.FlyoutLost()
+		}
 		return locales.FlyoutPasscode()
 	}
 	return t

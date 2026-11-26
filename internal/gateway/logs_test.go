@@ -317,6 +317,23 @@ func TestLinesResultListening(t *testing.T) {
 	}
 }
 
+// Lines the driver left out as noise of Pinky's own screen reads are
+// counted, with the filter that shows them.
+func TestLinesResultHidden(t *testing.T) {
+	now := time.Date(2026, 11, 9, 15, 0, 0, 0, time.Local)
+	since := now.Add(-10 * time.Minute)
+	lr := driver.LogResult{From: since, Hidden: 11424, HiddenTag: "com.apple.CFBundle:strings",
+		Lines: []driver.LogLine{{Time: now.Add(-time.Minute), PID: 7, Level: driver.LevelInfo, Tag: "cc.example.app:sync", Text: "sync started"}}}
+	res := linesResult(lr, "Example", since, now, true)
+	if !strings.HasPrefix(res.Message, "1 log line of Example since 14:50:00") ||
+		!strings.Contains(res.Message, `11424 lines that Pinky's own screen reads make the system write in the app's log (com.apple.CFBundle:strings) left out, not counted in limit; filter "com.apple.CFBundle:strings" shows them.`) {
+		t.Fatalf("hidden: %q", res.Message)
+	}
+	if res := linesResult(driver.LogResult{From: since}, "Example", since, now, true); strings.Contains(res.Message, "screen reads") {
+		t.Fatalf("nothing hidden: %q", res.Message)
+	}
+}
+
 func TestParseSince(t *testing.T) {
 	now := time.Date(2026, 11, 9, 15, 4, 5, 0, time.Local)
 	task := now.Add(-time.Hour)

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DIYgod/pinky/internal/driver"
 	goios "github.com/danielpaulus/go-ios/ios"
 	"github.com/danielpaulus/go-ios/ios/xpc"
 	"github.com/google/uuid"
@@ -36,6 +37,13 @@ func dialCoreDevice(entry goios.DeviceEntry, name string) (*cdService, error) {
 		return nil, err
 	}
 	return &cdService{name: name, devID: uuid.New().String(), entry: entry, conn: conn}, nil
+}
+
+// coreDevice is a CoreDevice service that dials on its first request, so
+// that invokeRepeatable also covers a connection that drops while it is
+// set up.
+func coreDevice(entry goios.DeviceEntry, name string) *cdService {
+	return &cdService{name: name, devID: uuid.New().String(), entry: entry}
 }
 
 // dialTimeout bounds connecting to a service. A service that is stuck on the
@@ -98,7 +106,7 @@ func (s *cdService) invoke(ctx context.Context, feature, action string, input ma
 		}
 		c, err := dial(s.entry, s.name)
 		if err != nil {
-			return nil, err
+			return nil, noReply(ctx, err, err)
 		}
 		s.conn = c
 	}
@@ -113,12 +121,16 @@ func (s *cdService) invoke(ctx context.Context, feature, action string, input ma
 	req := coreDeviceRequest(s.devID, feature, action, input)
 	if err := conn.Send(req, xpc.HeartbeatRequestFlag); err != nil {
 		s.drop()
-		return nil, fmt.Errorf("%s: send %s: %w", s.name, feature, ctxErr(ctx, err))
+		return nil, noReply(ctx, err, fmt.Errorf("%s: send %s: %w", s.name, feature, ctxErr(ctx, err)))
 	}
 	resp, err := conn.ReceiveOnServerClientStream()
 	if err != nil {
 		s.drop()
-		return nil, fmt.Errorf("%s: %s: %w", s.name, feature, ctxErr(ctx, err))
+		wrapped := fmt.Errorf("%s: %s: %w", s.name, feature, ctxErr(ctx, err))
+		if !strings.Contains(err.Error(), replyHeaderUnread) {
+			return nil, wrapped // part of a reply came: the phone answered
+		}
+		return nil, noReply(ctx, err, wrapped)
 	}
 	if out, ok := resp["CoreDevice.output"].(map[string]any); ok {
 		return out, nil
@@ -127,6 +139,59 @@ func (s *cdService) invoke(ctx context.Context, feature, action string, input ma
 		return nil, decodeCoreDeviceError(e)
 	}
 	return nil, fmt.Errorf("%s: unexpected reply to %s: %v", s.name, feature, resp)
+}
+
+// replyHeaderUnread is how go-ios starts an error from reading a reply of
+// which not even the first field, its magic number, arrived.
+const replyHeaderUnread = "failed to read magic number"
+
+// noReplyError is an exchange that failed because the connection closed
+// before any of the reply arrived: while it was dialled, while the request
+// was sent, or before the reply's header. The phone may have got the
+// request, so only a request that is safe to repeat is sent again.
+type noReplyError struct{ err error }
+
+func (e *noReplyError) Error() string { return e.err.Error() }
+func (e *noReplyError) Unwrap() error { return e.err }
+
+// noReply marks wrapped as a noReplyError when cause is the connection
+// closing and ctx did not close it.
+func noReply(ctx context.Context, cause, wrapped error) error {
+	if ctx.Err() != nil || !isClosedErr(cause) {
+		return wrapped
+	}
+	return &noReplyError{wrapped}
+}
+
+// redialPause is how long invokeRepeatable waits before it sends a request
+// again: a service the phone just restarted (another CoreDevice client,
+// such as devicectl installing an app, can make it do that) may refuse the
+// first connection after.
+const redialPause = 300 * time.Millisecond
+
+// invokeRepeatable is invoke for a request that is safe to repeat, such as
+// launching an app (a running one only comes to the front) or a read: when
+// the connection closed before the phone answered, it drops the connection
+// and sends the request once more on a new one. When that fails the same
+// way, the error wraps driver.ErrConnDropped.
+func (s *cdService) invokeRepeatable(ctx context.Context, feature, action string, input map[string]any) (map[string]any, error) {
+	out, err := s.invoke(ctx, feature, action, input)
+	var nr *noReplyError
+	if !errors.As(err, &nr) {
+		return out, err
+	}
+	t := time.NewTimer(redialPause)
+	select {
+	case <-t.C:
+	case <-ctx.Done():
+		t.Stop()
+		return nil, err
+	}
+	out, err = s.invoke(ctx, feature, action, input)
+	if errors.As(err, &nr) {
+		return nil, fmt.Errorf("%w, also when tried again: %w", driver.ErrConnDropped, err)
+	}
+	return out, err
 }
 
 // coreDeviceRequest builds a CoreDevice invocation. It always announces the

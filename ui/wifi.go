@@ -46,6 +46,13 @@ type (
 	deviceServiceRestarter interface {
 		RestartDeviceService(ctx context.Context, deviceID, reason string) error
 	}
+	// quietRestarter lets Pinky restart the device service without a
+	// password, by itself when it lost a phone an agent uses
+	// (gateway.QuietRestart, SetQuietRestart).
+	quietRestarter interface {
+		QuietRestart() (supported, allowed bool)
+		SetQuietRestart(ctx context.Context, on bool, reason string) error
+	}
 )
 
 // foundState is the person's choices on their way to the gateway, by phone,
@@ -59,6 +66,11 @@ type foundState struct {
 	// trustAsking: the dialog that asks before trusting trustFor.
 	trustAsking bool
 	trustFor    string
+	// quiet is whether the person allowed restarts without a password,
+	// and quietOK whether the gateway can do them at all, read once
+	// (quietKnown) and after each change, which quietBusy is on its way
+	// to the gateway (Settings › Phones).
+	quiet, quietOK, quietKnown, quietBusy bool
 }
 
 // foundOnWiFi reports whether a phone waits for the person to say whether
@@ -382,20 +394,34 @@ func (a *app) restartControls(c *mg.Context, d gateway.DeviceView, center bool) 
 			t.TextAlign(mg.Center)
 		}
 	}
-	if _, ok := a.api.(deviceServiceRestarter); ok && guideOS == "darwin" {
-		mg.Row(c).Gap(8).AlignItems(mg.Center).Children(func() {
-			b := button(c.Key("restart-"+d.Info.ID), locales.LostRestart(), btnOpt{kind: btnPrimary}).Disabled(a.found.restarting)
-			if b.Clicked() {
-				a.found.asking, a.found.askFor = true, d.Info.ID
-			}
-			if a.found.restarting {
-				spinner(c)
-			}
-		})
-		note(locales.LostRestartNote())
+	if a.restartButton(c, d) {
+		if a.quietAllowed() {
+			note(locales.LostRestartNoteQuiet())
+		} else {
+			note(locales.LostRestartNote())
+		}
 	}
 	note(locales.LostManual())
 	a.restartDialog(c, d)
+}
+
+// restartButton is the restart button, which asks first (restartDialog),
+// where the gateway can restart the device service; it reports whether it
+// showed.
+func (a *app) restartButton(c *mg.Context, d gateway.DeviceView) bool {
+	if _, ok := a.api.(deviceServiceRestarter); !ok || guideOS != "darwin" {
+		return false
+	}
+	mg.Row(c).Gap(8).AlignItems(mg.Center).Children(func() {
+		b := button(c.Key("restart-"+d.Info.ID), locales.LostRestart(), btnOpt{kind: btnPrimary}).Disabled(a.found.restarting)
+		if b.Clicked() {
+			a.found.asking, a.found.askFor = true, d.Info.ID
+		}
+		if a.found.restarting {
+			spinner(c)
+		}
+	})
+	return true
 }
 
 // restartDialog asks before restarting the device service for a phone.
@@ -404,7 +430,11 @@ func (a *app) restartDialog(c *mg.Context, d gateway.DeviceView) {
 	if !st.asking || st.askFor != d.Info.ID {
 		return
 	}
-	if mg.AlertDialog(c.Key("restart-ask"), &st.asking, locales.LostConfirmTitle(), locales.LostConfirmMessage(d.Info.Name),
+	msg := locales.LostConfirmMessage(d.Info.Name)
+	if a.quietAllowed() {
+		msg = locales.LostConfirmMessageQuiet(d.Info.Name)
+	}
+	if mg.AlertDialog(c.Key("restart-ask"), &st.asking, locales.LostConfirmTitle(), msg,
 		locales.SettingsCancel(), locales.LostConfirmButton()) == 1 {
 		a.restartDeviceService(d)
 	}
@@ -436,6 +466,65 @@ func (a *app) restartDeviceService(d gateway.DeviceView) {
 			case errors.Is(err, driver.ErrCanceled):
 			default:
 				a.toasts = append(a.toasts, locales.LostRestartFailed(err.Error()))
+			}
+		})
+	}()
+}
+
+// quietRestartShown reports whether Settings › Phones shows the switch that
+// lets Pinky restart the device service without a password: on a Mac whose
+// gateway can, while iPhones are used over Wi-Fi or the person allowed it
+// (so they can take it back).
+func (a *app) quietRestartShown() bool {
+	if _, ok := a.api.(quietRestarter); !ok || guideOS != "darwin" {
+		return false
+	}
+	allowed := a.quietAllowed()
+	return a.found.quietOK && (a.settings.IOSWiFi || allowed)
+}
+
+// quietAllowed reports whether the person allowed restarts of the device
+// service without a password, as last read.
+func (a *app) quietAllowed() bool {
+	st := &a.found
+	r, ok := a.api.(quietRestarter)
+	if !ok {
+		return false
+	}
+	if !st.quietKnown {
+		st.quietOK, st.quiet = r.QuietRestart()
+		st.quietKnown = true
+	}
+	return st.quiet
+}
+
+// quietRestartRow is the switch in Settings › Phones. Turning it either way
+// asks for an administrator's password once; the switch shows the person's
+// choice meanwhile, and what the system holds once the gateway answers.
+func (a *app) quietRestartRow(c *mg.Context, last bool) {
+	st := &a.found
+	on := a.quietAllowed()
+	if !a.toggleRowFor(c, "quiet-restart", locales.SettingsPhonesQuietRestart(), locales.SettingsPhonesQuietRestartDesc(), last, &on) || st.quietBusy {
+		return
+	}
+	r, ok := a.api.(quietRestarter)
+	if !ok {
+		return
+	}
+	st.quiet, st.quietBusy = on, true
+	reason := locales.SettingsPhonesQuietRestartOffReason()
+	if on {
+		reason = locales.SettingsPhonesQuietRestartOnReason()
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(a.ctx, 5*time.Minute) // the person types a password
+		defer cancel()
+		err := r.SetQuietRestart(ctx, on, reason)
+		supported, allowed := r.QuietRestart()
+		a.post(func() {
+			st.quietOK, st.quiet, st.quietKnown, st.quietBusy = supported, allowed, true, false
+			if err != nil && !errors.Is(err, driver.ErrCanceled) {
+				a.toasts = append(a.toasts, locales.SettingsPhonesQuietRestartFailed(err.Error()))
 			}
 		})
 	}()

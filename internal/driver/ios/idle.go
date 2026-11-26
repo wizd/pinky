@@ -12,6 +12,8 @@ import (
 // shared (UIScreen.isCaptured), shows the screen-sharing indicator and
 // keeps the camera and microphone from apps, and some banking apps refuse
 // to run at all (DBS digibank, China Merchants Bank; seen in the field).
+// A task that opens one of them, or the Camera, moves to the helper
+// (internal/gateway/taskconn.go).
 // HID input needs the stream, so it cannot stay off while Pinky types or
 // taps, but nothing needs it while nobody watches the phone in Pinky,
 // nothing records it and Pinky sends no input: then it stops, and the next

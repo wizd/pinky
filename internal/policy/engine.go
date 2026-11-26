@@ -194,12 +194,22 @@ func (e *Engine) Evaluate(in Input) Verdict {
 	kinds := detect(in, cats)
 	system := contains(cats, CatSystem)
 
+	credAsk := false
 	if in.Op == OpType && IsCredentialField(in.Target) && !(in.Virtual && e.file.VirtualCredentials) {
-		reason := "Pinky never types into password or one-time-code fields; call phone_handoff so the person can fill it."
-		if in.Virtual {
-			reason += " On a virtual phone the person may allow it in Pinky's Settings › Safety."
+		switch {
+		case in.Virtual:
+			return Verdict{Decision: Deny, Rule: RuleCredentials, Kinds: kinds,
+				Reason: "Pinky does not type into password or one-time-code fields unless the person allows it; call phone_handoff so the person can fill it. On a virtual phone the person may allow it in Pinky's Settings › Safety."}
+		case !e.file.PhoneCredentials:
+			return Verdict{Decision: Deny, Rule: RuleCredentials, Kinds: kinds,
+				Reason: "Pinky does not type into password or one-time-code fields unless the person allows it; call phone_handoff so the person can fill it. The person may allow it on phones in Pinky's Settings › Safety, and then approves it in each app."}
+		case PhoneLockScreen(in, cats):
+			return Verdict{Decision: Deny, Rule: RuleCredentials, Kinds: kinds,
+				Reason: "This field may take the phone's own passcode, which Pinky never types, whatever its settings; call phone_handoff so the person can enter it."}
 		}
-		return Verdict{Decision: Deny, Rule: RuleCredentials, Kinds: kinds, Reason: reason}
+		// A phone where the person allows it: the person approves, or
+		// always allows it in this app.
+		credAsk = true
 	}
 	if in.Op == OpLaunch && in.LaunchURL {
 		if why, refused := LinkRefused(in.Link); refused {
@@ -250,6 +260,12 @@ func (e *Engine) Evaluate(in Input) Verdict {
 			v.Decision, v.Rule = Ask, RuleTaskApps
 			v.Reason = askReason(v, app)
 		}
+	}
+	if credAsk && v.Decision <= Ask {
+		// The credentials rule asks first, so the approval names it.
+		asks = append([]string{RuleCredentials}, asks...)
+		v.Decision, v.Rule = Ask, RuleCredentials
+		v.Reason = askReason(v, app)
 	}
 	if v.Decision == Ask {
 		v.Asks = asks
@@ -303,8 +319,11 @@ func readOnlyWhy(in Input, global bool) (why, fix string) {
 
 // askReason explains an Ask verdict.
 func askReason(v Verdict, app screen.App) string {
-	if v.Rule == RuleTaskApps {
+	switch v.Rule {
+	case RuleTaskApps:
 		return fmt.Sprintf("Typing into %s, which is not in this task's app list.", appName(app))
+	case RuleCredentials:
+		return fmt.Sprintf("Typing into a password or one-time-code field in %s asks the person, who allows it on phones in Pinky's Settings › Safety. Type only what the task gives you.", appName(app))
 	}
 	return reason(v, app)
 }

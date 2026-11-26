@@ -14,8 +14,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var state: CoreState?
     @Published private(set) var reason: String?
     /// The VPN that reflects the phone's own connections: Pinky's own
-    /// packet tunnel, or LocalDevVPN in a build without one.
+    /// packet tunnel, or LocalDevVPN in a build without one, on once its
+    /// tunnel is up with Pinky's address or the core reaches the phone.
     @Published private(set) var vpn = VPN.off
+    /// LocalDevVPN's tunnel as the interfaces show it, in a build without a
+    /// tunnel of its own (watchTunnel); .off in the full build.
+    @Published private(set) var localDevVPN = LocalDevVPN.Status.off
     /// A refused start or decide, in words, until the next action.
     @Published var problem: String?
     /// The five latest tasks that ended, for the task screen's Activity.
@@ -58,7 +62,8 @@ final class AppModel: ObservableObject {
         #if DEBUG
         if demo {
             paired = Demo.paired
-            vpn = Demo.paired ? .on : .off
+            vpn = Demo.vpnOn ? .on : .off
+            if inApp { localDevVPN = Demo.localDevVPN }
             state = Demo.state
             Task { await loadRecent() }
             return
@@ -70,6 +75,8 @@ final class AppModel: ObservableObject {
         }
         Task { await loadManager() }
         #else
+        checkTunnel()
+        watchTunnel()
         Task { await startInApp() }
         #endif
         listen()
@@ -252,6 +259,41 @@ final class AppModel: ObservableObject {
 
     func disconnect() {}
 
+    /// Looks at the interfaces every two seconds while Pinky is in front,
+    /// where its first screen waits for LocalDevVPN, which the person turns
+    /// on in another app; coming to the front looks at once (phaseChanged),
+    /// and going to the background stops it.
+    private var watch: Task<Void, Never>?
+
+    private func watchTunnel() {
+        guard watch == nil else { return }
+        watch = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self else { return }
+                if self.active { self.checkTunnel() }
+            }
+        }
+    }
+
+    private func stopWatchingTunnel() {
+        watch?.cancel()
+        watch = nil
+    }
+
+    /// The VPN is on once LocalDevVPN's tunnel is up with the phone at
+    /// Pinky's address, or the core reached the phone anyway (a tunnel set
+    /// up otherwise that works). A tunnel that just came up has the core
+    /// try again at once rather than after its back-off.
+    private func checkTunnel() {
+        let s = LocalDevVPN.status()
+        if s != localDevVPN { syslog.log("pinky LocalDevVPN: \(String(describing: s), privacy: .public)") }
+        let came = s != localDevVPN && s != .off
+        localDevVPN = s
+        vpn = s == .on || state?.device.ready == true ? .on : .off
+        if came && PinkyCore.isStarted { PinkyRetry() }
+    }
+
     private func startInApp() async {
         guard !PinkyCore.isStarted else { return }
         let p = Pairing.load()
@@ -262,7 +304,7 @@ final class AppModel: ObservableObject {
             return
         }
         PinkyUIActive(active ? 1 : 0)
-        vpn = .on
+        checkTunnel()
         let n = Notifier()
         n.start()
         notifier = n
@@ -324,6 +366,9 @@ final class AppModel: ObservableObject {
         let was = state
         state = st
         self.reason = reason
+        #if NO_TUNNEL
+        if !demo { checkTunnel() }
+        #endif
         keepAlive(isBusy)
         updateActivity(st)
         if was == nil || (was?.agent?.running == true && st.agent?.running != true) {
@@ -383,9 +428,15 @@ final class AppModel: ObservableObject {
         DarwinNote.post(active ? Pinky.uiOnNote : Pinky.uiOffNote)
         if inApp && PinkyCore.isStarted { PinkyUIActive(active ? 1 : 0) }
         keepAlive(isBusy)
+        #if NO_TUNNEL
+        if p == .background { stopWatchingTunnel() }
+        #endif
         if p == .active {
             #if !NO_TUNNEL
             vpnChanged()
+            #else
+            checkTunnel()
+            watchTunnel()
             #endif
             listen()
             if let st = state { updateActivity(st) }

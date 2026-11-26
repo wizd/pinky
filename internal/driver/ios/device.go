@@ -13,6 +13,7 @@ import (
 
 	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/screen"
+	goios "github.com/danielpaulus/go-ios/ios"
 )
 
 // inputSettle is how long the device needs after a stream starts before it
@@ -100,6 +101,12 @@ type Device struct {
 
 	// startFn starts a stream of display id (tests); nil: startMedia.
 	startFn func(ctx context.Context, l *link, id int) (*media, error)
+	// hidFn opens the HID session on a stream (tests); nil: newHIDSession.
+	hidFn func(goios.DeviceEntry) (*hidSession, error)
+	// probeStrikes counts the streams in a row that a probe found broken
+	// young (probeYoung): the next waits longer before a probe may fail
+	// it (probeHold). Guarded by mu.
+	probeStrikes int
 
 	raxDialMu   sync.Mutex // one remoteAXService dial at a time (raxReady)
 	padReadMu   sync.Mutex // one read of a screenshot for the passcode pad at a time (padshot.go)
@@ -287,6 +294,15 @@ func (d *Device) startStream(ctx context.Context) error {
 	d.mu.Lock()
 	old, oldHID := d.m, d.hid
 	d.m, d.hid = nil, nil
+	if old != nil {
+		var pe *probeError
+		if errors.As(old.Err(), &pe) && pe.age < probeYoung {
+			d.probeStrikes++
+		} else {
+			d.probeStrikes = 0
+		}
+	}
+	hold := probeHold(d.probeStrikes)
 	d.mu.Unlock()
 	if oldHID != nil {
 		oldHID.Close()
@@ -296,10 +312,16 @@ func (d *Device) startStream(ctx context.Context) error {
 	}
 	sd := streamDisplay{
 		start: func(ctx context.Context, id int) (*media, error) {
+			start := startMedia
 			if d.startFn != nil {
-				return d.startFn(ctx, d.link(), id)
+				start = d.startFn
 			}
-			return startMedia(ctx, d.link(), id)
+			m, err := start(ctx, d.link(), id)
+			if m != nil {
+				m.setLog(d.log)
+				m.setProbe(&d.lastInput, hold, d.screenOffNow)
+			}
+			return m, err
 		},
 		stop:   stop,
 		gone:   d.linkGone,
@@ -311,7 +333,11 @@ func (d *Device) startStream(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	h, err := newHIDSession(d.link().entry)
+	newHID := newHIDSession
+	if d.hidFn != nil {
+		newHID = d.hidFn
+	}
+	h, err := newHID(d.link().entry)
 	if err != nil {
 		stop(m)
 		return err

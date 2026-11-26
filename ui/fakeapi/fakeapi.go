@@ -145,6 +145,8 @@ type API struct {
 	wifiOff    bool             // iPhones over Wi-Fi turned off (wifi.go)
 	restarts   []string         // RestartDeviceService reasons (wifi.go)
 	restartErr error
+	quiet      bool          // restarts of the device service without a password allowed (wifi.go)
+	quietWhy   []string      // SetQuietRestart reasons
 	trusted    []string      // TrustPhone's phones (wifi.go)
 	dlErr      error         // what DownloadDiskImage fails with (iphone.go)
 	dlHold     chan struct{} // closed when held downloads go on (HoldDownload)

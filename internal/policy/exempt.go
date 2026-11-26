@@ -15,9 +15,9 @@ import (
 // Dinely; another commit there, such as Delete, still asks.
 //
 // An exemption only lifts asks. It never lifts a deny (blocked apps,
-// finance and password apps, credential fields), read-only mode, an
-// agent's scope or a task's app list, and it does not apply while every
-// action asks (PresetEvery). The rules file keeps exemptions under
+// finance and password apps, credential fields where they are refused),
+// read-only mode, an agent's scope or a task's app list, and it does not
+// apply while every action asks (PresetEvery). The rules file keeps exemptions under
 // always_allow; Settings › Safety lists them.
 type Exemption struct {
 	// Rule is the rule the approval named, such as "Payments". The
@@ -70,10 +70,13 @@ func (x Exemption) sameApp(y Exemption) bool {
 
 // exemptable reports whether "Always allow" may lift a rule: any rule that
 // asks, but not a task's app list, nor PresetEvery's catch-all, nor the
-// built-in rules that deny.
+// built-in rules that deny. The credentials rule asks only on a phone
+// where the person allows it (File.PhoneCredentials); where it denies, an
+// exemption has nothing to lift, so turning the switch off takes them all
+// back.
 func exemptable(rule string) bool {
 	switch rule {
-	case "", RuleTaskApps, RuleEvery, RuleCredentials, RuleReadOnly, RuleAgentScope, RuleBlocked,
+	case "", RuleTaskApps, RuleEvery, RuleReadOnly, RuleAgentScope, RuleBlocked,
 		RuleInstall, RuleUninstall, RulePinkyApps, RuleSystemApps:
 		return false
 	}

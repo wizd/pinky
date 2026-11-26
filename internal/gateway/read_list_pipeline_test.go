@@ -353,3 +353,131 @@ func TestReadListIsUncertainWhenTheScreenCannotBeReadAfterASwipe(t *testing.T) {
 		t.Fatalf("%d swipe steps, want 1", swipeSteps(g))
 	}
 }
+
+// slowList is a list on a phone whose reads take readTime each (an iPhone
+// through WebDriverAgent over Wi-Fi took 20–40 s in a field test), in a
+// gateway whose calls have budget, connected and ready to read.
+func slowList(t *testing.T, readTime, budget time.Duration, setup func(*readListDevice)) (*Gateway, *Session, *readListDevice) {
+	t.Helper()
+	base := demo.NewDevice("pixel", "Pixel 9", driver.Android)
+	dev := &readListDevice{Device: base, pages: threePages(), clock: true}
+	if setup != nil {
+		setup(dev)
+	}
+	g := newDevGateway(t, base, dev, func(o *Options) { o.CallBudget = budget })
+	s, _ := connect(t, g, "Read a list")
+	dev.observeDelay = readTime
+	return g, s, dev
+}
+
+// Each screen is read once: the first swipe starts from the read of the
+// first screen, as a phone_batch step starts from the step before, and
+// with ocr "auto" that read takes the text OCR adds at once, rather than
+// reading the tree and then again with OCR where it says little. On a slow
+// phone every read more costs a good part of the call.
+func TestReadListReadsEachScreenOnce(t *testing.T) {
+	base := demo.NewDevice("pixel", "Pixel 9", driver.Android)
+	dev := &readListDevice{Device: base, pages: [][]string{{"first long title", "second long title"}}}
+	g := newDevGateway(t, base, dev)
+	s, _ := connect(t, g, "Read a list")
+
+	// Two lines say too little about the list, so "auto" takes OCR.
+	dev.reads = 0
+	res := s.ReadList(context.Background(), ReadListRequest{MaxScreens: 1, MaxMS: 5000})
+	if res.IsError() || res.Scan == nil || res.Scan.Pages != 1 || dev.reads != 1 {
+		t.Fatalf("one screen: %+v, %d reads, want 1", res.Scan, dev.reads)
+	}
+
+	dev.pages, dev.page, dev.reads = threePages(), 0, 0
+	res = s.ReadList(context.Background(), ReadListRequest{MaxScreens: 2, MaxMS: 5000, OCR: "off"})
+	if res.IsError() || res.Scan == nil || res.Scan.Pages != 2 || res.Scan.Swipes != 1 || dev.reads != 2 {
+		t.Fatalf("two screens: %+v, %d reads, want 2", res.Scan, dev.reads)
+	}
+}
+
+// A slow phone whose screen keeps moving after a swipe (a web page with a
+// scroll_area): the read checks the list's text again only while the call
+// has time for a read, and ends with what it read and a continuation, not
+// with an error that the phone answered too slowly. Here the screen after
+// the swipe is read with less than a read's time left.
+func TestReadListEndsAtTheDeadlineOnASlowPhone(t *testing.T) {
+	t.Parallel()
+	_, s, _ := slowList(t, 3*time.Second, 8500*time.Millisecond, func(d *readListDevice) {
+		d.noList, d.unsettled = true, true
+	})
+	res := s.ReadList(context.Background(), ReadListRequest{
+		Area: &screen.Rect{X: 0, Y: 200, W: 1080, H: 1900}, MaxScreens: 10, MaxMS: 45000})
+	if res.IsError() || res.Status != StatusSettled || res.Scan == nil || res.Scan.Stop != "deadline" ||
+		res.Scan.Pages != 2 || res.Scan.Continuation == "" {
+		t.Fatalf("slow read: %+v", res)
+	}
+	if !strings.Contains(res.Message, "Reading the screen took up to 3 s") {
+		t.Fatalf("the message does not say the phone is slow: %s", res.Message)
+	}
+}
+
+// A continuation on a slow phone reads on: it does not read the screen it
+// starts from twice, so the swipe and the read after it fit in the call
+// (a field test came back uncertain with 0 screens).
+func TestReadListContinuesOnASlowPhone(t *testing.T) {
+	t.Parallel()
+	_, s, _ := slowList(t, 3*time.Second, 8500*time.Millisecond, nil)
+	one := s.ReadList(context.Background(), ReadListRequest{MaxScreens: 10, MaxMS: 45000})
+	if one.IsError() || one.Status != StatusSettled || one.Scan == nil || one.Scan.Pages != 2 ||
+		one.Scan.Stop != "deadline" || one.Scan.Continuation == "" {
+		t.Fatalf("first call: %+v", one)
+	}
+	two := s.ReadList(context.Background(), ReadListRequest{Continuation: one.Scan.Continuation, MaxScreens: 10, MaxMS: 45000})
+	if two.IsError() || two.Status != StatusSettled || two.Scan == nil || two.Scan.Pages != 1 || two.Scan.Swipes != 1 {
+		t.Fatalf("continuation: %+v", two)
+	}
+	if got := scanText(two.Scan); got != "screen 3\nfifth long title" {
+		t.Fatalf("continuation read %q", got)
+	}
+}
+
+// When one read takes more than the call has left after the first, the
+// swipe still goes out, without the read after it, and the continuation
+// reads the screen it led to first: each call gets a screen further.
+func TestReadListSwipesAheadWhenReadsTakeMostOfTheCall(t *testing.T) {
+	t.Parallel()
+	g, s, dev := slowList(t, 5500*time.Millisecond, 10600*time.Millisecond, nil)
+	one := s.ReadList(context.Background(), ReadListRequest{MaxScreens: 10, MaxMS: 45000})
+	if one.IsError() || one.Status != StatusSettled || one.Scan == nil || one.Scan.Pages != 1 || one.Scan.Swipes != 1 ||
+		one.Scan.Stop != "deadline" || one.Scan.Continuation == "" || dev.swipes != 1 {
+		t.Fatalf("first call: %+v", one)
+	}
+	if !strings.Contains(one.Message, "the continuation reads it first") {
+		t.Fatalf("the message does not say the last screen is unread: %s", one.Message)
+	}
+	two := s.ReadList(context.Background(), ReadListRequest{Continuation: one.Scan.Continuation, MaxScreens: 10, MaxMS: 45000})
+	if two.IsError() || two.Status != StatusSettled || two.Scan == nil || two.Scan.Pages != 1 || two.Scan.Continuation == "" {
+		t.Fatalf("continuation: %+v", two)
+	}
+	if got := scanText(two.Scan); got != "screen 2\nfourth long title" {
+		t.Fatalf("continuation read %q", got)
+	}
+	if n := swipeSteps(g); n != 2 {
+		t.Fatalf("%d swipe steps, want 2", n)
+	}
+}
+
+// A continuation whose first read outlasts the call reads nothing, and
+// says so with a continuation that still holds.
+func TestReadListKeepsTheContinuationWhenTheFirstReadIsTooSlow(t *testing.T) {
+	_, s, dev := slowList(t, 0, 1500*time.Millisecond, nil)
+	one := s.ReadList(context.Background(), ReadListRequest{MaxScreens: 1, MaxMS: 5000, OCR: "off"})
+	if one.IsError() || one.Scan == nil || one.Scan.Continuation == "" {
+		t.Fatalf("first call: %+v", one)
+	}
+	dev.observeDelay = 3 * time.Second
+	two := s.ReadList(context.Background(), ReadListRequest{Continuation: one.Scan.Continuation, OCR: "off"})
+	if two.IsError() || two.Scan == nil || two.Scan.Stop != "deadline" || two.Scan.Pages != 0 || two.Scan.Continuation == "" {
+		t.Fatalf("too slow a read: %+v", two)
+	}
+	dev.observeDelay = 0
+	three := s.ReadList(context.Background(), ReadListRequest{Continuation: two.Scan.Continuation, OCR: "off"})
+	if three.IsError() || three.Scan == nil {
+		t.Fatalf("the continuation kept does not hold: %+v", three)
+	}
+}

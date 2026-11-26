@@ -450,6 +450,29 @@ func (p *onlyWiFi) RestartDeviceService(ctx context.Context, reason string) erro
 	return fmt.Errorf("restarting the device service: %w", driver.ErrUnsupported)
 }
 
+// QuietRestart, AllowQuietRestart and RestartDeviceServiceQuietly pass on
+// restarts of usbmuxd without a password, when the provider can.
+func (p *onlyWiFi) QuietRestart() (supported, allowed bool) {
+	if q, ok := p.wifi.(driver.QuietDeviceServiceRestarter); ok {
+		return q.QuietRestart()
+	}
+	return false, false
+}
+
+func (p *onlyWiFi) AllowQuietRestart(ctx context.Context, on bool, reason string) error {
+	if q, ok := p.wifi.(driver.QuietDeviceServiceRestarter); ok {
+		return q.AllowQuietRestart(ctx, on, reason)
+	}
+	return fmt.Errorf("restarting the device service without a password: %w", driver.ErrUnsupported)
+}
+
+func (p *onlyWiFi) RestartDeviceServiceQuietly(ctx context.Context) error {
+	if q, ok := p.wifi.(driver.QuietDeviceServiceRestarter); ok {
+		return q.RestartDeviceServiceQuietly(ctx)
+	}
+	return fmt.Errorf("restarting the device service: %w", driver.ErrUnsupported)
+}
+
 type allowOnPair struct {
 	driver.Pairing
 	p *onlyProvider

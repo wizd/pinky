@@ -263,7 +263,13 @@ func (a *app) rulesSection(c *mg.Context) {
 				ruleLine(c, "builtin-"+r.Name, ruleName(r.Name), ruleSummary(r), r.Decision, i == len(st.view.BuiltIn)-1 && !st.loaded, nil)
 			}
 			if st.loaded {
-				ruleLine(c, "builtin-credentials", locales.SettingsRulesCredentials(), locales.SettingsRulesCredentialsDesc(), "deny", true, nil)
+				// With Allow passwords on phones on, the rule asks on phones
+				// (and still refuses the phone's own passcode).
+				decision := "deny"
+				if a.settings.PhoneCredentials {
+					decision = "ask"
+				}
+				ruleLine(c, "builtin-credentials", locales.SettingsRulesCredentials(), locales.SettingsRulesCredentialsDesc(), decision, true, nil)
 			}
 		})
 	})

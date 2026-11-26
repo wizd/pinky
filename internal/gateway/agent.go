@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -137,6 +138,13 @@ type Result struct {
 	Log        string       // phone_logs: the log lines or crash reports, as text
 	Switches   []SwitchView // phone_device
 	About      *PhoneAbout  // phone_device's read: the phone's model, system, battery and storage
+
+	// outOfTime: the call's budget ran out before the screen could be
+	// read (outOfTimeBeforeAction, outOfTimeAfterAction).
+	outOfTime bool
+	// unread: the action went out and its screen was left unread, as
+	// Call.unread asks.
+	unread bool
 }
 
 // IsError reports whether the result is an error rather than a status.
@@ -165,6 +173,12 @@ type Call struct {
 	// noAsk refuses an action the rules would ask the person about,
 	// instead of asking: phone_read_list never opens an approval.
 	noAsk bool
+	// unread sends the action without waiting for the screen to settle
+	// or reading it afterwards: the settle stays owed, and the caller
+	// reads the screen in a later call. phone_read_list's last swipe on a
+	// phone whose reads take so long that the call has no time left for
+	// the read after it; its continuation reads that screen first.
+	unread bool
 }
 
 // reuseAge is how old the previous step's read may be for the next batch
@@ -291,6 +305,9 @@ type ScanView struct {
 	Continuation string
 	// gap says why a read stopped at a gap (gapNote), for the message.
 	gap string
+	// notes are further sentences for the message: where the read
+	// scrolled when no list was found, or how slow the phone's reads were.
+	notes []string
 }
 
 // Limits from DESIGN.md's tool table.
@@ -566,6 +583,47 @@ func (g *Gateway) deviceListLocked() string {
 	return strings.Join(out, ", ")
 }
 
+// notSeenHelp is what an agent can tell the person about a phone not seen
+// on Wi-Fi (driver.SetupNotOnWiFi), as the Phone screen explains it.
+const notSeenHelp = "Not seen on Wi-Fi: the phone may be asleep (unlock it), on another Wi-Fi network than this computer, " +
+	"or on one that keeps devices apart, as guest networks and some routers do. " +
+	"A VPN on the computer or the phone can hide it too, and so can Pinky not being allowed on the local network " +
+	"(System Settings › Privacy & Security › Local Network). Plugging it in works on any network."
+
+// NoPhoneMessage tells an agent that no phone is online, with the phones
+// of devs that are offline and what their status lines say.
+func NoPhoneMessage(devs []DeviceView) string {
+	msg, help := "No phone is connected to Pinky.", ""
+	var known []string
+	for _, d := range devs {
+		if d.Status != DeviceOffline && d.Status != DeviceConnecting {
+			continue // one found on Wi-Fi, which may not be the person's
+		}
+		known = append(known, fmt.Sprintf("%s (%s)", cmp.Or(d.Info.Name, d.Info.ID), d.StatusLine))
+		if d.Info.Setup == driver.SetupNotOnWiFi {
+			help = " " + notSeenHelp
+		}
+	}
+	if len(known) > 0 {
+		msg += " Phones it knows: " + strings.Join(known, ", ") + "."
+	}
+	return msg + help + " Ask the person to connect one."
+}
+
+// offlineMessageLocked tells an agent that d is offline, and why when its
+// status line says so. The caller holds g.mu.
+func (g *Gateway) offlineMessageLocked(d *device) string {
+	msg := d.name() + " is offline"
+	if _, line := g.statusLocked(d, nil); line != "Offline" {
+		msg += " (" + strings.TrimSuffix(strings.TrimPrefix(line, "Offline · "), ".") + ")"
+	}
+	msg += "."
+	if d.info.Setup == driver.SetupNotOnWiFi {
+		msg += " " + notSeenHelp
+	}
+	return msg
+}
+
 // Connect implements phone_connect: it leases a device for a task and
 // returns the first screen.
 func (s *Session) Connect(ctx context.Context, req ConnectRequest) *Result {
@@ -626,7 +684,7 @@ func (s *Session) Connect(ctx context.Context, req ConnectRequest) *Result {
 		switch len(online) {
 		case 0:
 			g.mu.Unlock()
-			return errResult(ErrDeviceOffline, "No phone is connected to Pinky. Ask the person to connect one.")
+			return errResult(ErrDeviceOffline, "%s", NoPhoneMessage(g.Devices()))
 		case 1:
 			d = online[0]
 		default:
@@ -650,8 +708,9 @@ func (s *Session) Connect(ctx context.Context, req ConnectRequest) *Result {
 			s.agent.Name, d.name(), approval.Human(stopHold))
 	}
 	if !d.online && !waitsForStep(d.info.State) {
+		msg := g.offlineMessageLocked(d)
 		g.mu.Unlock()
-		return errResult(ErrDeviceOffline, "%s is offline.", d.name())
+		return errResult(ErrDeviceOffline, "%s", msg)
 	}
 	if res := g.busyElsewhereLocked(s, d, title); res != nil {
 		g.mu.Unlock()
@@ -760,6 +819,8 @@ func setupResultLocked(d *device, first string) *Result {
 		msg += " Pinky will not use it until the person trusts it on its page in Pinky or plugs the phone in: tell them, and end the task."
 	case driver.SetupMediaInUse:
 		msg += " The person may be on a call: ask them with phone_handoff to end it or close that app when they can, saying why; the handoff ends by itself once the phone is ready."
+	case driver.SetupDeviceService:
+		msg += " " + deviceServiceHelpLocked(d)
 	default:
 		msg += " Ask the person to do it with phone_handoff, saying what to do; the handoff ends by itself once the phone is ready."
 	}
@@ -770,6 +831,17 @@ func setupResultLocked(d *device, first string) *Result {
 	}
 	return res
 }
+
+// deviceServiceHelp is what an agent can do about a phone the computer's
+// device service lost (driver.SetupDeviceService): only a person at the
+// computer can bring it back, with an administrator's password, so an agent
+// nobody watches must not wait for it.
+const deviceServiceHelp = "Only a person at this computer can fix it: they click Restart device service on the phone's page in Pinky " +
+	"and enter the computer's administrator password, which Pinky cannot do for them (Pinky shows them a card in Needs you and a notification). " +
+	"If nobody is at the computer, as in a scheduled or unattended run, do not wait for it: release it with phone_release and use another phone, " +
+	"or end the task saying the phone needs the device service restarted. " +
+	"Otherwise ask them with phone_handoff; it ends by itself once the phone is back. " +
+	"To have Pinky restart it by itself next time, without the password, they can turn on Restart device service without a password in Settings › Phones."
 
 // connectStep is the history step of phone_connect. own says the task
 // left the background display the person chose for the phone's own
@@ -998,6 +1070,7 @@ func withUnknownApps(res *Result, unknown []unknownApp) *Result {
 // firstScreen reads the whole screen for a new lease, or says which step
 // the phone waits for.
 func (g *Gateway) firstScreen(ctx context.Context, l *lease) *Result {
+	g.recoverLost(ctx, l)
 	g.mu.Lock()
 	if waitingLocked(l.dev) {
 		res := setupResultLocked(l.dev, fmt.Sprintf("Connected to %s for “%s”. The phone is connected but waits for a step before Pinky can use it.",
@@ -2053,6 +2126,7 @@ func (s *Session) Batch(ctx context.Context, req BatchRequest) *Result {
 	ctx, cancel := g.callCtx(ctx, l)
 	defer cancel()
 	out := &Result{Status: StatusSettled}
+	secrets := batchSecrets(g, l, req.Steps)
 	// The longest step so far: the next step starts only while the call's
 	// budget has room for one like it (budget.go).
 	var longest time.Duration
@@ -2066,6 +2140,7 @@ func (s *Session) Batch(ctx context.Context, req BatchRequest) *Result {
 		if a.Intent != "" {
 			c.Intent = a.Intent
 		}
+		c.Intent = scrubSecrets(c.Intent, secrets)
 		start := time.Now()
 		r := g.finish(l, g.act(ctx, l, c, a))
 		longest = max(longest, time.Since(start))

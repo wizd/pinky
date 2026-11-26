@@ -648,7 +648,9 @@ func (h *hidSession) Close() error {
 		errs = append(errs, h.buttons.send(buttonEvent(h.held[0], h.held[1], buttonUp), false))
 		h.held = nil
 	}
-	errs = append(errs, h.touch.Close())
+	if h.touch != nil {
+		errs = append(errs, h.touch.Close())
+	}
 	if h.buttons != nil {
 		errs = append(errs, h.buttons.Close())
 	}

@@ -317,14 +317,11 @@ const springBoard = "com.apple.springboard"
 
 // processPaths lists the device's processes as pid -> executable path.
 func (d *Device) processPaths(ctx context.Context) (map[uint64]string, error) {
-	svc, err := dialCoreDevice(d.link().entry, appService)
-	if err != nil {
-		return nil, err
-	}
+	svc := coreDevice(d.link().entry, appService)
 	defer svc.Close()
 	c, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	out, err := svc.invoke(c, "com.apple.coredevice.feature.listprocesses", "", nil)
+	out, err := svc.invokeRepeatable(c, "com.apple.coredevice.feature.listprocesses", "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -393,14 +390,18 @@ func (d *Device) startApp(ctx context.Context, id, link string) error {
 	if err != nil {
 		return err
 	}
-	svc, err := dialCoreDevice(d.link().entry, appService)
-	if err != nil {
-		return err
-	}
+	svc := coreDevice(d.link().entry, appService)
 	defer svc.Close()
 	c, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	out, err := svc.invoke(c, featureLaunchApplication, "", input)
+	// Launching is safe to repeat (a running app only comes to the
+	// front), so a connection that drops before the phone answers is
+	// tried again once. A link is not: the app could open it twice.
+	invoke := svc.invokeRepeatable
+	if link != "" {
+		invoke = svc.invoke
+	}
+	out, err := invoke(c, featureLaunchApplication, "", input)
 	if err != nil {
 		return fmt.Errorf("launch %s: %w", id, err)
 	}

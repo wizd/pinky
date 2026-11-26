@@ -51,6 +51,11 @@ func uncaptured(els []screen.Element, img image.Image, lines []ocrLine, w, h int
 		if e.Source != screen.SourceTree || e.Label == "" || !visibleRole(e.Role) {
 			continue
 		}
+		if _, ok := screen.NotificationApp(e.ID); ok {
+			// SpringBoard's banners are in every screenshot; one the
+			// picture missed was not there yet, or gone already.
+			continue
+		}
 		r := e.Bounds
 		if r.W < 30 || r.H < 30 || r.W*r.H > w*h/2 {
 			continue
@@ -66,6 +71,65 @@ func uncaptured(els []screen.Element, img image.Image, lines []ocrLine, w, h int
 		return nil
 	}
 	return out
+}
+
+// The picture and the tree must show the same moment. A read starts its
+// picture as soon as it may (capturegate.go), long before its tree is in:
+// a walk takes 1 to 4 s while the phone builds a push, a walk of an app
+// that has just launched and lists nothing yet waits raxEmptyWait and
+// walks again, and SpringBoard's banners are walked on the same session,
+// one request after the other. Meanwhile the screen can change: right
+// after phone_launch the picture can show the app's launch screen, one
+// flat color, while the tree shows the app as it came up, and then every
+// element of the app looked blank (seen on an iPhone 13 mini, iOS 27.0.1,
+// with a notification banner coming in during the launch; a read a few
+// seconds later marked none). So the elements a picture taken before the
+// tree was in does not show are looked for again on a picture taken after
+// it, and only those that one does not show either are marked.
+
+// uncapturedNow is uncaptured for a read whose picture img may be older
+// than its tree (early): when img shows some elements as blank, it takes
+// a new picture with again and returns those that one does not show either. OCR's
+// lines are of img, and so are not used on the new picture. When again
+// gives no picture, it keeps what img found.
+func uncapturedNow(els []screen.Element, img image.Image, lines []ocrLine, w, h int, early bool, again func() image.Image) []int {
+	found := uncaptured(els, img, lines, w, h)
+	if len(found) == 0 || !early || again == nil {
+		return found
+	}
+	now := again()
+	if now == nil {
+		return found
+	}
+	// Only elements neither picture shows: the new one has no OCR lines,
+	// so it alone could mark text the first one's OCR read.
+	blank := map[int]bool{}
+	for _, i := range uncaptured(els, now, nil, w, h) {
+		blank[i] = true
+	}
+	var both []int
+	for _, i := range found {
+		if blank[i] {
+			both = append(both, i)
+		}
+	}
+	return both
+}
+
+// pictureNow takes a picture of the screen for the capture marks, as
+// ocrPicture does but without encoding it for OCR; nil when it cannot.
+func (d *Device) pictureNow(ctx context.Context, opt driver.ObserveOptions) image.Image {
+	if img, ok := d.videoFrame(ctx, opt.Frame); ok {
+		return img
+	}
+	if ctx.Err() != nil {
+		return nil
+	}
+	png, err := d.ScreenshotPNG(ctx)
+	if err != nil {
+		return nil
+	}
+	return decodeShot(png)
 }
 
 // visibleRole reports whether elements of a role draw something: text or a

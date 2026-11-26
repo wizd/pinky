@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -65,9 +66,7 @@ func runDevices(args []string) error {
 		}
 	}
 	if *asJSON {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(devs)
+		return devicesJSON(os.Stdout, devs)
 	}
 	if len(devs) == 0 {
 		fmt.Printf("No phones (%s).\n", source)
@@ -101,6 +100,19 @@ func listedView(info driver.Info) gateway.DeviceView {
 		v.Status = gateway.DeviceOffline
 	}
 	return v
+}
+
+// devicesJSON writes the phones as a JSON array, which is empty (`[]`)
+// when no phone was listed: without the gateway, devs stays nil, and a
+// nil slice encodes as `null`. A script reading `pinky devices --json`
+// gets an array either way.
+func devicesJSON(w io.Writer, devs []gateway.DeviceView) error {
+	if devs == nil {
+		devs = []gateway.DeviceView{}
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(devs)
 }
 
 // statusColumn is a phone's STATUS: its status line, then the driver's

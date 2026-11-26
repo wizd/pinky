@@ -32,6 +32,7 @@ type stream struct {
 // session with input and settle detection; options that differ from the
 // running session's restart it. A second Stream call replaces the first.
 func (d *Device) Stream(ctx context.Context, opt driver.StreamOptions) (driver.Stream, error) {
+	d.checkHEVCEncoder(ctx)
 	want := d.baseOptions()
 	if opt.MaxSize > 0 {
 		want.MaxSize = opt.MaxSize

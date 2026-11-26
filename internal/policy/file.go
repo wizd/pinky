@@ -25,9 +25,17 @@ type File struct {
 	// VirtualCredentials lets agents type into password and one-time-code
 	// fields, and tap an app's own passcode keypad, on virtual phones (an
 	// emulator or a Simulator on this computer), for signing in with test
-	// accounts. Phones are refused as ever. Default false.
-	VirtualCredentials bool   `yaml:"virtual_credentials,omitempty"`
-	Rules              []Rule `yaml:"rules"`
+	// accounts. Phones go by PhoneCredentials. Default false.
+	VirtualCredentials bool `yaml:"virtual_credentials,omitempty"`
+	// PhoneCredentials lets agents type into password and one-time-code
+	// fields on phones (not virtual ones), for signing in with test
+	// accounts: each time it asks the person (rule credentials), who may
+	// always allow it in that app (an Exemption). Never where the field
+	// may take the phone's own passcode (PhoneLockScreen), never into an
+	// app's hidden passcode keypad, and never without ref beside a
+	// password field. Default false: refused, as before.
+	PhoneCredentials bool   `yaml:"phone_credentials,omitempty"`
+	Rules            []Rule `yaml:"rules"`
 	// AlwaysAllow holds the person's "Always allow" answers to approvals
 	// (see Exemption), oldest first.
 	AlwaysAllow []Exemption `yaml:"always_allow,omitempty"`

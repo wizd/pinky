@@ -274,14 +274,13 @@ func (d *Device) launchLocale(ctx context.Context, app string, loc driver.Locale
 	opts := input["options"].(map[string]any)
 	opts["arguments"] = args
 	opts["terminateExisting"] = true
-	svc, err := dialCoreDevice(d.link().entry, appService)
-	if err != nil {
-		return err
-	}
+	// Relaunching ends the same way when sent twice, so a connection that
+	// drops before the phone answers is tried again once.
+	svc := coreDevice(d.link().entry, appService)
 	defer svc.Close()
 	c, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	if _, err := svc.invoke(c, featureLaunchApplication, "", input); err != nil {
+	if _, err := svc.invokeRepeatable(c, featureLaunchApplication, "", input); err != nil {
 		return fmt.Errorf("launch %s: %w", id, err)
 	}
 	return nil

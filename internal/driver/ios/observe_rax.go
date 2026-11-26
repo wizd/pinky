@@ -188,6 +188,7 @@ func (d *Device) observeRAX(ctx context.Context, opt driver.ObserveOptions, st *
 	var els []raxElement
 	var complete bool
 	var walkErr error
+	var treeAt time.Time // when the tree was in
 	walked := make(chan struct{})
 	go func() {
 		defer close(walked)
@@ -199,7 +200,8 @@ func (d *Device) observeRAX(ctx context.Context, opt driver.ObserveOptions, st *
 			default:
 			}
 		})
-		st.Walk = time.Since(t)
+		treeAt = time.Now()
+		st.Walk = treeAt.Sub(t)
 		if pushed {
 			st.Source = "remoteax-push"
 		}
@@ -207,6 +209,7 @@ func (d *Device) observeRAX(ctx context.Context, opt driver.ObserveOptions, st *
 	var lines []ocrLine
 	var ocrErr error
 	var shot image.Image // the screenshot, for what it does not show (capture.go)
+	var shotAt time.Time // when the picture was begun
 	var pictured sync.WaitGroup
 	var gate *captureGate
 	if opt.OCR {
@@ -216,6 +219,7 @@ func (d *Device) observeRAX(ctx context.Context, opt driver.ObserveOptions, st *
 			go func() {
 				defer pictured.Done()
 				t := time.Now()
+				shotAt = t
 				png, pic, from, err := d.ocrPicture(ctx, opt)
 				st.Shot, st.ShotFrom = time.Since(t), from
 				if err != nil {
@@ -352,7 +356,18 @@ func (d *Device) observeRAX(ctx context.Context, opt driver.ObserveOptions, st *
 		s.Elements = append(s.Elements, ocrExtras(s.Elements, lines, si.Width, si.Height)...)
 	}
 	if shot != nil {
-		d.capture.mark(s, uncaptured(s.Elements, shot, lines, si.Width, si.Height))
+		// A picture begun before the tree was in may show an earlier
+		// screen, such as an app's launch screen (capture.go).
+		retook := false
+		found := uncapturedNow(s.Elements, shot, lines, si.Width, si.Height, shotAt.Before(treeAt), func() image.Image {
+			retook = true
+			return d.pictureNow(ctx, opt)
+		})
+		if retook {
+			st.Trace = append(st.Trace, fmt.Sprintf("the picture came %v before the tree and showed some elements blank: %d of them blank on a new picture",
+				treeAt.Sub(shotAt).Round(time.Millisecond), len(found)))
+		}
+		d.capture.mark(s, found)
 	} else {
 		d.capture.apply(s)
 	}

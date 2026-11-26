@@ -19,6 +19,7 @@ var ruleActions = map[string]func() string{
 	"Payments":           locales.RuleActionPayments,
 	"Messages":           locales.RuleActionMessages,
 	"Commits":            locales.RuleActionCommits,
+	"credentials":        locales.RuleActionCredentials,
 	"Installs and links": locales.RuleActionInstallsLinks,
 	"Calls":              locales.RuleActionCalls,
 	"Settings changes":   locales.RuleActionSettingsChanges,

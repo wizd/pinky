@@ -135,13 +135,14 @@ func (l *live) move2(a, b scrcpy.Position) error {
 	return l.send(scrcpy.InjectTouch(scrcpy.ActionMove, pinchSecond, b, 1, 0, 0))
 }
 
-// touch2 puts down, moves or lifts both fingers of the person's pinch.
+// touch2 puts down, moves or lifts both fingers of the person's pinch,
+// at points in the video's pixels.
 func (l *live) touch2(ctx context.Context, a driver.TouchAction, p, q screen.Point) error {
-	pp, err := l.position(ctx, p)
+	pp, err := l.picturePosition(ctx, p)
 	if err != nil {
 		return err
 	}
-	pq, err := l.position(ctx, q)
+	pq, err := l.picturePosition(ctx, q)
 	if err != nil {
 		return err
 	}

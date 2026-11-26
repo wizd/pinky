@@ -137,7 +137,7 @@ build() {
 		lacking "no companion APK at $apk (scripts/dist.sh companion): the apps will not offer to install it"
 	fi
 	say "mygo build $platforms (Pinky $version)"
-	MYGO_LDFLAGS="-X main.version=$version${MYGO_LDFLAGS:+ $MYGO_LDFLAGS}" go tool mygo build -platform "$platforms" "$@" -o "$stage" cmd/pinky
+	MYGO_LDFLAGS="-X main.version=$version${kit_ldflags:-}${MYGO_LDFLAGS:+ $MYGO_LDFLAGS}" go tool mygo build -platform "$platforms" "$@" -o "$stage" cmd/pinky
 	unstage
 }
 
@@ -371,6 +371,23 @@ darwin() {
 	ff_amd64=$(ffmpeg_for amd64)
 	adb_arm64=$(adb_for arm64)
 	adb_amd64=$(adb_for amd64)
+	# The app builds Pinky's iPhone app from the release's iPhone app kit,
+	# which it downloads (internal/driver/ios/appinstall.go): IPHONE_KIT is
+	# that kit, packed first (ios/build.sh kit), and its SHA-256 goes into the
+	# app, which then builds no other.
+	kit_ldflags=
+	if [ -n "${IPHONE_KIT:-}" ]; then
+		[ -f "$IPHONE_KIT" ] || die "IPHONE_KIT is not a file: $IPHONE_KIT"
+		kit_sum=$(sha256 "$IPHONE_KIT")
+		case $kit_sum in
+		*[!0-9a-f]* | '') die "the SHA-256 of $IPHONE_KIT came out as \"$kit_sum\"" ;;
+		esac
+		[ ${#kit_sum} = 64 ] || die "the SHA-256 of $IPHONE_KIT came out as \"$kit_sum\""
+		kit_ldflags=" -X main.iphoneKitSHA256=$kit_sum"
+		say "the iPhone app kit's SHA-256 goes into the app: $kit_sum"
+	else
+		printf 'dist: warning: %s\n' "no IPHONE_KIT: the app takes its iPhone app kit without checking it" >&2
+	fi
 	build darwin/arm64,darwin/amd64 -sign "$sign" -skip-notarize
 	for arch in arm64 amd64; do
 		app=$stage/darwin-$arch/Pinky.app

@@ -454,8 +454,10 @@ func (l *live) swipe(ctx context.Context, from, to screen.Point, dur time.Durati
 	return werr
 }
 
+// touch injects the person's touch on the mirror, at a point in the
+// video's pixels.
 func (l *live) touch(ctx context.Context, a driver.TouchAction, p screen.Point) error {
-	pos, err := l.position(ctx, p)
+	pos, err := l.picturePosition(ctx, p)
 	if err != nil {
 		return err
 	}

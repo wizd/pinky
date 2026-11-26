@@ -31,6 +31,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.max
 
 /**
@@ -44,6 +46,16 @@ import kotlin.math.max
  * - Share to Pinky (the ShareToPinky alias): text, a link or pictures from
  *   another app go with the task (StartRequest's shared and images).
  * - A new task (the Quick Settings tile): the task box alone.
+ * - The phone's digital assistant app (the AssistPinky alias, for ASSIST):
+ *   holding the power button or the assistant gesture asks about the
+ *   screen, as the floating button's double tap does: typed, or by the
+ *   mic, not by voice at once, since the press comes anywhere, quiet
+ *   places too, and many phones have no speech recognizer. Android does
+ *   not name the app in front to an activity assistant (no
+ *   EXTRA_ASSIST_PACKAGE on the Android 17 emulator, even with "Use
+ *   screen and app data" on), so over Pinky's own screens it asks about
+ *   the screen too, and the gateway, which refuses to read them, tells the
+ *   task it cannot.
  *
  * EXTRA_VOICE opens Android's own speech recognizer at once (a long press
  * on the floating button); the mic button does it any time. Like Pinky's
@@ -74,18 +86,22 @@ class AskActivity : Activity() {
     private var state: JSONObject? = null
     private var down = false
     private var starting = false
+    private var listening = false // Android's speech recognizer is open for the panel
     private val created = System.currentTimeMillis()
     private val rerender = Runnable { render() }
+    private val gone = CountDownLatch(1) // the panel was destroyed
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         look = Look(this)
         settings = TaskSettings(this)
         secrets = Secrets(this)
-        // Only Pinky itself opens the panel for a screen; other apps reach
-        // it through the share alias, whose intents carry what they share.
+        // Only Pinky itself opens the panel by its own name, with extras;
+        // other apps reach it through the share alias, whose intents carry
+        // what they share, and Android through the assistant alias.
         val ours = intent.component?.className == AskActivity::class.java.name
         mode = when {
+            intent.component?.className == ASSIST_ALIAS -> Mode.SCREEN
             !ours -> Mode.SHARE
             intent.getBooleanExtra(EXTRA_SCREEN, false) -> Mode.SCREEN
             else -> Mode.TASK
@@ -111,9 +127,15 @@ class AskActivity : Activity() {
         sub?.close()
         sub = null
         super.onStop()
+        // A panel left behind (Home, another app) goes: Android would bring
+        // it back as it was in place of the next one, since the panels share
+        // a task and Android's assistant launch makes no new one there.
+        // Not while Android's speech recognizer is over it.
+        if (!listening && !isChangingConfigurations) finish()
     }
 
     override fun onDestroy() {
+        gone.countDown()
         main.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -122,6 +144,7 @@ class AskActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_VOICE) listening = false
         if (requestCode != REQ_VOICE || resultCode != RESULT_OK) return
         val heard = QuickAccess.heard(data)
         if (heard.isEmpty()) return
@@ -351,6 +374,7 @@ class AskActivity : Activity() {
         try {
             @Suppress("DEPRECATION")
             startActivityForResult(QuickAccess.voiceIntent(), REQ_VOICE)
+            listening = true
         } catch (e: Exception) {
             Log.w(TAG, "no speech recognizer", e)
             note.say(getString(R.string.phone_voice_none))
@@ -399,7 +423,13 @@ class AskActivity : Activity() {
             }
             // The panel goes first, so that the task's first screen is the
             // app's, not Pinky's; the Working pill then shows the task.
+            // The theme has no window animations, but Android still
+            // animates the closing of the panel's own task, 300 to 800 ms
+            // on the Android 17 emulator, which outran a fixed wait: the
+            // task waits for the panel to be gone (at most GONE_MS), then
+            // LEAVE_MS.
             main.post { finish() }
+            gone.await(GONE_MS, TimeUnit.MILLISECONDS)
             Thread.sleep(LEAVE_MS)
             val why = try {
                 CoreClient.call(req)
@@ -428,10 +458,12 @@ class AskActivity : Activity() {
     companion object {
         const val EXTRA_SCREEN = "app.pinky.companion.extra.SCREEN"
         const val EXTRA_VOICE = "app.pinky.companion.extra.VOICE"
+        private val ASSIST_ALIAS = AskActivity::class.java.name.substringBeforeLast('.') + ".AssistPinky"
         private const val TAG = "PinkyAsk"
         private const val REQ_VOICE = 1
         private const val GRACE_MS = 3_000L
-        private const val LEAVE_MS = 400L // the panel's window is gone by then (no exit animation)
+        private const val GONE_MS = 2_000L // at most this for the panel's close
+        private const val LEAVE_MS = 400L // after it, for the accessibility service to see the app's window
         private const val MAX_SHARED = 20_000 // pilot.MaxSharedChars
         private const val MAX_IMAGES = 4 // pilot.MaxImages
         private const val MAX_SIDE = 1568 // Claude's recommended longest side

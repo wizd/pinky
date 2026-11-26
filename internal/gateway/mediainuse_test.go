@@ -135,6 +135,19 @@ func TestMediaInUseStep(t *testing.T) {
 	}
 }
 
+// TestActionConnDropped: an action the driver sent twice on connections
+// that closed before the phone answered stays uncertain, and tells the
+// agent it may simply try again.
+func TestActionConnDropped(t *testing.T) {
+	g := &Gateway{}
+	err := fmt.Errorf("launch com.example.app: %w, also when tried again: %w", driver.ErrConnDropped, errors.New("EOF"))
+	res := g.actionError(nil, err)
+	if res.Status != StatusUncertain || !strings.Contains(res.Message, "dropped before it answered") ||
+		!strings.Contains(res.Message, "safe to repeat") || strings.Contains(res.Message, "do not repeat") {
+		t.Fatalf("actionError = %+v", res)
+	}
+}
+
 // TestActionNeedsSetup: input that the phone refused for a step (an
 // iPhone's stream refused while an app uses the camera or microphone)
 // tells the agent that step, and that nothing was done.

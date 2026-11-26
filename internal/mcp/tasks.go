@@ -9,6 +9,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/DIYgod/pinky/internal/driver"
 	"github.com/DIYgod/pinky/internal/gateway"
 )
 
@@ -310,7 +311,8 @@ func (s *Server) taskRun(req *sdk.CallToolRequest, remote bool, in taskRunIn) *s
 }
 
 // taskDevice resolves the phone of phone_task_run to its device id: by id,
-// name, or the start of its id; with none, the one phone online.
+// name, or the start of its id; with none, as phone_connect does, the one
+// phone online, or with none online the one that waits for a step.
 func (s *Server) taskDevice(ref string) (string, *sdk.CallToolResult) {
 	var devs []gateway.DeviceView
 	if s.g != nil {
@@ -318,6 +320,9 @@ func (s *Server) taskDevice(ref string) (string, *sdk.CallToolResult) {
 	}
 	var list []string
 	for _, d := range devs {
+		if found(d) {
+			continue
+		}
 		list = append(list, fmt.Sprintf("%s (device %q, %s)", d.Info.Name, d.Info.ID, d.Status))
 	}
 	listed := strings.Join(list, ", ")
@@ -344,19 +349,32 @@ func (s *Server) taskDevice(ref string) (string, *sdk.CallToolResult) {
 		}
 		return "", render(&gateway.Result{Error: gateway.ErrInvalidArgument, Message: fmt.Sprintf("No phone matches %q. Connected phones: %s.", ref, listed)})
 	}
-	var online []string
+	var online, waiting []string
 	for _, d := range devs {
-		if d.Status != gateway.DeviceOffline {
+		switch {
+		case found(d), d.Status == gateway.DeviceOffline, d.Status == gateway.DeviceConnecting:
+		case d.Status == gateway.DeviceNeedsSetup:
+			waiting = append(waiting, d.Info.ID)
+		default:
 			online = append(online, d.Info.ID)
 		}
 	}
+	if len(online) == 0 {
+		online = waiting
+	}
 	switch len(online) {
 	case 0:
-		return "", render(&gateway.Result{Error: gateway.ErrDeviceOffline, Message: "No phone is connected to Pinky. Ask the person to connect one."})
+		return "", render(&gateway.Result{Error: gateway.ErrDeviceOffline, Message: gateway.NoPhoneMessage(devs)})
 	case 1:
 		return online[0], nil
 	}
 	return "", render(&gateway.Result{Error: gateway.ErrInvalidArgument, Message: fmt.Sprintf("Several phones are connected: %s. Pass device.", listed)})
+}
+
+// found reports whether the phone was found on Wi-Fi and waits for the
+// person to say whether it is theirs: agents do not hear of it.
+func found(d gateway.DeviceView) bool {
+	return d.Status == gateway.DeviceNeedsSetup && d.Info.Setup == driver.SetupConfirmWiFi
 }
 
 func (s *Server) phoneName(id string) string {

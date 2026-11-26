@@ -533,15 +533,17 @@ func pick(phone []driver.FileInfo, paths []string) (want []driver.FileInfo, miss
 	return want, missing
 }
 
-// localPath returns where a file of the Pinky folder goes under dir. No
-// folder on the way may be a link (which could lead out of dir); the
-// missing ones are made.
+// localPath returns where a file of the Pinky folder goes under dir. rel
+// is a listed or already cleaned name, used as it is: spaces at either end
+// belong to it. No folder on the way may be a link (which could lead out
+// of dir); the missing ones are made.
 func localPath(dir, rel string) (string, error) {
-	clean, ok := cleanRel(rel)
-	if !ok || clean == "" {
-		return "", fmt.Errorf("%q: %w", rel, driver.ErrNotFound)
+	parts := strings.Split(rel, "/")
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." || strings.Contains(part, `\`) {
+			return "", fmt.Errorf("%q: %w", rel, driver.ErrNotFound)
+		}
 	}
-	parts := strings.Split(clean, "/")
 	cur := dir
 	for _, part := range parts[:len(parts)-1] {
 		cur = filepath.Join(cur, part)

@@ -175,6 +175,10 @@ type Gateway struct {
 	trafficOn    map[string]bool
 	trafficRoute map[string]bool
 	prune        chan struct{} // asks the retention loop to run now
+	// serviceRestarts is when the device service of each platform last
+	// restarted through Pinky, by the person's click or by itself
+	// (servicerestart.go).
+	serviceRestarts map[driver.Platform]time.Time
 
 	cap captureState // Pinky's traffic proxy (capture.go)
 
@@ -503,6 +507,7 @@ func (g *Gateway) discover(ctx context.Context) {
 	}
 	g.listMu.Unlock()
 	wg.Wait()
+	g.restartLost(ctx, nil)
 }
 
 // unopenedGrace is how long a phone the gateway never opened stays listed,
@@ -627,13 +632,14 @@ func (g *Gateway) updateDevice(p driver.Provider, info driver.Info) *device {
 	moved := info.State == driver.StateOnline && d.dev != nil && from != "" && info.Connection != "" && info.Connection != from
 	if moved {
 		d.moving = time.Now().Add(moveWait)
-	}
-	g.mu.Unlock()
-	if moved {
+		g.mu.Unlock()
 		g.log.Info("device moving", "device", d.id, "from", from, "to", info.Connection)
 		g.setOffline(d, movingWhy(info.Connection))
+		g.mu.Lock()
 	}
-	g.mu.Lock()
+	// Else g.mu stays held until the phone is marked opening below: a call
+	// in between would find a phone listed online that is neither open nor
+	// opening, and tell its agent it is offline (a lost phone coming back).
 	if d.switching != "" && waitsForStep(info.State) {
 		// Moving to another connection for a task, it waits for the
 		// person (the passcode before the helper starts): the task's
