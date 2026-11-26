@@ -196,7 +196,7 @@ func (l *Link) once(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	ws.MaxPayloadBytes = 8 << 20
+	ws.MaxPayloadBytes = 20 << 20
 	l.wmu.Lock()
 	l.ws = ws
 	l.wmu.Unlock()

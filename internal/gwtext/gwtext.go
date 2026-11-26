@@ -932,7 +932,9 @@ var (
 	reSetupDetail  = re(`^iOS asks for it on the phone before (?:Pinky on the iPhone|Pinky for iPhone|the WebDriverAgent helper) can control it, and stops asking after a while\. (.+) is waiting · (.*)$`)
 	reLostDetail   = re(`^This computer's device service lost the phone on Wi-Fi, and only someone at the computer can restart it\. (.+) is waiting · (.*)$`)
 	reAgentWants   = re(`^(.+) wants to connect for “(.*)”\.(?: Allowing gives it (\S+) access\.)?$`)
-	reFilesDetail  = re(`^(.+) · into the phone's Pinky folder(: .*)?$`)
+	reFilesDetail       = re(`^(.+) · into the phone's Pinky folder(: .*)?$`)
+	reFilesPhotosDetail = re(`^(.+) · into the phone's Photos library(: .*)?$`)
+	reFilesClipDetail   = re(`^(.+) · onto the phone's clipboard(: .*)?$`)
 	reSettingsBack = re(`^(.+) · Pinky puts it back when the task ends$`)
 )
 
@@ -959,6 +961,12 @@ func needDetail(n gateway.NeedView) string {
 	}
 	if m := reFilesDetail.FindStringSubmatch(n.Detail); m != nil {
 		return locales.GwFilesDetail(m[1], fileNames(m[2]))
+	}
+	if m := reFilesPhotosDetail.FindStringSubmatch(n.Detail); m != nil {
+		return locales.GwFilesPhotosDetail(m[1], fileNames(m[2]))
+	}
+	if m := reFilesClipDetail.FindStringSubmatch(n.Detail); m != nil {
+		return locales.GwFilesClipboardDetail(m[1], fileNames(m[2]))
 	}
 	if n.Detail == "Unlike screenshots, recordings do not cover one-time codes or blocked apps' notifications." {
 		return locales.GwRecordingsDetail()

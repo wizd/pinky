@@ -5544,6 +5544,34 @@
       }
     }
   },
+  "gwFilesPhotosDetail": "{agent} · into the phone's Photos library{names}",
+  "@gwFilesPhotosDetail": {
+    "description": "The second line of an approval to save photos into an iPhone's Photos library; names is gwFilesList or empty. Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "agent": {
+        "type": "String",
+        "example": "Claude Code"
+      },
+      "names": {
+        "type": "String",
+        "example": ": cover.jpg"
+      }
+    }
+  },
+  "gwFilesClipboardDetail": "{agent} · onto the phone's clipboard{names}",
+  "@gwFilesClipboardDetail": {
+    "description": "The second line of an approval to copy an image onto the phone's clipboard; names is gwFilesList or empty. Shown only in other languages; in English the gateway's own words show.",
+    "placeholders": {
+      "agent": {
+        "type": "String",
+        "example": "Claude Code"
+      },
+      "names": {
+        "type": "String",
+        "example": ": cover.jpg"
+      }
+    }
+  },
   "gwAppFilesMore": "“{file}” and {count} more files",
   "@gwAppFilesMore": {
     "description": "The files an app is installed from when there are several: the first one and how many more (split APKs). Shown only in other languages; in English the gateway's own words show.",

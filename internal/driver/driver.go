@@ -729,6 +729,20 @@ type Files interface {
 	Push(ctx context.Context, path string, r io.Reader, size int64, mtime time.Time) error
 }
 
+// MediaImporter saves photos from the computer into the phone's Photos
+// library, for phones without a Pinky folder (iPhones). name is the file's
+// base name; r holds its bytes, and size (when non-negative) is its length.
+type MediaImporter interface {
+	ImportMedia(ctx context.Context, name string, r io.Reader, size int64) error
+}
+
+// ImageClipboard puts an image on the phone's clipboard, so an agent can paste
+// or send it directly inside apps that take pasted images. mimeType is
+// "image/jpeg", "image/png", "image/gif" or "image/heic".
+type ImageClipboard interface {
+	SetClipboardImage(ctx context.Context, mimeType string, data []byte) error
+}
+
 // AppLogger reads one app's own logs and crash reports, for an agent that
 // tests the app (phone_logs). Every line and report comes from the app's
 // own processes only; a driver that cannot tell them apart from other

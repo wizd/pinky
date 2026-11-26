@@ -263,6 +263,8 @@ func TestGatewayWordsInChinese(t *testing.T) {
 		{gateway.NeedView{Rule: "Installing from the computer", Detail: "Codex · app.pinky.testapp · from “a.apk” · from “b.apk” please"}, "Codex · app.pinky.testapp · " + zh.GwAppFrom("“a.apk”") + " · from “b.apk” please"},
 		{gateway.NeedView{Rule: "Uninstalling apps", Detail: "Codex · com.dinely.app · its data on the phone is deleted too · clean up"}, "Codex · com.dinely.app · " + zh.GwAppDataDeleted() + " · clean up"},
 		{gateway.NeedView{Rule: "Every action", Detail: "Codex · com.dinely.app · from “x”"}, "Codex · com.dinely.app · from “x”"},
+		{gateway.NeedView{Rule: "Files", Detail: "Claude Code · into the phone's Photos library: cover.jpg"}, zh.GwFilesPhotosDetail("Claude Code", zh.GwFilesList("cover.jpg"))},
+		{gateway.NeedView{Rule: "Files", Detail: "Claude Code · onto the phone's clipboard: cover.jpg"}, zh.GwFilesClipboardDetail("Claude Code", zh.GwFilesList("cover.jpg"))},
 	} {
 		in, out := c.in, c.out
 		in.Kind = gateway.NeedApproval

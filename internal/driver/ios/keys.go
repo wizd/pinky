@@ -23,6 +23,7 @@ const keyboardPage = 0x07
 const (
 	keyA         = 0x04
 	keyV         = 0x19
+	keyW         = 0x1A
 	key1         = 0x1E
 	key0         = 0x27
 	keyEnter     = 0x28

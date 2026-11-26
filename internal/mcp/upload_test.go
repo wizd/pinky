@@ -81,7 +81,7 @@ func TestToolUploadSchema(t *testing.T) {
 			continue
 		}
 		schema, _ := json.Marshal(tool.InputSchema)
-		for _, s := range []string{`"upload"`, `"content"`, `"replace"`} {
+		for _, s := range []string{`"upload"`, `"clipboard"`, `"content"`, `"replace"`} {
 			if !strings.Contains(string(schema), s) {
 				t.Fatalf("phone_files schema misses %s: %s", s, schema)
 			}

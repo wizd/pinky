@@ -347,6 +347,19 @@ func (t *Tunnel) DialTCP(ctx context.Context, port int) (*gonet.TCPConn, error) 
 	return gonet.DialContextTCP(ctx, t.stack, addr, ipv6.ProtocolNumber)
 }
 
+// ListenTCP binds a TCP listener on the host's tunnel address (port 0 picks
+// an ephemeral port), for apps or services on the device to connect back to
+// Pinky through the CoreDevice tunnel.
+func (t *Tunnel) ListenTCP(port uint16) (*gonet.TCPListener, error) {
+	select {
+	case <-t.done:
+		return nil, errTunnelClosed(t.Err())
+	default:
+	}
+	addr := tcpip.FullAddress{NIC: t.nic, Addr: tcpip.AddrFrom16(t.host.As16()), Port: port}
+	return gonet.ListenTCP(t.stack, addr, ipv6.ProtocolNumber)
+}
+
 // ListenUDP binds a UDP socket on the host's tunnel address, for the device
 // to send media to. bufSize is the receive buffer in bytes.
 func (t *Tunnel) ListenUDP(bufSize int) (*gonet.UDPConn, error) {

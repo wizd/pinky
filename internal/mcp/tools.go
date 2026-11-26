@@ -230,11 +230,11 @@ func (a *area) screen() *screen.Rect {
 
 type filesIn struct {
 	Device     string   `json:"device,omitempty" jsonschema:"The phone, by device id or name. Required when this session holds more than one phone, or once Pinky says several tasks share it."`
-	Action     string   `json:"action,omitempty" jsonschema:"list (default): the files on the phone and on the computer; pull: copy from the phone to the computer; push: copy from the computer to the phone, which asks the person first; upload: send Pinky a file for the computer's folder, when you cannot write there yourself (from another computer), then push it or install it with phone_app."`
-	Paths      []string `json:"paths,omitempty" jsonschema:"Files or folders, relative to the Pinky folder. Default: everything (for push, the files that are new or changed). For upload: the one file's name, such as photo.jpg or Pictures/photo.jpg."`
+	Action     string   `json:"action,omitempty" jsonschema:"list (default): the files on the phone and on the computer; pull: copy from the phone to the computer; push: copy from the computer to the phone (Android: /sdcard/Pinky and Gallery; iPhone: saves images into Photos Recents), which asks the person first; clipboard: (iPhone) copy one image file onto the phone's clipboard for direct pasting/sending inside apps (on Android use push instead), which asks the person first; upload: send Pinky a file for the computer's folder, when you cannot write there yourself (from another computer), then push, clipboard, or install it with phone_app."`
+	Paths      []string `json:"paths,omitempty" jsonschema:"Files or folders, relative to the Pinky folder. Default: everything (for push on Android, new or changed files; on iPhone, image files). For upload or clipboard: the one file's name, such as photo.jpg or Pictures/photo.jpg."`
 	Content    *string  `json:"content,omitempty" jsonschema:"For upload: the file's bytes in base64, up to 10 MB. Over HTTP, leave it out to get a one-time link to send the file to with curl instead, up to 200 MB, which keeps it out of your context: better for anything but small files."`
 	Replace    bool     `json:"replace,omitempty" jsonschema:"For upload: replace a different file of the same name in the computer's folder."`
-	Intent     string   `json:"intent,omitempty" jsonschema:"For push: one sentence on why, shown to the person on the approval panel."`
+	Intent     string   `json:"intent,omitempty" jsonschema:"For push or clipboard: one sentence on why, shown to the person on the approval panel."`
 	ApprovalID string   `json:"approval_id,omitempty" jsonschema:"From an approval_pending result: repeat the same call with this id to keep waiting."`
 }
 
@@ -626,14 +626,15 @@ func (s *Server) addTools(srv *sdk.Server, remote bool) {
 		})
 
 	sdk.AddTool(srv, &sdk.Tool{Name: "phone_files", Title: "Phone files",
-		Description: "Copy files between the phone's Pinky folder (Android: /sdcard/Pinky, the only place on the phone you may reach) and a folder on the computer running Pinky, " +
-			"which the result names; use your own file tools there. list shows both sides, pull copies from the phone, push copies to the phone and asks the person first " +
+		Description: "Transfer files and images between the phone and a folder on the computer running Pinky, which the result names; use your own file tools there. " +
+			"list shows available files, pull copies from Android's /sdcard/Pinky folder to the computer, push copies to the phone (Android: /sdcard/Pinky and scans into Gallery; iPhone: saves images into Photos Recents) and asks the person first " +
 			"(up to 45 s, then approval_pending with an approval_id to repeat the call with). " +
-			"upload sends Pinky a file for that folder when you cannot write there yourself, as from another computer: its name in paths and its bytes in content (base64), " +
-			"or over HTTP no content, for a one-time link to send the file to with curl; then push it. " +
-			"Read-only and watch-only agents may only list and pull. An iPhone has no Pinky folder: list and upload work on its folder on the computer, for phone_app to install from.",
+			"clipboard (iPhone) puts one image file (JPEG, PNG, GIF, WebP, BMP or HEIC) directly onto the iPhone's clipboard without switching apps so you can paste/send it in chats or editors (on Android, use push to place images in Gallery), and asks the person first. " +
+			"upload sends Pinky a file for the computer's folder when you cannot write there yourself, as from another computer: its name in paths and its bytes in content (base64, up to 10 MB), " +
+			"or over HTTP no content, for a one-time link to send the file to with curl; then push, clipboard, or phone_app install it. " +
+			"Read-only and watch-only agents may only list and pull.",
 		InputSchema: schema[filesIn](func(p map[string]*jsonschema.Schema) {
-			enum(p["action"], "list", "pull", "push", "upload")
+			enum(p["action"], "list", "pull", "push", "clipboard", "upload")
 			nonNull(p, "content")
 		}),
 		Annotations: &sdk.ToolAnnotations{DestructiveHint: boolp(false), OpenWorldHint: boolp(false)}},

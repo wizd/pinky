@@ -96,9 +96,9 @@ func partProblem(part string) string {
 }
 
 // upload saves the file an agent sends as rel in dir, the phone's local
-// folder, or with Check only checks that it could. canPush says whether
-// the phone has a Pinky folder to copy it to.
-func (g *Gateway) upload(ctx context.Context, l *lease, req FilesRequest, dir, rel, args string, canPush bool, start time.Time) *Result {
+// folder, or with Check only checks that it could. caps says how the phone
+// can receive files from this folder.
+func (g *Gateway) upload(ctx context.Context, l *lease, req FilesRequest, dir, rel, args string, caps filesCaps, start time.Time) *Result {
 	d := l.dev
 	if m := g.scopeOf(l.session).Mode; m == ScopeReadOnly || m == ScopeWatchOnly {
 		return errResult(ErrScopeDenied, "This agent may only list and copy from the phone: the person gave it %s access.", strings.ReplaceAll(string(m), "_", "-"))
@@ -120,7 +120,7 @@ func (g *Gateway) upload(ctx context.Context, l *lease, req FilesRequest, dir, r
 		return existsResult(rel, old)
 	case req.Check:
 		// The phone, the cleaned name and what to do after, for the link.
-		return &Result{Status: StatusSettled, Device: d.id, Files: []FileView{{Path: rel, Where: FileComputer}}, Message: nextHint(rel, d.name(), canPush)}
+		return &Result{Status: StatusSettled, Device: d.id, Files: []FileView{{Path: rel, Where: FileComputer}}, Message: nextHint(rel, d.name(), caps)}
 	case req.Body == nil:
 		return errResult(ErrInvalidArgument, "Send the file's contents with it (content), or write the file into %s with your own file tools.", dir)
 	}
@@ -160,7 +160,7 @@ func (g *Gateway) upload(ctx context.Context, l *lease, req FilesRequest, dir, r
 			return errResult(ErrInvalidArgument, "%s cannot be uploaded: a folder of that name is there.", rel)
 		case !req.Replace && fi.Mode().IsRegular() && fi.Size() == n && sameBytes(tmp.Name(), dst):
 			res := &Result{Status: StatusSettled, Files: []FileView{{Path: rel, Size: fi.Size(), ModTime: fi.ModTime(), Where: FileComputer}},
-				Message: fmt.Sprintf("The folder on Pinky's computer already has this %s; nothing changed. %s", rel, nextHint(rel, d.name(), canPush))}
+				Message: fmt.Sprintf("The folder on Pinky's computer already has this %s; nothing changed. %s", rel, nextHint(rel, d.name(), caps))}
 			g.recordFiles(l, args, fmt.Sprintf("Received %s (%s) from the agent", quoteName(rel), SizeText(n)), res, start)
 			return res
 		case !req.Replace:
@@ -178,7 +178,7 @@ func (g *Gateway) upload(ctx context.Context, l *lease, req FilesRequest, dir, r
 		mod = fi.ModTime()
 	}
 	res := &Result{Status: StatusSettled, Files: []FileView{{Path: rel, Size: n, ModTime: mod, Where: FileComputer}},
-		Message: fmt.Sprintf("%s %s (%s) in the folder on Pinky's computer. %s", verb, rel, SizeText(n), nextHint(rel, d.name(), canPush))}
+		Message: fmt.Sprintf("%s %s (%s) in the folder on Pinky's computer. %s", verb, rel, SizeText(n), nextHint(rel, d.name(), caps))}
 	g.recordFiles(l, args, fmt.Sprintf("Received %s (%s) from the agent", quoteName(rel), SizeText(n)), res, start)
 	return res
 }
@@ -218,13 +218,19 @@ func existsResult(rel string, fi fs.FileInfo) *Result {
 }
 
 // nextHint says what an agent can do with a file it uploaded: install an
-// app, or copy anything else to the phone's Pinky folder when it has one.
-func nextHint(rel, phone string, canPush bool) string {
+// app, save a photo to Photos or the clipboard, or copy it to the Pinky folder.
+func nextHint(rel, phone string, caps filesCaps) string {
 	switch {
 	case apppkg.IsAPK(rel) || apppkg.IsIOSApp(rel):
 		return fmt.Sprintf(`Install it with phone_app { action: "install", paths: [%q] }, which the person approves first.`, rel)
-	case canPush:
+	case caps.files:
 		return fmt.Sprintf(`Copy it to the phone with phone_files { action: "push", paths: [%q] }, which the person approves first.`, rel)
+	case caps.media && caps.clipboard && isImageFileName(rel):
+		return fmt.Sprintf(`Save it to %s's Photos library with phone_files { action: "push", paths: [%q] }, or put it on the clipboard to paste directly with phone_files { action: "clipboard", paths: [%q] } (both ask the person first).`, phone, rel, rel)
+	case caps.media && isImageFileName(rel):
+		return fmt.Sprintf(`Save it to %s's Photos library with phone_files { action: "push", paths: [%q] }, which the person approves first.`, phone, rel)
+	case caps.clipboard && isImageFileName(rel):
+		return fmt.Sprintf(`Put it on %s's clipboard to paste directly with phone_files { action: "clipboard", paths: [%q] }, which the person approves first.`, phone, rel)
 	}
 	return fmt.Sprintf("%s has no Pinky folder, so it stays on the computer.", phone)
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -584,7 +585,7 @@ func (p *SimProvider) Open(ctx context.Context, id string) (driver.Device, error
 	apps := &simApps{p: p, x: x, udid: id}
 	d.appsFn = apps.list
 	p.logger().Info("ios simulator: WebDriverAgent started", "udid", id, "took", time.Since(start).Round(time.Millisecond))
-	return &simPhone{WDADevice: d, run: run}, nil
+	return &simPhone{WDADevice: d, run: run, p: p, x: x, udid: id}, nil
 }
 
 // brandBuild gives the runner in a build Pinky's name and icon
@@ -628,7 +629,10 @@ func (p *SimProvider) forgetBuild() {
 // whose Close also ends the test run Pinky started for it.
 type simPhone struct {
 	*WDADevice
-	run *simRun
+	run  *simRun
+	p    *SimProvider
+	x    xcode
+	udid string
 }
 
 // Close implements driver.Device.
@@ -637,6 +641,36 @@ func (d *simPhone) Close() error {
 	d.run.stop()
 	return err
 }
+
+// ImportMedia implements driver.MediaImporter through `simctl addmedia`.
+func (d *simPhone) ImportMedia(ctx context.Context, name string, r io.Reader, size int64) error {
+	if d.p == nil || d.udid == "" {
+		return fmt.Errorf("ios simulator: no simctl handle: %w", driver.ErrUnsupported)
+	}
+	img, err := prepareImportImage(name, r, size)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp("", "pinky-media-*"+img.ext)
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(img.data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if _, err := d.p.simctl(ctx, d.x, "addmedia", d.udid, tmpPath); err != nil {
+		return fmt.Errorf("ios simulator: addmedia %s: %w", name, err)
+	}
+	return nil
+}
+
+var _ driver.MediaImporter = (*simPhone)(nil)
 
 // simApps lists a Simulator's apps through simctl, kept a few seconds.
 type simApps struct {

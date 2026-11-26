@@ -105,6 +105,32 @@ func textItems(text string) []any {
 	}}
 }
 
+// imageItems is a pasteboard holding a single image keyed by its iOS UTI
+// (public.jpeg, public.png, com.compuserve.gif or public.heic).
+func imageItems(uti string, data []byte) []any {
+	return []any{map[string]any{
+		"types": []any{uti},
+		"data":  map[string]any{uti: map[string]any{"data": data}},
+	}}
+}
+
+// mimeToPasteboardUTI maps an image MIME type to the iOS UTI that
+// UIPasteboard and apps recognize.
+func mimeToPasteboardUTI(mimeType string) (string, bool) {
+	switch mimeType {
+	case "image/jpeg":
+		return "public.jpeg", true
+	case "image/png":
+		return "public.png", true
+	case "image/gif":
+		return "com.compuserve.gif", true
+	case "image/heic":
+		return "public.heic", true
+	default:
+		return "", false
+	}
+}
+
 // parsePBReply reads a PULL_REPLY or SET_REPLY. Errors the device reports
 // come back as *CoreDeviceError, a refused read as errPBRestricted.
 func parsePBReply(r map[string]any, want string) (*pbSnapshot, error) {

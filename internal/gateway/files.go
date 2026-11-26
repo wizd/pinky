@@ -30,8 +30,8 @@ import (
 // FilesRequest is phone_files.
 type FilesRequest struct {
 	Call
-	Action string   // list (default), pull, push or upload
-	Paths  []string // files or folders, relative to the Pinky folder; empty means all. upload: the one file's name
+	Action string   // list (default), pull, push, upload or clipboard
+	Paths  []string // files or folders, relative to the Pinky folder; empty means all. upload/clipboard: the one file's name
 
 	// For upload: the file's contents, at most MaxUpload bytes, and whether
 	// they may replace a different file of that name. Check only checks
@@ -99,8 +99,8 @@ func (s *Session) Files(ctx context.Context, req FilesRequest) *Result {
 	if action == "" {
 		action = "list"
 	}
-	if action != "list" && action != "pull" && action != "push" && action != "upload" {
-		return errResult(ErrInvalidArgument, "action must be list, pull, push or upload.")
+	if action != "list" && action != "pull" && action != "push" && action != "upload" && action != "clipboard" {
+		return errResult(ErrInvalidArgument, "action must be list, pull, push, upload or clipboard.")
 	}
 	var paths []string
 	switch {
@@ -113,6 +113,8 @@ func (s *Session) Files(ctx context.Context, req FilesRequest) *Result {
 		}
 		paths = []string{name}
 		req.Paths = nil
+	case action == "clipboard" && len(req.Paths) != 1:
+		return errResult(ErrInvalidArgument, `clipboard takes one image file: pass its name in paths, such as ["photo.jpg"].`)
 	}
 	for _, p := range req.Paths {
 		clean, ok := cleanRel(p)
@@ -123,6 +125,9 @@ func (s *Session) Files(ctx context.Context, req FilesRequest) *Result {
 			paths = append(paths, clean)
 		}
 	}
+	if action == "clipboard" && len(paths) != 1 {
+		return errResult(ErrInvalidArgument, `clipboard takes one image file: pass its name in paths, such as ["photo.jpg"].`)
+	}
 	l, res := s.acquire(req.Device)
 	if res != nil {
 		return res
@@ -131,7 +136,7 @@ func (s *Session) Files(ctx context.Context, req FilesRequest) *Result {
 	g := s.g
 	ctx, cancel := g.callCtx(ctx, l)
 	defer cancel()
-	if res := g.gate(l, req.ApprovalID, action == "push"); res != nil {
+	if res := g.gate(l, req.ApprovalID, action == "push" || action == "clipboard"); res != nil {
 		return g.finish(l, res)
 	}
 	d := l.dev
@@ -140,10 +145,28 @@ func (s *Session) Files(ctx context.Context, req FilesRequest) *Result {
 		return g.finish(l, errResult(ErrDeviceOffline, "%s is offline.", d.name()))
 	}
 	// A phone without a Pinky folder (an iPhone) still has its folder on
-	// the computer, which phone_app installs from: list and upload work.
-	fsys, ok := dev.(driver.Files)
-	if !ok && action != "list" && action != "upload" {
-		return g.finish(l, errResult(ErrUnsupported, "%s has no Pinky folder that Pinky can reach, so nothing is copied to or from it; list and upload work on its folder on the computer.", d.name()))
+	// the computer (for phone_app), and may accept photos into Photos
+	// (driver.MediaImporter) or images on its clipboard (driver.ImageClipboard).
+	fsys, hasFiles := dev.(driver.Files)
+	importer, hasMedia := dev.(driver.MediaImporter)
+	imgClip, hasClip := dev.(driver.ImageClipboard)
+	caps := filesCaps{files: hasFiles, media: hasMedia, clipboard: hasClip}
+	switch action {
+	case "pull":
+		if !hasFiles {
+			return g.finish(l, errResult(ErrUnsupported, "%s has no Pinky folder that Pinky can reach, so nothing is copied to or from it; list and upload work on its folder on the computer.", d.name()))
+		}
+	case "push":
+		if !hasFiles && !hasMedia {
+			return g.finish(l, errResult(ErrUnsupported, "%s has no Pinky folder that Pinky can reach, so nothing is copied to or from it; list and upload work on its folder on the computer.", d.name()))
+		}
+	case "clipboard":
+		if !hasClip {
+			if hasFiles {
+				return g.finish(l, errResult(ErrUnsupported, "%s does not support copying images directly to its clipboard; use action \"push\" to copy images into /sdcard/Pinky so gallery and photo pickers can pick them.", d.name()))
+			}
+			return g.finish(l, errResult(ErrUnsupported, "%s does not support copying images to its clipboard.", d.name()))
+		}
 	}
 	dir := g.FilesDir(d.id)
 	if dir == "" {
@@ -156,11 +179,17 @@ func (s *Session) Files(ctx context.Context, req FilesRequest) *Result {
 	start := time.Now()
 	switch action {
 	case "push":
-		res = g.pushFiles(ctx, l, req, fsys, dir, paths, args, start)
+		if hasFiles {
+			res = g.pushFiles(ctx, l, req, fsys, dir, paths, args, start)
+		} else {
+			res = g.pushMediaFiles(ctx, l, req, importer, dir, paths, args, start)
+		}
+	case "clipboard":
+		res = g.copyImageToClipboard(ctx, l, req, imgClip, dir, paths[0], args, start)
 	case "upload":
-		res = g.upload(ctx, l, req, dir, paths[0], args, fsys != nil, start)
+		res = g.upload(ctx, l, req, dir, paths[0], args, caps, start)
 	default:
-		res = g.listOrPull(ctx, l, action, fsys, dir, paths, args, start)
+		res = g.listOrPull(ctx, l, action, fsys, caps, dir, paths, args, start)
 	}
 	if res.Status != StatusPending {
 		res.Folder = dir
@@ -185,9 +214,9 @@ func cleanRel(p string) (string, bool) {
 	return c, true
 }
 
-func (g *Gateway) listOrPull(ctx context.Context, l *lease, action string, fsys driver.Files, dir string, paths []string, args string, start time.Time) *Result {
+func (g *Gateway) listOrPull(ctx context.Context, l *lease, action string, fsys driver.Files, caps filesCaps, dir string, paths []string, args string, start time.Time) *Result {
 	if fsys == nil {
-		return g.listLocalOnly(l, dir, args, start)
+		return g.listLocalOnly(l, caps, dir, args, start)
 	}
 	phone, err := fsys.ListFiles(ctx)
 	if err != nil {
@@ -237,7 +266,7 @@ func (g *Gateway) listOrPull(ctx context.Context, l *lease, action string, fsys 
 
 // listLocalOnly lists the folder on the computer of a phone without a
 // Pinky folder.
-func (g *Gateway) listLocalOnly(l *lease, dir string, args string, start time.Time) *Result {
+func (g *Gateway) listLocalOnly(l *lease, caps filesCaps, dir string, args string, start time.Time) *Result {
 	local, err := listLocal(dir)
 	if err != nil {
 		return errResult(ErrInternal, "Reading the local folder failed: %v", err)
@@ -246,8 +275,16 @@ func (g *Gateway) listLocalOnly(l *lease, dir string, args string, start time.Ti
 	for i := range files {
 		files[i].Where = FileComputer
 	}
-	res := &Result{Status: StatusSettled, Files: files, Folder: dir,
-		Message: fmt.Sprintf("%s on the computer. %s has no Pinky folder; install apps from this folder with phone_app.", count(len(files), "file"), l.dev.name())}
+	msg := fmt.Sprintf("%s on the computer. %s has no Pinky folder; install apps from this folder with phone_app.", count(len(files), "file"), l.dev.name())
+	switch {
+	case caps.media && caps.clipboard:
+		msg = fmt.Sprintf("%s on the computer. %s has no Pinky folder; use push to save images into Photos, clipboard to copy an image to the phone's clipboard for direct pasting, or phone_app to install apps.", count(len(files), "file"), l.dev.name())
+	case caps.media:
+		msg = fmt.Sprintf("%s on the computer. %s has no Pinky folder; use push to save images into Photos, or phone_app to install apps.", count(len(files), "file"), l.dev.name())
+	case caps.clipboard:
+		msg = fmt.Sprintf("%s on the computer. %s has no Pinky folder; use clipboard to copy an image to the phone's clipboard for direct pasting, or phone_app to install apps.", count(len(files), "file"), l.dev.name())
+	}
+	res := &Result{Status: StatusSettled, Files: files, Folder: dir, Message: msg}
 	g.recordFiles(l, args, fmt.Sprintf("Listed the phone's folder on the computer (%s)", count(len(files), "file")), res, start)
 	return res
 }
@@ -309,7 +346,7 @@ func (g *Gateway) pushFiles(ctx context.Context, l *lease, req FilesRequest, fsy
 	if len(want) == 0 {
 		return &Result{Status: StatusSettled, Folder: dir, Message: "The phone already has these files; nothing was copied."}
 	}
-	if res := g.askToPush(ctx, l, req, want, args); res != nil {
+	if res := g.askToPush(ctx, l, req, want, args, "push", "into the phone's Pinky folder"); res != nil {
 		return res
 	}
 	var copied []FileView
@@ -331,7 +368,7 @@ func (g *Gateway) pushFiles(ctx context.Context, l *lease, req FilesRequest, fsy
 
 // askToPush asks the person before files go to the phone, unless they
 // allowed it for the task. It returns nil once allowed.
-func (g *Gateway) askToPush(ctx context.Context, l *lease, req FilesRequest, want []FileView, args string) *Result {
+func (g *Gateway) askToPush(ctx context.Context, l *lease, req FilesRequest, want []FileView, args, kind, dest string) *Result {
 	g.mu.Lock()
 	granted := l.filesGranted
 	g.mu.Unlock()
@@ -340,6 +377,7 @@ func (g *Gateway) askToPush(ctx context.Context, l *lease, req FilesRequest, wan
 	}
 	s := l.session
 	var key strings.Builder
+	fmt.Fprintf(&key, "%s\x00", kind)
 	for _, f := range want {
 		fmt.Fprintf(&key, "%s\x00%d\x00", f.Path, f.Size)
 	}
@@ -359,7 +397,7 @@ func (g *Gateway) askToPush(ctx context.Context, l *lease, req FilesRequest, wan
 		if len(want) == 1 {
 			title = fmt.Sprintf("Copy “%s” to %s?", want[0].Path, l.dev.name())
 		}
-		detail := s.agent.Name + " · into the phone's Pinky folder" + names(want)
+		detail := s.agent.Name + " · " + dest + names(want)
 		if c := strings.TrimSpace(req.Intent); c != "" {
 			detail = s.agent.Name + " · " + c
 		}
@@ -402,6 +440,8 @@ func (g *Gateway) askToPush(ctx context.Context, l *lease, req FilesRequest, wan
 
 func (g *Gateway) filesError(l *lease, err error) *Result {
 	switch {
+	case errors.Is(err, driver.ErrLocked):
+		return &Result{Status: StatusLocked, Message: fmt.Sprintf("%s is locked. Call phone_handoff so the person can unlock it.", l.dev.name())}
 	case errors.Is(err, driver.ErrNotFound):
 		return errResult(ErrNotFound, "%v", err)
 	case errors.Is(err, driver.ErrUnsupported):

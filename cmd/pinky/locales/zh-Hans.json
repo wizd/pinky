@@ -836,6 +836,8 @@
   "gwDoZoomOut": "缩小",
   "gwDoZoomOutOn": "缩小“{label}”",
   "gwFilesDetail": "{agent} · 拷贝到手机的 Pinky 文件夹{names}",
+  "gwFilesPhotosDetail": "{agent} · 存到手机的「照片」图库{names}",
+  "gwFilesClipboardDetail": "{agent} · 拷贝到手机剪贴板{names}",
   "gwAppFilesMore": "“{file}”及另外 {count} 个文件",
   "gwAppSignedBy": "由 {signer} 签名",
   "gwAppFrom": "来自{files}",

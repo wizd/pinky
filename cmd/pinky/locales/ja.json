@@ -836,6 +836,8 @@
   "gwDoZoomOut": "ズームアウト",
   "gwDoZoomOutOn": "“{label}” をズームアウト",
   "gwFilesDetail": "{agent} · スマホの Pinky フォルダへコピー{names}",
+  "gwFilesPhotosDetail": "{agent} · スマホの「写真」へ保存{names}",
+  "gwFilesClipboardDetail": "{agent} · スマホのクリップボードへコピー{names}",
   "gwAppFilesMore": "“{file}” ほか {count} 個のファイル",
   "gwAppSignedBy": "署名：{signer}",
   "gwAppFrom": "{files} から",

@@ -132,10 +132,16 @@ func (d *Device) Push(ctx context.Context, p string, r io.Reader, size int64, mt
 	if size >= 0 && cr.n != size {
 		return fmt.Errorf("android: pushed %d bytes of %s, expected %d", cr.n, rel, size)
 	}
-	// Android 11 and later index files written through /sdcard by
-	// themselves; older versions need the media scanner told, or galleries
-	// and pickers do not see the file.
-	if d.props.SDK > 0 && d.props.SDK < 30 {
+	// Tell MediaStore to index pushed media right away so gallery and photo
+	// pickers see newly pushed images without waiting for a background scan.
+	if d.props.SDK >= 30 {
+		if isAndroidMediaExt(rel) {
+			storagePath := "/storage/emulated/0/Pinky/" + rel
+			if _, err := d.client.Shell(ctx, d.info.ID, "content call --uri content://media/ --method scan_file --arg "+adb.Quote(storagePath)+" >/dev/null 2>&1"); err != nil {
+				d.cfg.logf("android: %s: media scan of %s: %v", d.info.ID, rel, err)
+			}
+		}
+	} else if d.props.SDK > 0 {
 		uri := fileURI(remotePath(rel))
 		if _, err := d.client.Shell(ctx, d.info.ID, "am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d "+adb.Quote(uri)+" >/dev/null"); err != nil {
 			d.cfg.logf("android: %s: media scan of %s: %v", d.info.ID, rel, err)
@@ -297,6 +303,16 @@ func fileURI(p string) string {
 		}
 	}
 	return b.String()
+}
+
+// isAndroidMediaExt reports whether rel is an image or video file that gallery
+// pickers look for in MediaStore.
+func isAndroidMediaExt(rel string) bool {
+	switch strings.ToLower(path.Ext(rel)) {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif", ".mp4", ".mov", ".mkv", ".webm":
+		return true
+	}
+	return false
 }
 
 var _ driver.Files = (*Device)(nil)

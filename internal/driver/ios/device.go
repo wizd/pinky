@@ -132,8 +132,9 @@ type Device struct {
 	typeStats   TypeStats // guarded by mu
 	inputNote   string    // for the agent, about the last Type (TakeInputNote); guarded by mu
 	keysOnly    bool      // Type skips the pasteboard (TypeByKeys); guarded by mu
-	framesAfter time.Time // no frames of the video for pictures until then (capture.go); guarded by mu
-	lastTap     tapRecord // most recent non-long-press Tap, for refocusing after ensureKeyboard; guarded by mu
+	framesAfter    time.Time   // no frames of the video for pictures until then (capture.go); guarded by mu
+	lastTap        tapRecord   // most recent non-long-press Tap, for refocusing after ensureKeyboard; guarded by mu
+	safariNoTunnel atomic.Bool // set when Safari could not reach host IPv6 inside CoreDevice tunnel
 
 	// preferCapture is set when the screen capture service answered and the
 	// instruments one did not.

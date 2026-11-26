@@ -14949,6 +14949,46 @@ func (msgs Messages) GwFilesDetail(agent string, names string) string {
 	return Catalog.Format(msgs.locale, "gwFilesDetail", map[string]any{"agent": agent, "names": names})
 }
 
+// GwFilesPhotosDetail says "{agent} · into the phone's Photos library{names}"
+// in the language the app shows.
+//
+// The second line of an approval to save photos into an iPhone's Photos
+// library; names is gwFilesList or empty. Shown only in other languages; in
+// English the gateway's own words show.
+func GwFilesPhotosDetail(agent string, names string) string {
+	return In(i18n.Locale()).GwFilesPhotosDetail(agent, names)
+}
+
+// GwFilesPhotosDetail says "{agent} · into the phone's Photos library{names}"
+// in the language of msgs.
+//
+// The second line of an approval to save photos into an iPhone's Photos
+// library; names is gwFilesList or empty. Shown only in other languages; in
+// English the gateway's own words show.
+func (msgs Messages) GwFilesPhotosDetail(agent string, names string) string {
+	return Catalog.Format(msgs.locale, "gwFilesPhotosDetail", map[string]any{"agent": agent, "names": names})
+}
+
+// GwFilesClipboardDetail says "{agent} · onto the phone's clipboard{names}"
+// in the language the app shows.
+//
+// The second line of an approval to copy an image onto the phone's
+// clipboard; names is gwFilesList or empty. Shown only in other languages;
+// in English the gateway's own words show.
+func GwFilesClipboardDetail(agent string, names string) string {
+	return In(i18n.Locale()).GwFilesClipboardDetail(agent, names)
+}
+
+// GwFilesClipboardDetail says "{agent} · onto the phone's clipboard{names}"
+// in the language of msgs.
+//
+// The second line of an approval to copy an image onto the phone's
+// clipboard; names is gwFilesList or empty. Shown only in other languages;
+// in English the gateway's own words show.
+func (msgs Messages) GwFilesClipboardDetail(agent string, names string) string {
+	return Catalog.Format(msgs.locale, "gwFilesClipboardDetail", map[string]any{"agent": agent, "names": names})
+}
+
 // GwAppFilesMore says "“{file}” and {count} more files"
 // in the language the app shows.
 //
