@@ -80,7 +80,10 @@ type recPlayer struct {
 	gen    int
 	cancel context.CancelFunc
 	player *video.Player
-	bitmap *mg.Bitmap
+	bitmap *mg.Bitmap // the picture at its own size
+	// halves are the picture halved, once and more, for a player that shows
+	// it at half its size or less (mirrorLevel), made as it draws.
+	halves halvings
 	picW   int // the picture's size the right way up
 	picH   int
 	turn   int    // quarter turns clockwise that put the picture upright
@@ -445,6 +448,10 @@ func (pl *recPlayer) frameAt(f *video.Frame) time.Duration {
 // PTS while a paused seek holds the last frame before from.
 func (pl *recPlayer) show(f *video.Frame, at time.Duration) {
 	pl.bitmap = showPlanes(pl.bitmap, f.YUV)
+	// Halved as the player draws it, once: a paused player shows no new
+	// picture, and the planes stay the picture's until the next, as the
+	// bitmap's must (keep writes the copy it does not show).
+	pl.halves.next(f.YUV)
 	pl.shownCopy = -1
 	for i := range pl.copies {
 		if f.YUV == &pl.copies[i] {
@@ -502,10 +509,14 @@ func (a *app) recordingView(c *mg.Context, t gateway.TaskView, pl *recPlayer) {
 				scr.Draw(func(pt *mg.Painter, r mg.Rect) {
 					pl.take(pt)
 					if pl.bitmap != nil {
-						pt.Clip(r, inner, func() { drawTurned(pt, pl.bitmap, r, pl.turn) })
+						// Halved as often as the player's pixels need, as the
+						// mirror draws it.
+						bm, src := pl.halves.pictureFor(pl.bitmap, pl.turn, r, pt.Scale())
+						pt.Clip(r, inner, func() { drawTurned(pt, bm, src, r, pl.turn) })
 					}
 					// What the step at this moment acted on, for a moment after
-					// its mark.
+					// its mark: in the picture's own pixels, as a picture
+					// halved fills the same box.
 					if i := pl.markAt(pl.pos); i >= 0 && pl.picW > 0 {
 						mk := pl.rec.Marks[i]
 						if pl.pos-mk.At < 2*time.Second && mk.Step >= 0 && mk.Step < len(t.Steps) {

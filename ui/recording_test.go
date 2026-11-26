@@ -405,3 +405,138 @@ func TestRecordingPausedSeekPicture(t *testing.T) {
 		t.Errorf("picture at %v after a paused seek to the end, want 2.9 s", pl.pic)
 	}
 }
+
+// recordingScreen returns the recording player's screen, inside its bezel.
+func recordingScreen(t *testing.T, tt *mg.Tester, task gateway.TaskView) mg.Rect {
+	t.Helper()
+	r, ok := tt.Find(locales.RecordingPlayerLabel(task.Title))
+	if !ok {
+		t.Fatalf("no player: %q", tt.Texts())
+	}
+	const bezel = 7 // recordingView's
+	return mg.Rect{X: r.X + bezel, Y: r.Y + bezel, W: r.W - 2*bezel, H: r.H - 2*bezel}
+}
+
+// TestRecordingSmallShowsAverage: the recording player shows a picture of
+// the finest detail, squares of a pixel of black and white, as an even
+// gray where it shows the picture at half its size or less, as the mirror
+// does (#233): a recording at the default size, 1280 pixels on its long
+// side, on a 1× display, and one at an iPhone 13 mini's own size on a 1×
+// and a Retina display. It draws the picture halved as often as its pixels
+// need, and a recording at the default size on a Retina display, 1.5
+// times smaller, as it is. Drawn whole, the checkerboards showed 1 to 254.
+func TestRecordingSmallShowsAverage(t *testing.T) {
+	ta := newTestApp(t, fakeapi.OnePhone)
+	task := gateway.TaskView{ID: "t", Title: "Checkerboard"}
+	for _, tc := range []struct {
+		name  string
+		w, h  int
+		scale float32
+		level int
+	}{
+		{"smaller on 1×", 590, 1280, 1, 1},       // 3.0 times smaller
+		{"original on 1×", 1136, 2464, 1, 2},     // 5.8
+		{"original on Retina", 1136, 2464, 2, 1}, // 2.9
+		{"smaller on Retina", 590, 1280, 2, 0},   // 1.5
+	} {
+		// The player shows once the display has its scale: it draws no
+		// level for another.
+		var pl *recPlayer
+		tt := mg.NewTester(func(c *mg.Context) {
+			ta.sync()
+			if pl != nil {
+				ta.recordingView(c, task, pl)
+			}
+		}, 1280, 820)
+		tt.SetScale(tc.scale)
+		pl = &recPlayer{a: ta.app, task: task.ID, rec: gateway.RecordingView{Length: time.Second}, state: "paused", shownCopy: -1}
+		pl.show(&video.Frame{YUV: lumaYUV(tc.w, tc.h, checker), Width: tc.w, Height: tc.h}, 0)
+		ta.rec.pl = pl
+		tt.Frame()
+		scr := recordingScreen(t, tt, task)
+		if k := mirrorLevel(tc.w, tc.h, 0, scr.W, scr.H, tc.scale); k != tc.level {
+			t.Fatalf("%s: a screen of %v at %v× halves the picture %d times, want %d", tc.name, scr, tc.scale, k, tc.level)
+		}
+		for k := range pl.halves.levels {
+			// The level shown is made from those above it.
+			var made, shown uint64
+			if k < tc.level {
+				made = 1
+			}
+			if k == tc.level-1 {
+				shown = 1
+			}
+			if l := &pl.halves.levels[k]; l.pic != made || l.shown != shown {
+				t.Errorf("%s: the picture halved %d times: made for picture %d, shown for %d; want %d, %d", tc.name, k+1, l.pic, l.shown, made, shown)
+			}
+		}
+		if tc.level == 0 {
+			continue
+		}
+		if lo, hi := grayRange(tt.Image(), scr, tc.scale); lo < 124 || hi > 132 {
+			t.Errorf("%s: the checkerboard shows from %d to %d, want an even gray of 128", tc.name, lo, hi)
+		}
+	}
+}
+
+// TestRecordingHalvesOnce: the recording player halves a picture once, as
+// it first draws it, and not again as it draws it again: paused, and while
+// it plays, when it draws 60 times a second however few pictures come. A
+// paused jump shows the picture it lands on, halved, and the one before
+// until then: the stream's picture waits in the copy the player does not
+// show (recPlayer.keep).
+func TestRecordingHalvesOnce(t *testing.T) {
+	ta := newTestApp(t, fakeapi.OnePhone)
+	task := gateway.TaskView{ID: "t", Title: "Grays"}
+	pl := &recPlayer{a: ta.app, task: task.ID, rec: gateway.RecordingView{Length: 10 * time.Second}, state: "paused", shownCopy: -1}
+	ta.rec.pl = pl
+	tt := mg.NewTester(func(c *mg.Context) {
+		ta.sync()
+		ta.recordingView(c, task, pl)
+	}, 1280, 820)
+	// A picture of a recording at the default size, which the player on a
+	// 1× display shows halved once.
+	gray := func(v byte) *video.Frame {
+		return &video.Frame{YUV: lumaYUV(590, 1280, func(x, y int) byte { return v }), Width: 590, Height: 1280}
+	}
+	shows := func(what string, v int) {
+		t.Helper()
+		tt.Frame()
+		if lo, hi := grayRange(tt.Image(), recordingScreen(t, tt, task), 1); lo < v-2 || hi > v+2 {
+			t.Errorf("%s: the screen shows %d to %d, want %d", what, lo, hi, v)
+		}
+	}
+	l := &pl.halves.levels[0]
+
+	pl.show(gray(200), 0)
+	shows("the first picture", 200)
+	if l.pic != 1 || l.shown != 1 || pl.halves.levels[1].pic != 0 {
+		t.Fatalf("the picture halved once made for picture %d, shown for %d; halved twice made for %d; want 1, 1, 0", l.pic, l.shown, pl.halves.levels[1].pic)
+	}
+	// Marked, the planes tell whether they are made again.
+	l.planes[l.cur].Planes[0][0] = 7
+	for range 3 {
+		tt.Frame()
+	}
+	if l.planes[l.cur].Planes[0][0] != 7 || l.pic != 1 {
+		t.Error("the picture was halved again as the player drew it again")
+	}
+
+	// A paused jump: the picture at the time asked for waits in a copy until
+	// the stream has caught up.
+	pl.still = true
+	pl.keep(gray(60))
+	shows("a paused jump, before the stream has caught up", 200)
+	pl.settle()
+	shows("a paused jump", 60)
+	// Another: its picture waits in the other copy, while the screen shows
+	// the first, halved from it.
+	pl.still = true
+	pl.keep(gray(100))
+	shows("another paused jump, before the stream has caught up", 60)
+	pl.settle()
+	shows("another paused jump", 100)
+	if pl.shownCopy != 1 || l.pic != 3 || l.shown != 3 {
+		t.Errorf("after two paused jumps the player shows copy %d and the picture halved once made for picture %d, shown for %d; want 1, 3, 3", pl.shownCopy, l.pic, l.shown)
+	}
+}

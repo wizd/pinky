@@ -121,6 +121,12 @@ func (g *Gateway) statusLocked(d *device, open []approval.Info) (DeviceStatus, s
 			// The computer's device service lost it on Wi-Fi (wifi.go).
 			return DeviceNeedsSetup, "Lost on Wi-Fi"
 		}
+		if d.info.State == driver.StateNeedsSetup && d.info.Setup == driver.SetupOwnHotspot {
+			// The computer is on the phone's own Personal Hotspot, where
+			// its device service does not reach the phone
+			// (internal/driver/ios/lost.go).
+			return DeviceNeedsSetup, "Lost on its hotspot"
+		}
 		if d.info.State == driver.StateNeedsSetup && d.info.Setup == driver.SetupMediaInUse {
 			// An app on the iPhone uses the camera or microphone, and iOS
 			// does not mirror it then; it connects once they are free.

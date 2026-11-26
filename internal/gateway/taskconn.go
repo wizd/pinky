@@ -314,6 +314,7 @@ func (g *Gateway) switchTo(ctx context.Context, d *device, cc driver.ConnectionC
 		return nil
 	}
 	d.switching = target
+	d.switchGen++
 	d.openErr = nil                       // an earlier failure says nothing about this switch
 	d.moving = time.Now().Add(switchWait) // calls wait while it reconnects
 	g.mu.Unlock()

@@ -2,6 +2,40 @@
 
 What changed for people in each release of Pinky, newest first. A version is the release's date in Asia/Shanghai and that day's count: 2026.1107.2 is the second release of 7 November 2026. Notes wait under "Unreleased" until the next release takes them; see [docs/RELEASING.md](docs/RELEASING.md).
 
+## 2026.1126.7 (2026-11-26)
+
+- When a task can't move an iPhone to Pinky on the iPhone, Pinky moves it back to CoreDevice, and the task's step now waits until the phone is back there instead of failing as offline. Thanks @pseudoyu.
+
+## 2026.1126.6 (2026-11-26)
+
+- With Pinky on the iPhone, opening an app that turns the screen, such as Settings over a landscape game, no longer reports the screen settled halfway through the turn, while elements were still in the wrong places and taps on them could miss.
+- With Pinky on the iPhone, the text read from the screen right after switching between a landscape and a portrait app no longer comes from the app before it.
+- With Pinky on the iPhone, elements no longer get new numbers on a screen that hasn't changed.
+- A batch of steps no longer says that an element still on the screen is not on the screen anymore.
+- A batch of steps now stops at a tap that left its switch or checkbox as it was, instead of going on with the steps after it.
+- With Pinky on the iPhone, an iPad back on its home screen is now seen as the Home Screen, and no longer said to show a keyboard.
+
+## 2026.1126.5 (2026-11-26)
+
+- `pinky update`, `pinky mcp` and `pinky daemon` now refuse a word they don't take, as `pinky devices` does: they say which word and exit with status 2, instead of ignoring the word and every flag after it. `pinky update now --check` could install the update it was only asked to look for, and `pinky mcp stdio --fake` could start Pinky with the real phones instead of the fake ones. Thanks @pseudoyu.
+
+## 2026.1126.4 (2026-11-26)
+
+- When you watch a task's recording in Activity, Pinky now scales the picture down smoothly too, as it does the phone's screen, so thin lines and text no longer break up. The difference shows on displays that aren't high-resolution, and on any display for recordings kept at Original size (Settings › Privacy › Recording size).
+
+## 2026.1126.3 (2026-11-26)
+
+- When Pinky shows a phone's screen small, as in a narrow window from Open in a window or in All phones, it now scales the picture down smoothly, so thin lines and text no longer break up. The difference is largest on displays that aren't high-resolution. Thanks @QFinn-Penguin for reporting it.
+
+## 2026.1126.2 (2026-11-26)
+
+- `pinky devices` now refuses a word it doesn't take, such as a phone's name: it says which word and exits with status 2, instead of ignoring the word and every flag after it (`pinky devices pixel-9 --json` printed the table and exited 0). A flag it doesn't have is reported once and also exits 2, and `pinky devices -h` prints the command's usage. Thanks @6moran.
+
+## 2026.1126.1 (2026-11-26)
+
+- When your Mac is on the iPhone's own Personal Hotspot and its device service can't reach the iPhone, Pinky now shows it as Lost on its hotspot and says to plug it in with a cable or to connect the Mac and the iPhone to the same other Wi-Fi network, instead of offering Restart device service…, which doesn't help there. Thanks @SamuelZ12 for reporting it.
+- With Settings › Phones › Restart device service without a password on, Pinky no longer restarts the device service every 5 minutes for an iPhone that a restart didn't bring back, which disconnected every iPhone and iPad on the Mac each time: after one restart that doesn't help, it leaves the phone to you until the Mac lists it again. Restart device service… still works.
+
 ## 2026.1125.9 (2026-11-25)
 
 - An iPhone app with a specially crafted Info.plist can no longer make Pinky quit when an agent asks to install it. Pinky now refuses an app whose Info.plist or provisioning profile is larger than 1 MB; real ones are tens of kilobytes. Thanks @pseudoyu.

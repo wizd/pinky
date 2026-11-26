@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"os/exec"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -45,6 +48,16 @@ import (
 // macOS's request for an administrator's password when the person asks, or
 // without one once the person allowed that (quietrestart.go), which also
 // lets the gateway restart it by itself for a phone an agent uses.
+//
+// A Mac on the iPhone's own Personal Hotspot is another matter (#235,
+// 2026-11-26): there usbmuxd matched the phone's record but connected only
+// to its IPv6 link-local address, gave up after 75 s and ignored the phone,
+// while lockdown answered at the phone's address on the hotspot,
+// 172.20.10.1, and restarting usbmuxd did not help. So a missing phone whose
+// records name hotspotPhone while this Mac has an address in hotspotNet is
+// listed with driver.SetupOwnHotspot instead, after the same wait, which
+// the gateway never restarts the service for: a cable brings it back, or
+// the Mac and the phone on the same other Wi-Fi network.
 
 const (
 	// lostAfter is how long a missing phone must show up on the network
@@ -82,6 +95,14 @@ const (
 // mobdevService is the service type a phone advertises for Wi-Fi sync.
 const mobdevService = "_apple-mobdev2._tcp"
 
+// hotspotNet is the network of an iPhone's Personal Hotspot, where the
+// phone is hotspotPhone: netmux's phoneLink, which a phone also makes with
+// a computer on its cable.
+var (
+	hotspotNet   = netip.MustParsePrefix("172.20.10.0/28")
+	hotspotPhone = netip.MustParseAddr("172.20.10.1")
+)
+
 // lostState is the provider's search for phones usbmuxd lost. Its zero value
 // is ready.
 type lostState struct {
@@ -95,7 +116,7 @@ type lostState struct {
 	pairs   map[string]pairState // by UDID
 	seen    map[string]time.Time // by UDID: on the network since, while missing from usbmuxd's list
 	names   map[string]driver.Info
-	reports map[string]bool      // logged as lost
+	reports map[string]string    // by UDID: the step it was logged as lost with (SetupDeviceService, SetupOwnHotspot)
 	cabled  map[string]time.Time // by UDID: when usbmuxd last listed it on a cable
 	netted  map[string]time.Time // by UDID: when usbmuxd last listed it over the network
 	notSeen map[string]bool      // logged as not seen on Wi-Fi
@@ -103,6 +124,7 @@ type lostState struct {
 	// For tests.
 	browseFn func() (bonjourSource, error)
 	pairFn   func(udid string) (netmux.PairInfo, error)
+	localFn  func() []netip.Addr // this Mac's addresses
 	anyOS    bool
 }
 
@@ -139,7 +161,9 @@ func (p *Provider) remember(infos []driver.Info) {
 
 // lostPhones returns the phones the person uses that usbmuxd does not list
 // though they have shown up on the network for lostAfter (unplugGrace after
-// a pull), and those not seen on Wi-Fi at all a moment after a pull: listed
+// a pull), with driver.SetupOwnHotspot when this Mac is on the phone's own
+// Personal Hotspot (ownHotspot), and those not seen on Wi-Fi at all a
+// moment after a pull: listed
 // are the UDIDs usbmuxd lists now, cabled those it lists on a cable, netted
 // those it lists over the network. A phone usbmuxd listed over the network
 // after its pull came through it, and may be asleep now: the slow rule. It
@@ -188,7 +212,7 @@ func (p *Provider) lostPhones(listed, cabled, netted map[string]bool) []driver.I
 	if w.pairs == nil {
 		w.pairs = map[string]pairState{}
 		w.seen = map[string]time.Time{}
-		w.reports = map[string]bool{}
+		w.reports = map[string]string{}
 	}
 	if w.notSeen == nil {
 		w.notSeen = map[string]bool{}
@@ -257,10 +281,10 @@ func (p *Provider) lostPhones(listed, cabled, netted map[string]bool) []driver.I
 	for _, id := range wanted {
 		pairs[id] = w.pairs[id].info
 	}
-	onNet := map[string]bool{}
+	found := map[string][]mdns.Service{} // by UDID: its records on the network
 	for _, s := range w.src.Services() {
 		if id := netmux.Match(s, pairs); id != "" {
-			onNet[id] = true
+			found[id] = append(found[id], s)
 		}
 	}
 	var out []driver.Info
@@ -269,7 +293,7 @@ func (p *Provider) lostPhones(listed, cabled, netted map[string]bool) []driver.I
 		mac := w.pairs[id].info.WiFiMAC
 		pulled := w.cabled[id]
 		recent := connOn[id] && !pulled.IsZero() && now.Sub(pulled) < unplugRecent && !w.netted[id].After(pulled)
-		if !paired || !onNet[id] {
+		if !paired || len(found[id]) == 0 {
 			delete(w.seen, id)
 			delete(w.reports, id)
 			if paired && recent && now.Sub(pulled) >= notSeenAfter && now.Sub(w.started) >= notSeenSearch {
@@ -302,13 +326,23 @@ func (p *Provider) lostPhones(listed, cabled, netted map[string]bool) []driver.I
 		if now.Sub(since) < wait || (!recent && !ok) {
 			continue
 		}
-		if !w.reports[id] {
-			w.reports[id] = true
-			p.logger().Warn("iphone: usbmuxd lost the phone on Wi-Fi; it is on the network", "device", id, "wifi_mac", mac, "since", since)
+		setup, detail := driver.SetupDeviceService, lostDetail
+		local, hotspot := w.ownHotspot(found[id])
+		if hotspot {
+			setup, detail = driver.SetupOwnHotspot, ownHotspotDetail
+		}
+		if w.reports[id] != setup {
+			w.reports[id] = setup
+			if hotspot {
+				p.logger().Warn("iphone: usbmuxd does not list the phone, which is on the network: this Mac is on the phone's own Personal Hotspot, where usbmuxd does not reach it",
+					"device", id, "wifi_mac", mac, "addr", hotspotPhone, "local", local, "since", since)
+			} else {
+				p.logger().Warn("iphone: usbmuxd lost the phone on Wi-Fi; it is on the network", "device", id, "wifi_mac", mac, "since", since)
+			}
 		}
 		info := w.names[id]
 		info.ID, info.Platform, info.Connection, info.Backend = id, driver.IOS, "wifi", backendCoreDevice
-		info.State, info.Setup, info.Detail = driver.StateNeedsSetup, driver.SetupDeviceService, lostDetail
+		info.State, info.Setup, info.Detail = driver.StateNeedsSetup, setup, detail
 		out = append(out, info)
 	}
 	for id := range w.seen {
@@ -333,12 +367,55 @@ func (w *lostState) stopLocked() {
 	}
 }
 
+// ownHotspot returns this Mac's address on a missing phone's own Personal
+// Hotspot: when the phone's records (svcs) name its address there,
+// hotspotPhone, and this Mac has an address in hotspotNet. A phone that is
+// only a client of a hotspot has another address there. The caller holds
+// w.mu.
+func (w *lostState) ownHotspot(svcs []mdns.Service) (netip.Addr, bool) {
+	if !slices.ContainsFunc(svcs, func(s mdns.Service) bool { return slices.Contains(s.Addrs, hotspotPhone) }) {
+		return netip.Addr{}, false
+	}
+	local := w.localFn
+	if local == nil {
+		local = localAddrs
+	}
+	for _, a := range local() {
+		if hotspotNet.Contains(a) {
+			return a, true
+		}
+	}
+	return netip.Addr{}, false
+}
+
+// localAddrs returns this computer's addresses.
+func localAddrs() []netip.Addr {
+	ifAddrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	var out []netip.Addr
+	for _, a := range ifAddrs {
+		if n, ok := a.(*net.IPNet); ok {
+			if ip, ok := netip.AddrFromSlice(n.IP); ok {
+				out = append(out, ip.Unmap())
+			}
+		}
+	}
+	return out
+}
+
 // notSeenDetail is the Detail of a phone not seen on Wi-Fi since its cable
 // was pulled, which the gateway's status line shows.
 const notSeenDetail = "Not seen on Wi-Fi"
 
 // lostDetail says what is wrong with a phone usbmuxd lost.
 const lostDetail = "This Mac's device service (usbmuxd) lost the iPhone on Wi-Fi: the iPhone is on the network, but the service no longer lists it, and may not for up to an hour. Restarting the service brings it back."
+
+// ownHotspotDetail says what is wrong with a phone usbmuxd does not list
+// while this Mac is on the phone's own Personal Hotspot.
+const ownHotspotDetail = "This Mac is on the iPhone's own Personal Hotspot, where macOS's device service (usbmuxd) does not reach the iPhone over the network. " +
+	"A cable brings it back, or the Mac and the iPhone on the same other Wi-Fi network. Restarting the service does not help."
 
 // readPairInfo reads what matches the phone on the network from this
 // computer's pair record, through usbmuxd. It does not contact the phone.

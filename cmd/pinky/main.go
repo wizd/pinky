@@ -85,6 +85,20 @@ func exitCode(err error) int {
 	return 1
 }
 
+// wordsUsageError refuses a word fs left, for a command that takes flags
+// alone, with the exit status of a usage error, 2. flag.Parse stops at the
+// first word that is not a flag, so a word where a flag was meant also
+// drops the flags after it: `pinky update now --check` would install the
+// update it was asked only to look for. As `pinky devices` refuses one.
+func wordsUsageError(fs *flag.FlagSet) error {
+	if fs.NArg() == 0 {
+		return nil
+	}
+	fmt.Fprintf(fs.Output(), "%s: unexpected %q: it takes no arguments, only flags\n\n", fs.Name(), fs.Arg(0))
+	fs.Usage()
+	return &exitError{code: 2}
+}
+
 // errUnknownCommand says the command line named a command Pinky does not
 // know: main prints the usage and quits 2.
 var errUnknownCommand = errors.New("unknown command")

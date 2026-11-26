@@ -20,6 +20,7 @@ type quietProvider struct {
 	quiet   atomic.Int32 // restarts without a password
 	allows  atomic.Int32
 	failing atomic.Bool
+	stuck   atomic.Bool // a restart does not bring the phone back
 }
 
 func (p *quietProvider) QuietRestart() (bool, bool) { return true, p.allowed.Load() }
@@ -39,13 +40,23 @@ func (p *quietProvider) RestartDeviceServiceQuietly(context.Context) error {
 	if p.failing.Load() {
 		return errors.New("killall failed")
 	}
-	p.lost.Store(false)
+	if !p.stuck.Load() {
+		p.lost.Store(false)
+	}
 	return nil
 }
 
 // lostGateway starts a gateway whose iPhone the device service lost on
 // Wi-Fi: Pinky used it before, in an earlier run.
 func lostGateway(t *testing.T, allowed bool) (*Gateway, *quietProvider) {
+	t.Helper()
+	return lostGatewayWith(t, allowed, false)
+}
+
+// lostGatewayWith is lostGateway, with the iPhone out of reach on its own
+// Personal Hotspot instead when hotspot is set, and opts applied to the
+// gateway's options.
+func lostGatewayWith(t *testing.T, allowed, hotspot bool, opts ...func(*Options)) (*Gateway, *quietProvider) {
 	t.Helper()
 	dir := t.TempDir()
 	iphone := demo.NewDevice("iphone", "DIYgod's iPhone", driver.IOS)
@@ -55,12 +66,17 @@ func lostGateway(t *testing.T, allowed bool) (*Gateway, *quietProvider) {
 	g.Flush()
 	g.Close()
 
-	p := &quietProvider{restartingProvider: &restartingProvider{airProvider: newAirProvider(iphone)}}
+	p := &quietProvider{restartingProvider: &restartingProvider{airProvider: newAirProvider(iphone), hotspot: hotspot}}
 	p.lost.Store(true)
 	p.allowed.Store(allowed)
-	g2, _ := newTestGateway(t, func(o *Options) { o.Providers = []driver.Provider{p}; o.DataDir = dir })
+	opts = append([]func(*Options){func(o *Options) { o.Providers = []driver.Provider{p}; o.DataDir = dir }}, opts...)
+	g2, _ := newTestGateway(t, opts...)
 	g2.SetWiFi(true)
-	waitFor(t, "the iPhone lost", func() bool { v, _ := viewOf(g2, "iphone"); return v.StatusLine == "Lost on Wi-Fi" })
+	line := "Lost on Wi-Fi"
+	if hotspot {
+		line = "Lost on its hotspot"
+	}
+	waitFor(t, "the iPhone lost", func() bool { v, _ := viewOf(g2, "iphone"); return v.StatusLine == line })
 	return g2, p
 }
 
@@ -215,4 +231,101 @@ func TestManualRestartCountsForLimit(t *testing.T) {
 	if p.quiet.Load() != 0 || p.restarts.Load() != 1 {
 		t.Fatalf("%d quiet restarts, %d asked for", p.quiet.Load(), p.restarts.Load())
 	}
+}
+
+// TestQuietRestartNotForOwnHotspot: a phone out of reach because the
+// computer is on the phone's own Personal Hotspot (driver.SetupOwnHotspot)
+// gets no restart of the device service, which does not help there, even
+// with restarts allowed and a task holding it, and no Needs you card asking
+// for one. Its agent is told to ask for a cable or another Wi-Fi network.
+func TestQuietRestartNotForOwnHotspot(t *testing.T) {
+	g, p := lostGatewayWith(t, true, true)
+	ctx := context.Background()
+	s := g.OpenSession(agent)
+	defer s.Close()
+	res := s.Connect(ctx, ConnectRequest{Task: "Check the weather"})
+	if res.Status != StatusNeedsSetup || res.Setup != driver.SetupOwnHotspot {
+		t.Fatalf("connecting: %+v", res)
+	}
+	for _, want := range []string{"own Personal Hotspot", "restarting the service does not help", "cable", "same other Wi-Fi network",
+		"phone_handoff", "If nobody is at the computer", "phone_release"} {
+		if !strings.Contains(res.Message, want) {
+			t.Errorf("the message lacks %q: %s", want, res.Message)
+		}
+	}
+	if strings.Contains(res.Message, "administrator") || strings.Contains(res.Message, "Restart device service") {
+		t.Errorf("the message offers a restart: %s", res.Message)
+	}
+	g.Refresh(ctx)
+	if obs := s.Observe(ctx, ObserveRequest{}); obs.Status != StatusNeedsSetup || obs.Setup != driver.SetupOwnHotspot {
+		t.Fatalf("observing: %+v", obs)
+	}
+	if n := p.quiet.Load() + p.restarts.Load(); n != 0 {
+		t.Fatalf("%d restarts for a phone on its own hotspot", n)
+	}
+	for _, n := range g.Needs() {
+		if n.Kind == NeedSetup {
+			t.Errorf("a card for a phone on its own hotspot: %+v", n)
+		}
+	}
+}
+
+// TestQuietRestartInVain: once Pinky's restart of the device service did
+// not bring a phone back, Pinky does not restart the service by itself for
+// it again, which would drop every iPhone and iPad on the computer every
+// quietRestartEvery for nothing, and its agent is told that only a person
+// can help now. Once the service lists the phone again, losing it later
+// gets a restart again.
+func TestQuietRestartInVain(t *testing.T) {
+	saved := lostBackWait
+	lostBackWait = 50 * time.Millisecond
+	t.Cleanup(func() { lostBackWait = saved })
+	g, p := lostGatewayWith(t, true, false, func(o *Options) { o.MaxBlock = 100 * time.Millisecond })
+	p.stuck.Store(true)
+	ctx := context.Background()
+	s := g.OpenSession(agent)
+	defer s.Close()
+	if res := s.Connect(ctx, ConnectRequest{Task: "Check the weather"}); res.Status != StatusNeedsSetup {
+		t.Fatalf("connecting: %+v", res)
+	}
+	waitFor(t, "a restart", func() bool { return p.quiet.Load() == 1 })
+	waitFor(t, "the restart found in vain", func() bool {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		return restartInVainLocked(g.devices["iphone"])
+	})
+	obs := s.Observe(ctx, ObserveRequest{})
+	if obs.Status != StatusNeedsSetup {
+		t.Fatalf("observing: %+v", obs)
+	}
+	for _, want := range []string{"did not bring the phone back", "will not restart it again", "cable", "phone_release", "phone_handoff"} {
+		if !strings.Contains(obs.Message, want) {
+			t.Errorf("the message lacks %q: %s", want, obs.Message)
+		}
+	}
+	h := s.Handoff(ctx, HandoffRequest{Reason: "Please plug the iPhone in"})
+	if h.Status != StatusPending || !strings.Contains(h.Message, "did not bring it back") || !strings.Contains(h.Message, "stop waiting") {
+		t.Fatalf("the handoff: %+v", h)
+	}
+
+	// Not even once quietRestartEvery passed.
+	g.mu.Lock()
+	g.serviceRestarts[driver.IOS] = time.Now().Add(-quietRestartEvery)
+	g.mu.Unlock()
+	g.Refresh(ctx)
+	s.Observe(ctx, ObserveRequest{})
+	if p.quiet.Load() != 1 {
+		t.Fatalf("restarted again for a phone the last restart did not bring back: %d restarts", p.quiet.Load())
+	}
+
+	// The service lists the phone again (a cable, its network): losing it
+	// later gets a restart again, at once, as quietRestartEvery passed.
+	p.stuck.Store(false)
+	p.lost.Store(false)
+	waitFor(t, "the iPhone back", func() bool {
+		v, _ := viewOf(g, "iphone")
+		return v.Status != DeviceNeedsSetup && v.StatusLine != "Lost on Wi-Fi"
+	})
+	p.lost.Store(true)
+	waitFor(t, "a restart for the phone lost again", func() bool { return p.quiet.Load() == 2 })
 }

@@ -179,7 +179,7 @@ Agents see one MCP server, `pinky`, with 21 tools. Every action waits for the sc
 | `phone_key` | `key`: back, home, recents, enter, tab, delete, escape, dpad keys, page\_up, page\_down | Result and new screen |
 | `phone_launch` | `app`: name, bundle id or package; `language?`, `region?` | Result and new screen |
 | `phone_apps` | `query?` | Installed apps inside the agent's scope |
-| `phone_batch` | `steps[]` | One result per step; stops at the first step that is not `settled` |
+| `phone_batch` | `steps[]` | One result per step; stops at the first step that is not `settled`, or whose tap left a switch as it was |
 | `phone_read_list` | `ref?`, `scroll_area?`, `direction?`, `max_screens?` (up to 30), `max_ms?`, `ocr?`, `scroll_percent?`, `continuation?` | One compact, ordered transcript from a vertical list, with overlap removed; a partial result says why it stopped and carries a continuation |
 | `phone_wait_for` | `text` or `any[]` (up to 10 texts), `gone?`, `area?`, `timeout_ms?` (up to 45000) | The screen once one of the texts appears, or once all have disappeared; `area` counts only the text in one part of the screen |
 | `phone_files` | none | A local folder synced with the phone's `Pinky/` folder (Android only); agents elsewhere upload files into it |

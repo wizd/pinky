@@ -709,7 +709,7 @@ func TestFrameSettle(t *testing.T) {
 				n++
 			}
 			return n, nil
-		})
+		}, nil)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/DIYgod/pinky/internal/demo"
@@ -63,6 +64,64 @@ func TestRefSurvivesAncestryFlicker(t *testing.T) {
 	mustStatus(t, res, StatusSettled)
 	if n := len(dev.Inputs()); n == 0 || dev.Inputs()[n-1].Kind != "tap" {
 		t.Fatalf("the tap did not reach the phone: %+v", dev.Inputs())
+	}
+}
+
+// wrapDev is a demo phone whose element ancestry changes once wrap is
+// set: the same elements, with the same labels and places, under other
+// paths from then on.
+type wrapDev struct {
+	*demo.Device
+	wrap atomic.Bool
+}
+
+func (w *wrapDev) Observe(ctx context.Context, opt driver.ObserveOptions) (*screen.Screen, error) {
+	s, err := w.Device.Observe(ctx, opt)
+	if err == nil && w.wrap.Load() {
+		for i := range s.Elements {
+			s.Elements[i].Path += "/wrapper"
+		}
+	}
+	return s, err
+}
+
+// The field report of 2026-11-26 (an iPad on iPadOS 26 over Wi-Fi): a
+// phone_batch step that tapped a ref from the screen the agent had seen
+// got not_found ("is not on the screen anymore") after the refs changed
+// meanwhile, though the element kept its label and place. The step looked
+// for the ref in the screen the step before it ended on, which the agent
+// had not seen and which lacked the ref, not in the screen the agent took
+// it from.
+func TestBatchRefSurvivesAncestryChange(t *testing.T) {
+	ctx := context.Background()
+	dev := &wrapDev{Device: demo.NewDevice("pixel", "Pixel 9", driver.Android)}
+	pol := policy.Default()
+	for cat, e := range demo.PolicyApps() {
+		pol.AddApps(cat, e)
+	}
+	g, err := New(Options{
+		Providers: []driver.Provider{videoProvider{demo.NewProvider(driver.Android, dev.Device), dev}}, Policy: pol,
+		TrustNewAgents: true, DataDir: t.TempDir(), SettleMax: 50e6, PollInterval: 5e6, DiscoverEvery: 3600e9,
+		NoScreenshots: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { g.Close() })
+	s, _ := connect(t, g, "Lunch")
+	res := s.Act(ctx, Call{}, Action{Tool: "launch", App: "Dinely"})
+	mustStatus(t, res, StatusSettled)
+	home, orders := ref(t, res, "Home"), ref(t, res, "Orders")
+	dev.wrap.Store(true)
+	res = s.Batch(ctx, BatchRequest{Steps: []Action{
+		{Tool: "tap", Ref: home}, // the tab already shown: nothing changes
+		{Tool: "tap", Ref: orders},
+	}})
+	if len(res.Steps) != 2 || res.IsError() || res.Status != StatusSettled {
+		t.Fatalf("batch: %+v\nlast step: %s", res, res.Steps[len(res.Steps)-1].Message)
+	}
+	if got := dev.Current(); got != "orders" {
+		t.Fatalf("on %q after tapping Orders", got)
 	}
 }
 

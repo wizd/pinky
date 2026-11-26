@@ -65,6 +65,11 @@ type Action struct {
 	// list shapes a swipe by direction that phone_read_list sends
 	// (read_list.go); nil for every other swipe.
 	list *listSwipe
+	// seen, for a phone_batch step, is the screen the agent had received
+	// when the batch began: the screen the step's refs come from. The
+	// steps before it end on screens the agent sees only once the batch
+	// returns (prepare's relocate).
+	seen *screen.Screen
 }
 
 // listSwipe shapes a phone_read_list swipe: area, when set, takes the
@@ -885,6 +890,14 @@ func (g *Gateway) prepare(ctx context.Context, l *lease, a Action, cur *screen.S
 		if !ok {
 			e, ok = relocate(seen, cur, ref)
 		}
+		if !ok && a.seen != nil && a.seen != seen {
+			// A phone_batch step whose ref the screen the step before it
+			// ended on lacks: its refs come from the screen the agent had
+			// when the batch began (field report, an iPad on iPadOS 26,
+			// 2026-11-26: refs that changed between the two made a step
+			// "not on the screen anymore" with its element in place).
+			e, ok = relocate(a.seen, cur, ref)
+		}
 		if !ok {
 			return nil, g.attachScreen(l, errResult(ErrNotFound, "[%d] is not on the screen anymore. Nothing was done.", ref), cur)
 		}
@@ -1671,10 +1684,23 @@ func (g *Gateway) pendingResult(l *lease, info approval.Info) *Result {
 	msg := fmt.Sprintf("Still waiting for the person to %s (%s). Nothing was done yet. Repeat the same call with approval_id %q; the person has %s left.",
 		what, info.Title, info.ID, approval.Human(left))
 	g.mu.Lock()
-	lost := info.Kind == approval.KindHandoff && waitingLocked(l.dev) && l.dev.info.Setup == driver.SetupDeviceService
-	quiet := l.dev.quietRestart
+	waiting := info.Kind == approval.KindHandoff && waitingLocked(l.dev)
+	lost := waiting && l.dev.info.Setup == driver.SetupDeviceService
+	hotspot := waiting && l.dev.info.Setup == driver.SetupOwnHotspot
+	quiet, inVain := l.dev.quietRestart, restartInVainLocked(l.dev)
 	g.mu.Unlock()
 	switch {
+	case hotspot:
+		// Restarts never help there (driver.SetupOwnHotspot).
+		msg += " The phone is still out of reach on its own Personal Hotspot, where restarting the computer's device service does not help: " +
+			"a person brings it back with a cable, or with the computer and the phone on the same other Wi-Fi network. " +
+			"If nobody is at the computer, as in a scheduled or unattended run, stop waiting: release the phone with phone_release and use another one, or end the task."
+	case lost && inVain:
+		// Pinky's restart did not bring it back, and it does not restart
+		// again for it (servicerestart.go).
+		msg += " The phone is still lost, and Pinky's restart of the computer's device service did not bring it back: " +
+			"a person brings it back with a cable, or by checking its network. " +
+			"If nobody is at the computer, as in a scheduled or unattended run, stop waiting: release the phone with phone_release and use another one, or end the task."
 	case lost && quiet:
 		// Pinky restarts the service by itself (servicerestart.go).
 		msg += " The phone still waits for the computer's device service, which Pinky restarts by itself without a password, as the person allowed: " +
@@ -2026,6 +2052,7 @@ func (g *Gateway) executeOn(ctx context.Context, l *lease, c Call, a Action, p *
 	}
 	if n := unflipped(a, p, next); n != "" {
 		res.Message = strings.TrimSpace(res.Message + " " + n)
+		res.unchanged = true
 	}
 	if f := p.follow; f != nil && f.note != "" {
 		res.Message = strings.TrimSpace(res.Message + " " + f.note)

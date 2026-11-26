@@ -166,6 +166,12 @@ func (a *app) phoneCenter(c *mg.Context, d gateway.DeviceView) {
 		a.lostPage(c, d)
 		return
 	}
+	if onOwnHotspot(d) {
+		// The computer is on the phone's own Personal Hotspot, where the
+		// device service does not reach it (wifi.go).
+		hotspotPage(c, d)
+		return
+	}
 	if changedOnWiFi(d) {
 		// What answers for it over the network lacks its mark (wifi.go).
 		a.changedPage(c, d)

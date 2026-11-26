@@ -26,6 +26,9 @@ func runMCP(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if err := wordsUsageError(fs); err != nil {
+		return err
+	}
 	dirs, err := api.DefaultDirs()
 	if err != nil {
 		return err

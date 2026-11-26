@@ -378,6 +378,42 @@ func TestSwitchOutlastsGrace(t *testing.T) {
 	}
 }
 
+// An open that began before a move to another connection, and fails, does
+// not end the move's wait: a pass that listed the phone between a failed
+// move to the helper and the move back opened it over the helper again,
+// and its failure ended the move back with the phone still offline, so the
+// task's next call found it offline (TestSwitchOutlastsGrace, now and
+// then). An open the move began still ends it when it fails.
+func TestStaleOpenKeepsSwitchWaiting(t *testing.T) {
+	p, _ := newTwoWayPhone()
+	p.helperErr = errors.New("the runner quit")
+	g := twoWayGateway(t, p, func(o *Options) { o.DiscoverEvery = time.Hour })
+	g.mu.Lock()
+	d := g.devices["iphone"]
+	g.mu.Unlock()
+	g.setOffline(d, "the phone disconnected")
+	if err := p.SetConnection("iphone", wayHelper); err != nil { // the open fails
+		t.Fatal(err)
+	}
+	waiting := func(began func()) bool {
+		g.mu.Lock()
+		d.opening, d.openGen = true, d.switchGen
+		began()
+		d.switching, d.moving = wayCoreDevice, time.Now().Add(time.Minute)
+		g.mu.Unlock()
+		g.open(context.Background(), d, p)
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		return !d.moving.IsZero()
+	}
+	if !waiting(func() { d.switchGen++ }) { // the move began after the open
+		t.Fatal("a failed open from before the move ended its wait")
+	}
+	if waiting(func() {}) {
+		t.Fatal("a failed open the move began left it waiting")
+	}
+}
+
 // A connection the person chooses while a task's move waits is theirs:
 // the task neither undoes it nor puts the provider back on Automatic.
 func TestPersonChoosesDuringSwitch(t *testing.T) {

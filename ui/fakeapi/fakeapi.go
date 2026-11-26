@@ -450,6 +450,8 @@ func (a *API) deviceView(d *device) gateway.DeviceView {
 		v.Status, v.StatusLine = gateway.DeviceNeedsSetup, "Found on Wi-Fi"
 	case d.info.Setup == driver.SetupDeviceService && d.info.State == driver.StateNeedsSetup:
 		v.Status, v.StatusLine = gateway.DeviceNeedsSetup, "Lost on Wi-Fi"
+	case d.info.Setup == driver.SetupOwnHotspot && d.info.State == driver.StateNeedsSetup:
+		v.Status, v.StatusLine = gateway.DeviceNeedsSetup, "Lost on its hotspot"
 	case d.info.Setup == driver.SetupPhoneChanged && d.info.State == driver.StateNeedsSetup:
 		v.Status, v.StatusLine = gateway.DeviceNeedsSetup, "Not the same phone"
 	case d.info.Setup == driver.SetupMediaInUse && d.info.State == driver.StateNeedsSetup:

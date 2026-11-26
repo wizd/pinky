@@ -19,14 +19,45 @@ import (
 	"github.com/DIYgod/pinky/internal/gateway"
 )
 
+// devicesUsage is what `pinky devices -h` prints, and what a word the
+// command does not take ends with.
+const devicesUsage = `Usage: pinkyctl devices [--json] [--fake]
+
+Lists the phones, from the running gateway or from the phones themselves
+when none runs.
+  --json   print them as JSON
+  --fake   list the fake phones instead, when no gateway runs
+`
+
+// devicesUsageError ends `pinky devices` with the exit status of a usage
+// error, 2, after saying which word it does not take.
+func devicesUsageError(fs *flag.FlagSet, word string) error {
+	fmt.Fprintf(fs.Output(), "pinky devices: unexpected %q: devices takes no arguments, only --json and --fake\n\n", word)
+	fmt.Fprint(fs.Output(), devicesUsage)
+	return &exitError{code: 2}
+}
+
 // runDevices lists phones: from the running gateway, or straight from the
 // providers when none runs.
 func runDevices(args []string) error {
 	fs := flag.NewFlagSet("pinky devices", flag.ContinueOnError)
 	fake := fs.Bool("fake", false, "list the fake phones when no gateway runs")
 	asJSON := fs.Bool("json", false, "print JSON")
+	fs.Usage = func() { fmt.Fprint(fs.Output(), devicesUsage) }
 	if err := fs.Parse(args); err != nil {
-		return err
+		if errors.Is(err, flag.ErrHelp) {
+			return err
+		}
+		// The flag package said why; main printing it again would say it
+		// twice. A bad flag is a usage error, as in `pinky task`: 2.
+		return &exitError{code: 2}
+	}
+	// flag.Parse stops at the first word that is not a flag, so a word
+	// where a flag was meant also drops the flags after it: `pinky devices
+	// pixel-9 --json` would print the table the script cannot read. Refuse
+	// the word, as `task list` refuses one.
+	if fs.NArg() > 0 {
+		return devicesUsageError(fs, fs.Arg(0))
 	}
 	dirs, err := api.DefaultDirs()
 	if err != nil {

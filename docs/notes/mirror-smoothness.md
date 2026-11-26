@@ -188,6 +188,8 @@ So the frame rate is not limited by what Pinky asks for. Device MCP's "HEVC 4:4:
 
 Decoding: 2.4 to 2.9 ms a 1080×2400 H.264 picture with VideoToolbox, 0 errors, 0 packets without a picture in every run above. MyGo's frame stats: a frame that only paints the mirror again takes 0.1 to 0.5 ms on the main thread; one that builds the view again 0.3 to 0.6 ms.
 
+Since 2026-11-26 a surface that shows the picture at half its size or less draws a copy halved as often as its pixels need, which the main thread makes as the first surface at that level paints a new picture ([client.md](client.md), "Halved pictures"): 0.33 ms for an iPhone's 1206×2622 halved once, 0.42 ms twice, once a picture however many surfaces show it, and nothing between pictures. At 60 pictures a second that is 2 to 2.5% of a core on top of the numbers here, which were measured before.
+
 Painting, before and after the fix (emulator `-gpu host`, the window on the 60 Hz display, frames a second of the whole app and its CPU as a share of one core, two runs each):
 
 | | Still 20 s | Scrolling 20 s | Still again 15 s |

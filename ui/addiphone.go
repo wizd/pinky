@@ -251,6 +251,11 @@ func (a *app) addIPhoneSteps(c *mg.Context) {
 				// macOS's device service lost it on Wi-Fi (wifi.go).
 				guideProblem(c, locales.LostTitle(d.Info.Name), locales.LostDetail(d.Info.Name))
 				a.restartControls(c, *d, false)
+			case driver.SetupOwnHotspot:
+				// This Mac is on the phone's own Personal Hotspot, where
+				// the device service does not reach it, and a restart does
+				// not help (wifi.go).
+				guideProblem(c, locales.LostHotspotTitle(d.Info.Name), locales.LostHotspotDetail(d.Info.Name))
 			case driver.SetupUnlock:
 				if lockedOnWiFi(*d) {
 					// Pinky connects to it over Wi-Fi once it is unlocked.

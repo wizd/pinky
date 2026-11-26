@@ -179,6 +179,9 @@ func setupWords(d gateway.DeviceView, step string, here bool) (title, text, note
 		return locales.AddPhoneIPhoneFoundTitle(), locales.FoundDetail(), ""
 	case driver.SetupDeviceService:
 		return locales.LostTitle(d.Info.Name), locales.LostDetail(d.Info.Name), locales.LostManual()
+	case driver.SetupOwnHotspot:
+		// A restart does not help there: a cable or another Wi-Fi network.
+		return locales.LostHotspotTitle(d.Info.Name), locales.LostHotspotDetail(d.Info.Name), ""
 	case driver.SetupDeveloperMode:
 		if d.Info.Connection == "wifi" {
 			return locales.CheckDeveloperModeTitle(), locales.AddPhoneIPhoneStepDevModeDetail(), locales.AddPhoneIPhoneDevModeWiFiNote(d.Info.Name)

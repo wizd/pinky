@@ -112,6 +112,20 @@ func (a *API) LoseOnWiFi(deviceID string) {
 	a.emit(gateway.Event{Kind: gateway.EventDevices, DeviceID: deviceID})
 }
 
+// LoseOnOwnHotspot shows a phone as one macOS's device service does not
+// reach because the Mac is on the phone's own Personal Hotspot
+// (driver.SetupOwnHotspot). A restart does not bring it back.
+func (a *API) LoseOnOwnHotspot(deviceID string) {
+	a.mu.Lock()
+	if d := a.device(deviceID); d != nil {
+		d.info.Connection = "wifi"
+		setStep(&d.info, driver.Info{State: driver.StateNeedsSetup, Setup: driver.SetupOwnHotspot,
+			Detail: "This Mac is on the iPhone's own Personal Hotspot, where macOS's device service (usbmuxd) does not reach the iPhone over the network."})
+	}
+	a.mu.Unlock()
+	a.emit(gateway.Event{Kind: gateway.EventDevices, DeviceID: deviceID})
+}
+
 // RestartDeviceService implements the client's restart: the phones the
 // service lost come back online, or it fails with what SetRestartError set.
 func (a *API) RestartDeviceService(ctx context.Context, deviceID, reason string) error {

@@ -121,11 +121,15 @@ func (m *mjpegReader) next(ctx context.Context) (frame, error) {
 		}
 		return frame{}, fmt.Errorf("MJPEG: %w", err)
 	}
-	turn := exifTurn(b)
+	turn, tagged := exifTurn(b)
 	if turn == 0 && m.upside != nil {
 		turn = m.upside()
 	}
-	return frame{key: frameKey(b), turn: turn, decode: func() (image.Image, error) { return jpeg.Decode(bytes.NewReader(b)) }}, nil
+	return frame{key: frameKey(b), turn: turn, tagged: tagged, decode: func() (image.Image, error) { return jpeg.Decode(bytes.NewReader(b)) },
+		size: func() (int, int, error) {
+			c, err := jpeg.DecodeConfig(bytes.NewReader(b))
+			return c.Width, c.Height, err
+		}}, nil
 }
 
 func (m *mjpegReader) Close() error {

@@ -1,9 +1,12 @@
 package ios
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
+	"log/slog"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -149,6 +152,74 @@ func TestLostPhonePrivateAddress(t *testing.T) {
 	advertise("0B9E7D3C-1A2F-4C6E-9D8B-7A6F5E4D3C2B")
 	if got := listed(t, w.Provider); len(got) != 0 {
 		t.Fatalf("another computer's record: %+v", got)
+	}
+}
+
+// TestLostPhoneOwnHotspot: a phone usbmuxd does not list, whose record
+// names its address on its own Personal Hotspot (172.20.10.1) while this
+// Mac has an address on that network, is listed as on its own hotspot after
+// the same wait as a lost one, and logged once (#235). With this Mac on
+// another network, or the phone only a client of a hotspot (another
+// 172.20.10.x), it is lost as before.
+func TestLostPhoneOwnHotspot(t *testing.T) {
+	const instance = "08:87:c7:2a:8a:db@fe80::a87:c7ff:fe2a:8adb-supportsRP-26"
+	w := newWiFiProvider(entry("iphone", 7, "Network"))
+	var logs bytes.Buffer
+	w.Log = slog.New(slog.NewTextHandler(&logs, nil))
+	w.lost.anyOS = true
+	bonjour := &fakeBonjour{}
+	w.lost.browseFn = func() (bonjourSource, error) { return bonjour, nil }
+	w.lost.pairFn = func(string) (netmux.PairInfo, error) { return netmux.PairInfo{WiFiMAC: "08:87:c7:2a:8a:db"}, nil }
+	addrs := func(list ...string) []netip.Addr {
+		var out []netip.Addr
+		for _, a := range list {
+			out = append(out, netip.MustParseAddr(a))
+		}
+		return out
+	}
+	local := addrs("127.0.0.1", "fe80::1c2b:3a4d:5e6f:7081", "172.20.10.3") // this Mac on the iPhone's hotspot
+	w.lost.localFn = func() []netip.Addr { return local }
+	advertise := func(list ...string) {
+		bonjour.mu.Lock()
+		bonjour.services = []mdns.Service{{Instance: instance, Type: mobdevService, Addrs: addrs(list...)}}
+		bonjour.mu.Unlock()
+	}
+	w.SetWiFi(true)
+	w.UseOverWiFi("iphone")
+	listed(t, w.Provider)
+
+	w.set() // usbmuxd does not list it
+	advertise("172.20.10.1", "fe80::a87:c7ff:fe2a:8adb")
+	if got := listed(t, w.Provider); len(got) != 0 {
+		t.Fatalf("at once: %+v", got)
+	}
+	w.after(lostAfter - time.Second)
+	if got := listed(t, w.Provider); len(got) != 0 {
+		t.Fatalf("before lostAfter: %+v", got)
+	}
+	w.after(time.Second)
+	got := listed(t, w.Provider)["iphone"]
+	if got.Setup != driver.SetupOwnHotspot || got.State != driver.StateNeedsSetup || got.Detail != ownHotspotDetail ||
+		got.Connection != "wifi" || got.Name != "iphone" {
+		t.Fatalf("on its own hotspot: %+v", got)
+	}
+	listed(t, w.Provider)
+	if n := strings.Count(logs.String(), "own Personal Hotspot"); n != 1 || !strings.Contains(logs.String(), "addr=172.20.10.1 local=172.20.10.3") {
+		t.Errorf("logged %d times, want once with the addresses: %s", n, logs.String())
+	}
+
+	// This Mac on another network: lost, as before.
+	local = addrs("127.0.0.1", "192.168.1.20")
+	if got := listed(t, w.Provider)["iphone"]; got.Setup != driver.SetupDeviceService || got.Detail != lostDetail {
+		t.Fatalf("this Mac on another network: %+v; want lost", got)
+	}
+
+	// The phone only a client of a hotspot this Mac is on too: lost, as
+	// before.
+	local = addrs("172.20.10.3")
+	advertise("172.20.10.5")
+	if got := listed(t, w.Provider)["iphone"]; got.Setup != driver.SetupDeviceService {
+		t.Fatalf("a hotspot's client: %+v; want lost", got)
 	}
 }
 

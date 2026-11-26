@@ -617,6 +617,11 @@ func (g *Gateway) updateDevice(p driver.Provider, info driver.Info) *device {
 	d.nameV.Store(info.Name)
 	d.provider = p
 	d.unlistedAt = time.Time{}
+	if serviceListed(info) {
+		// A restart since which the device service has not listed it did
+		// not bring it back (servicerestart.go).
+		d.serviceListedAt = time.Now()
+	}
 	if waitsForStep(old.State) && info.State == driver.StateOffline {
 		// It no longer waits: a lease kept while it did has the grace of
 		// any phone that drops from now (expireOffline).
@@ -649,7 +654,7 @@ func (g *Gateway) updateDevice(p driver.Provider, info driver.Info) *device {
 	}
 	open := info.State == driver.StateOnline && d.dev == nil && !d.opening && !d.removed && !g.paused[d.id]
 	if open {
-		d.opening, d.openingAt = true, time.Now()
+		d.opening, d.openingAt, d.openGen = true, time.Now(), d.switchGen
 		if time.Now().Before(d.moving) {
 			// Back on its other connection: calls wait while it opens.
 			d.moving = time.Now().Add(moveWait)
@@ -707,10 +712,15 @@ func (g *Gateway) open(ctx context.Context, d *device, p driver.Provider) {
 				step = true
 			}
 		}
-		if err != nil && d.switching != "" {
+		if err != nil && d.switching != "" && d.openGen == d.switchGen {
 			// It did not open over the connection a task moved it to:
 			// the task goes back at once (taskconn.go), or waits with
-			// the phone for the person.
+			// the phone for the person. An open that began before the
+			// move, over the way it left, says nothing about the new
+			// one: a pass that listed the phone between a failed move to
+			// Pinky on the iPhone and the move back opened it over the
+			// helper again, and its failure ended the move back before
+			// the phone opened over CoreDevice.
 			d.moving = time.Time{}
 		}
 		g.wakeLocked(d) // calls waiting for the open (connectWait) go on

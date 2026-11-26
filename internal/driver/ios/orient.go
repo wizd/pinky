@@ -105,14 +105,15 @@ func turnImage(img image.Image, q quarter) image.Image {
 // the picture the right way up: WebDriverAgent's MJPEG frames are the panel
 // as it is, with the interface's orientation only in this tag. Mirrored
 // orientations (2, 4, 5, 7), which a screen never has, and pictures without
-// the tag need no turn.
-func exifTurn(b []byte) quarter {
+// the tag need no turn. tagged reports whether the picture has the tag:
+// without it, nothing says whether it is upright or the panel as it is.
+func exifTurn(b []byte) (q quarter, tagged bool) {
 	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 {
-		return 0
+		return 0, false
 	}
 	for i := 2; i+4 <= len(b); {
 		if b[i] != 0xFF {
-			return 0
+			return 0, false
 		}
 		marker := b[i+1]
 		if marker == 0xD8 || (marker >= 0xD0 && marker <= 0xD7) || marker == 0x01 {
@@ -120,11 +121,11 @@ func exifTurn(b []byte) quarter {
 			continue
 		}
 		if marker == 0xDA || marker == 0xD9 {
-			return 0 // the picture's data starts: no EXIF before it
+			return 0, false // the picture's data starts: no EXIF before it
 		}
 		n := int(binary.BigEndian.Uint16(b[i+2:]))
 		if n < 2 || i+2+n > len(b) {
-			return 0
+			return 0, false
 		}
 		seg := b[i+4 : i+2+n]
 		if marker == 0xE1 && len(seg) > 14 && string(seg[:6]) == "Exif\x00\x00" {
@@ -132,13 +133,14 @@ func exifTurn(b []byte) quarter {
 		}
 		i += 2 + n
 	}
-	return 0
+	return 0, false
 }
 
-// tiffTurn reads the orientation tag (0x0112) of an EXIF block's first IFD.
-func tiffTurn(t []byte) quarter {
+// tiffTurn reads the orientation tag (0x0112) of an EXIF block's first IFD;
+// tagged reports whether the IFD has one of the eight orientations.
+func tiffTurn(t []byte) (q quarter, tagged bool) {
 	if len(t) < 8 {
-		return 0
+		return 0, false
 	}
 	var bo binary.ByteOrder
 	switch string(t[:2]) {
@@ -147,30 +149,31 @@ func tiffTurn(t []byte) quarter {
 	case "MM":
 		bo = binary.BigEndian
 	default:
-		return 0
+		return 0, false
 	}
 	off := int(bo.Uint32(t[4:]))
 	if off < 8 || off+2 > len(t) {
-		return 0
+		return 0, false
 	}
 	count := int(bo.Uint16(t[off:]))
 	for k := 0; k < count; k++ {
 		e := off + 2 + 12*k
 		if e+12 > len(t) {
-			return 0
+			return 0, false
 		}
 		if bo.Uint16(t[e:]) != 0x0112 {
 			continue
 		}
-		switch bo.Uint16(t[e+8:]) {
+		switch o := bo.Uint16(t[e+8:]); o {
 		case 3:
-			return 2
+			return 2, true
 		case 6:
-			return 1
+			return 1, true
 		case 8:
-			return 3
+			return 3, true
+		default:
+			return 0, o >= 1 && o <= 8
 		}
-		return 0
 	}
-	return 0
+	return 0, false
 }

@@ -477,6 +477,8 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 		locked   bool
 		lines    []ocrLine
 		ocrDone  bool
+		picWide  bool // OCR's picture is wider than it is tall
+		picSized bool // and its size was read
 		pictured sync.WaitGroup
 		gate     *captureGate
 		tm       wdaTimes
@@ -525,6 +527,7 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 			if err != nil {
 				return
 			}
+			picWide, picSized = pictureWide(pic)
 			if l, err := d.readText(pic); err == nil {
 				lines, ocrDone = l, true
 			}
@@ -597,7 +600,7 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 	if root.Rect.Width > 0 {
 		scale = float64(w) / root.Rect.Width
 	}
-	s.Elements, s.Keyboard, s.KeyboardFrame = wdaScreenElements(root, scale, w, h, s.App.ID)
+	s.Elements, s.Keyboard, s.KeyboardFrame = wdaScreenElements(root, scale, w, h, wdaTreeApp(root))
 	if len(s.Elements) == 0 && !locked {
 		// Nothing of the app in its tree: the lock screen may be in front
 		// while lockdown says unlocked (GitHub issue #7: a first read gave
@@ -608,10 +611,33 @@ func (d *WDADevice) Observe(ctx context.Context, opt driver.ObserveOptions) (*sc
 			return s, nil
 		}
 	}
+	if ocrDone && picSized && picWide != (w > h) {
+		// OCR's picture is turned the other way than the tree: another
+		// screen than the tree's, such as the last app's before the one in
+		// front turned the screen (field report, an iPad on iPadOS 26,
+		// 2026-11-26: Settings' elements came with a landscape game's
+		// text). Its lines, placed by their share of the picture, would all
+		// land in the wrong places.
+		ocrDone = false
+		if d.log != nil {
+			d.log.Info("iphone: OCR's picture is turned the other way than the tree; its text is left out",
+				"device", d.info.ID, "app", s.App.ID, "from", tm.from)
+		}
+	}
 	if ocrDone {
 		addOCR(s, lines)
 	}
 	return s, nil
+}
+
+// pictureWide reports whether a picture (JPEG or PNG) is wider than it is
+// tall; sized is false when its size cannot be read.
+func pictureWide(b []byte) (wide, sized bool) {
+	c, _, err := image.DecodeConfig(bytes.NewReader(b))
+	if err != nil || c.Width <= 0 || c.Height <= 0 || c.Width == c.Height {
+		return false, false
+	}
+	return c.Width > c.Height, true
 }
 
 // addOCR adds the text OCR read that no element of s shows; text where OCR
@@ -620,7 +646,16 @@ func addOCR(s *screen.Screen, lines []ocrLine) {
 	if len(lines) == 0 {
 		return
 	}
-	if top, kb := keyboardFromOCR(lines); kb {
+	top, kb := keyboardFromOCR(lines)
+	if kb && s.App.ID == springBoard && !s.Keyboard && !s.TreeTooSlow {
+		// On the home screen, the tree says whether a keyboard shows: WDA
+		// lists the keyboard in the tree of the app that shows it. OCR's
+		// one-character lines there are the text of icons and widgets,
+		// such as a calendar's weekdays: "keyboard shown" over the home
+		// screen (field report, an iPad on iPadOS 26, 2026-11-26).
+		kb = false
+	}
+	if kb {
 		noteOCRKeyboard(s, top)
 		kept := lines[:0:0]
 		for _, l := range lines {
@@ -693,9 +728,10 @@ func (d *WDADevice) noteSlowRead(start time.Time, tm wdaTimes, root *wdaNode, oc
 // appInfo names the app in front: by the name the app list knows (the home
 // screen's, in the phone's language) once it has been read, else WDA's
 // active app's, else its element's label, else the app list's (WDA leaves
-// SpringBoard's empty).
+// SpringBoard's empty). A view service of the home screen is the home
+// screen (homeScreenServices).
 func (d *WDADevice) appInfo(ctx context.Context, a wdaApp, root *wdaNode) screen.App {
-	if a.BundleID == springBoard {
+	if a.BundleID == springBoard || homeScreenService(a, root) {
 		return screen.App{Name: "Home Screen", ID: springBoard}
 	}
 	out := screen.App{ID: a.BundleID, Name: d.cachedAppName(a.BundleID)}
@@ -715,6 +751,34 @@ func (d *WDADevice) appInfo(ctx context.Context, a wdaApp, root *wdaNode) screen
 		}
 	}
 	return out
+}
+
+// homeScreenServices are view services of the home screen that WDA names
+// as the app in front of it, by bundle id without "com.apple.". After Home
+// on an iPad (iPadOS 26, field report of 2026-11-26), the header said "app:
+// DockFolderViewService" (the Dock's folders' service) with no bundle id
+// after it, as when WDA names none and the tree's root has that label. Not
+// view services in general: Safari's and the share sheet's lie over the
+// app that opened them.
+var homeScreenServices = map[string]bool{
+	"DockFolderViewService": true,
+}
+
+// homeScreenService reports whether WDA's app in front is one of
+// homeScreenServices: by its bundle id, or when WDA gave none, by its name
+// or else its tree's root label.
+func homeScreenService(a wdaApp, root *wdaNode) bool {
+	if id, ok := strings.CutPrefix(a.BundleID, "com.apple."); ok {
+		return homeScreenServices[id]
+	}
+	if a.BundleID != "" {
+		return false
+	}
+	name := strings.TrimSpace(a.Name)
+	if name == "" && root != nil {
+		name = strings.TrimSpace(strOr(root.Label))
+	}
+	return homeScreenServices[name]
 }
 
 // cachedAppName is the name of an app in the app list already read, without
@@ -1094,19 +1158,30 @@ func (d *WDADevice) interfaceTurn(ctx context.Context) quarter {
 	if at := d.uiAt.Load(); at != 0 && time.Since(time.Unix(0, at)) < rotationFresh {
 		return quarter(d.ui.Load()-1) & 3
 	}
+	if q, ok := d.turnNow(ctx); ok {
+		return q
+	}
+	if n := d.ui.Load(); n > 0 {
+		return quarter(n-1) & 3
+	}
+	return 0
+}
+
+// turnNow reads GET /rotation now, and keeps the answer for interfaceTurn;
+// false when WDA does not say: the request failed, or its z is no quarter
+// turn (WDA says -1 when it does not know the app's orientation, which
+// interfaceTurn takes as upright, as it always has).
+func (d *WDADevice) turnNow(ctx context.Context) (quarter, bool) {
 	rctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	z, err := d.c.rotation(rctx)
 	cancel()
 	if err != nil {
-		if n := d.ui.Load(); n > 0 {
-			return quarter(n-1) & 3
-		}
-		return 0
+		return 0, false
 	}
 	q := quarter((z/90)%4+4) & 3
 	d.ui.Store(int32(q) + 1)
 	d.uiAt.Store(time.Now().UnixNano())
-	return q
+	return q, z%90 == 0
 }
 
 // pictureTurn is the turn XCTest's pictures need beyond their own EXIF tag:

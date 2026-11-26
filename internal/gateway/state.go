@@ -39,6 +39,10 @@ type device struct {
 	// the way it is moving to now, and switchBack puts it back after the
 	// task.
 	taskWay, switching string
+	// switchGen counts the moves to another connection switchTo began, and
+	// openGen is what it was when the open under way began: only a failed
+	// open that the current move began ends that move's wait (open).
+	switchGen, openGen uint64
 	// helper: an iPhone or iPad has the WebDriverAgent helper installed,
 	// as checkHelper found when it last came online (helperneed.go).
 	helper     bool
@@ -140,6 +144,11 @@ type device struct {
 	// itself for the phone (servicerestart.go).
 	quietRestart     bool
 	serviceRestarted time.Time
+	// serviceListedAt is when its provider last listed it from the device
+	// service's own list (serviceListed): a restart since which it has not
+	// is one that did not bring it back (restartInVainLocked). inVainLogged
+	// is the restart last logged as such.
+	serviceListedAt, inVainLogged time.Time
 	// opened is set once the gateway opened the phone. One it never
 	// opened is forgotten a while after its provider stops listing it
 	// (discover, unopenedGrace).

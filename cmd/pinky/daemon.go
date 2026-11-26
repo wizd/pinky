@@ -42,6 +42,9 @@ func runDaemon(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if err := wordsUsageError(fs); err != nil {
+		return err
+	}
 	c.Log = newLogger(os.Stderr, *verbose)
 	if dirs, err := api.DefaultDirs(); err == nil && dirs.Ensure() == nil {
 		crashes := captureCrashes(dirs, "daemon", c.Log)

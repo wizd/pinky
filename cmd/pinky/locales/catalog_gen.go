@@ -15753,6 +15753,26 @@ func (msgs Messages) GwStatusScreenOff() string {
 	return Catalog.Format(msgs.locale, "gwStatusScreenOff", nil)
 }
 
+// GwStatusLostOnHotspot says "Lost on its hotspot"
+// in the language the app shows.
+//
+// A phone's status line: this Mac is on the iPhone's own Personal Hotspot,
+// where macOS's device service (usbmuxd) doesn't reach the iPhone over the
+// network; a cable or another Wi-Fi network brings it back. Shown only in
+// other languages; in English the gateway's own words show.
+func GwStatusLostOnHotspot() string { return In(i18n.Locale()).GwStatusLostOnHotspot() }
+
+// GwStatusLostOnHotspot says "Lost on its hotspot"
+// in the language of msgs.
+//
+// A phone's status line: this Mac is on the iPhone's own Personal Hotspot,
+// where macOS's device service (usbmuxd) doesn't reach the iPhone over the
+// network; a cable or another Wi-Fi network brings it back. Shown only in
+// other languages; in English the gateway's own words show.
+func (msgs Messages) GwStatusLostOnHotspot() string {
+	return Catalog.Format(msgs.locale, "gwStatusLostOnHotspot", nil)
+}
+
 // GwStatusLostOnWiFi says "Lost on Wi-Fi"
 // in the language the app shows.
 //
@@ -17893,6 +17913,42 @@ func LostDetail(phone string) string { return In(i18n.Locale()).LostDetail(phone
 // Under lostTitle, and in Add phone and the checkup. phone is its name.
 func (msgs Messages) LostDetail(phone string) string {
 	return Catalog.Format(msgs.locale, "lostDetail", map[string]any{"phone": phone})
+}
+
+// LostHotspotDetail says "This Mac is connected to {phone}'s own Personal Hotspot, where macOS's device service (usbmuxd) doesn't reach it over…"
+// in the language the app shows.
+//
+// Under lostHotspotTitle, and in Add phone and the checkup. Personal
+// Hotspot is Apple's name for the iPhone's feature that shares its internet
+// connection (Settings › Personal Hotspot). phone is its name.
+func LostHotspotDetail(phone string) string { return In(i18n.Locale()).LostHotspotDetail(phone) }
+
+// LostHotspotDetail says "This Mac is connected to {phone}'s own Personal Hotspot, where macOS's device service (usbmuxd) doesn't reach it over…"
+// in the language of msgs.
+//
+// Under lostHotspotTitle, and in Add phone and the checkup. Personal
+// Hotspot is Apple's name for the iPhone's feature that shares its internet
+// connection (Settings › Personal Hotspot). phone is its name.
+func (msgs Messages) LostHotspotDetail(phone string) string {
+	return Catalog.Format(msgs.locale, "lostHotspotDetail", map[string]any{"phone": phone})
+}
+
+// LostHotspotTitle says "This Mac can't reach {phone} on its Personal Hotspot"
+// in the language the app shows.
+//
+// The page of an iPhone that macOS's device service doesn't reach because
+// this Mac is connected to that iPhone's own Personal Hotspot (Apple's name
+// for the feature). phone is its name.
+func LostHotspotTitle(phone string) string { return In(i18n.Locale()).LostHotspotTitle(phone) }
+
+// LostHotspotTitle says "This Mac can't reach {phone} on its Personal Hotspot"
+// in the language of msgs.
+//
+// The page of an iPhone that macOS's device service doesn't reach because
+// this Mac is connected to that iPhone's own Personal Hotspot (Apple's name
+// for the feature). phone is its name.
+func (msgs Messages) LostHotspotTitle(phone string) string {
+	return Catalog.Format(msgs.locale, "lostHotspotTitle", map[string]any{"phone": phone})
 }
 
 // LostManual says "Or restart it yourself: run sudo killall usbmuxd in Terminal."

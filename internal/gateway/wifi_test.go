@@ -487,9 +487,12 @@ func (p *lockedProvider) List(ctx context.Context) ([]driver.Info, error) {
 }
 
 // restartingProvider lists a phone that usbmuxd lost, without a name as the
-// iOS provider does after Pinky restarted, and records restarts.
+// iOS provider does after Pinky restarted, and records restarts. With
+// hotspot set (before the gateway starts), it lists the phone as one out of
+// reach on its own Personal Hotspot (driver.SetupOwnHotspot) instead.
 type restartingProvider struct {
 	*airProvider
+	hotspot  bool
 	lost     atomic.Bool
 	restarts atomic.Int32
 	reason   atomic.Value
@@ -498,8 +501,12 @@ type restartingProvider struct {
 func (p *restartingProvider) List(ctx context.Context) ([]driver.Info, error) {
 	infos, err := p.airProvider.List(ctx)
 	if p.lost.Load() {
-		return []driver.Info{{ID: "iphone", Platform: driver.IOS, Connection: "wifi", State: driver.StateNeedsSetup,
-			Setup: driver.SetupDeviceService, Detail: "This Mac's device service lost the iPhone on Wi-Fi."}}, err
+		info := driver.Info{ID: "iphone", Platform: driver.IOS, Connection: "wifi", State: driver.StateNeedsSetup,
+			Setup: driver.SetupDeviceService, Detail: "This Mac's device service lost the iPhone on Wi-Fi."}
+		if p.hotspot {
+			info.Setup, info.Detail = driver.SetupOwnHotspot, "This Mac is on the iPhone's own Personal Hotspot."
+		}
+		return []driver.Info{info}, err
 	}
 	return infos, err
 }

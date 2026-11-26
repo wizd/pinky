@@ -384,6 +384,25 @@ func (a *app) lostPage(c *mg.Context, d gateway.DeviceView) {
 	})
 }
 
+// onOwnHotspot reports whether the computer's device service does not reach
+// the phone because the computer is on the phone's own Personal Hotspot
+// (driver.SetupOwnHotspot).
+func onOwnHotspot(d gateway.DeviceView) bool {
+	return d.Info.State == driver.StateNeedsSetup && d.Info.Setup == driver.SetupOwnHotspot
+}
+
+// hotspotPage is the Phone screen of a phone out of reach on its own
+// Personal Hotspot: what happened and what brings it back, without the
+// restart, which does not help there.
+func hotspotPage(c *mg.Context, d gateway.DeviceView) {
+	p := pal(c)
+	mg.Column(c).AlignItems(mg.Center).Gap(10).MaxWidth(440).Role(mg.RoleStatus).Children(func() {
+		mg.Icon(c, icWifiOff).FontSize(iconHero).TextColor(p.amberDot)
+		mg.Text(c, locales.LostHotspotTitle(d.Info.Name)).FontSize(fsTitle3).FontWeight(fwSemibold).TextAlign(mg.Center)
+		mg.Text(c, locales.LostHotspotDetail(d.Info.Name)).FontSize(fsSmall).TextColor(p.ink2).TextAlign(mg.Center)
+	})
+}
+
 // restartControls are the restart button, what it does, and how to do it by
 // hand; with only the latter where the gateway cannot restart the service.
 func (a *app) restartControls(c *mg.Context, d gateway.DeviceView, center bool) {

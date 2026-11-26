@@ -188,7 +188,7 @@ type batchStep struct {
 type batchIn struct {
 	Device string      `json:"device,omitempty" jsonschema:"The phone, by device id or name. Required when this session holds more than one phone, or once Pinky says several tasks share it."`
 	Intent string      `json:"intent,omitempty" jsonschema:"Why, for steps without their own intent."`
-	Steps  []batchStep `json:"steps" jsonschema:"The steps, in order, each an object naming its action in tool and that action's arguments beside it: [{\"tool\":\"tap\",\"ref\":12},{\"tool\":\"type\",\"text\":\"coffee\",\"submit\":true},{\"tool\":\"swipe\",\"direction\":\"up\"}]. The batch stops at the first step that does not settle."`
+	Steps  []batchStep `json:"steps" jsonschema:"The steps, in order, each an object naming its action in tool and that action's arguments beside it: [{\"tool\":\"tap\",\"ref\":12},{\"tool\":\"type\",\"text\":\"coffee\",\"submit\":true},{\"tool\":\"swipe\",\"direction\":\"up\"}]. The batch stops at the first step that does not settle, or whose tap left a switch as it was."`
 }
 
 type readListIn struct {
@@ -553,7 +553,7 @@ func (s *Server) addTools(srv *sdk.Server, remote bool) {
 		})
 
 	sdk.AddTool(srv, &sdk.Tool{Name: "phone_batch", Title: "Run several steps",
-		Description: "Run up to 50 tap, type, swipe, pinch, drag, key and launch steps in order, each settling before the next; returns one result per step and stops at the first step that is not settled (approval_pending, uncertain or an error; a screen that kept moving, settle: timeout, does not stop it). " +
+		Description: "Run up to 50 tap, type, swipe, pinch, drag, key and launch steps in order, each settling before the next; returns one result per step and stops at the first step that is not settled (approval_pending, uncertain or an error; a screen that kept moving, settle: timeout, does not stop it) or whose tap left a switch or checkbox as it was. " +
 			"If a step returns approval_pending, repeat that step alone (with its approval_id), then continue.",
 		InputSchema: schema[batchIn](func(p map[string]*jsonschema.Schema) {
 			item := p["steps"].Items

@@ -25,6 +25,14 @@ import (
 // middle of an action, and restarts at most once every quietRestartEvery.
 // Every restart is logged, and the agents of the phones it dropped are
 // told in their next result.
+//
+// A restart that did not bring a phone back is not repeated for it: one
+// still lost lostBackWait after Pinky restarted the service for it is left
+// to a person (a cable, its network) until the service lists it again
+// (restartInVainLocked), so that a phone a restart cannot help does not
+// have every iPhone and iPad on the computer dropped every
+// quietRestartEvery. A phone on its own Personal Hotspot
+// (driver.SetupOwnHotspot), which restarts never help, never gets one.
 
 // quietRestartEvery is how long the gateway waits after a restart of a
 // platform's device service before it restarts it by itself again. A
@@ -40,6 +48,27 @@ var lostBackWait = 30 * time.Second
 // The caller holds g.mu.
 func lostLocked(d *device) bool {
 	return waitingLocked(d) && d.info.Setup == driver.SetupDeviceService
+}
+
+// serviceListed reports whether a provider lists a phone from its device
+// service's own list, rather than as one the service is missing (the iOS
+// provider's lost.go).
+func serviceListed(info driver.Info) bool {
+	switch info.Setup {
+	case driver.SetupDeviceService, driver.SetupOwnHotspot, driver.SetupNotOnWiFi:
+		return false
+	}
+	return true
+}
+
+// restartInVainLocked reports whether Pinky's last restart of the device
+// service for the phone did not bring it back: lostBackWait after it,
+// which the restart had to work in, the service has not listed the phone
+// since. Pinky then restarts the service no more by itself for the phone
+// until the service lists it again (updateDevice). The caller holds g.mu.
+func restartInVainLocked(d *device) bool {
+	r := d.serviceRestarted
+	return !r.IsZero() && !d.serviceListedAt.After(r) && time.Since(r) >= lostBackWait
 }
 
 // QuietRestart reports whether this computer can restart its device
@@ -88,8 +117,10 @@ func (g *Gateway) SetQuietRestart(ctx context.Context, on bool, reason string) e
 // restartLost restarts a platform's device service without a password
 // when it lost a phone an agent uses (only, when set: that phone), the
 // person allowed it, no phone of the platform is in the middle of an
-// action, and the service did not restart through Pinky within
-// quietRestartEvery. It reports whether it restarted the service.
+// action, the service did not restart through Pinky within
+// quietRestartEvery, and an earlier restart for the phone did not fail to
+// bring it back (restartInVainLocked). It reports whether it restarted the
+// service.
 func (g *Gateway) restartLost(ctx context.Context, only *device) bool {
 	restarted := false
 	for _, p := range g.opt.Providers {
@@ -105,7 +136,13 @@ func (g *Gateway) restartLost(ctx context.Context, only *device) bool {
 				continue
 			}
 			if lostLocked(d) && d.lease != nil && !d.lease.ended {
-				lost = append(lost, d)
+				if !restartInVainLocked(d) {
+					lost = append(lost, d)
+				} else if d.inVainLogged != d.serviceRestarted {
+					d.inVainLogged = d.serviceRestarted
+					g.log.Warn("restarting the device service did not bring the phone back; not restarting it again for the phone until the service lists it",
+						"device", d.id, "restarted", d.serviceRestarted)
+				}
 			}
 			busy = busy || d.inflight != nil
 		}
@@ -229,8 +266,17 @@ func (g *Gateway) recoverLost(ctx context.Context, l *lease) {
 
 // deviceServiceHelpLocked is what an agent can do about a phone the device
 // service lost: wait a little when Pinky restarts the service by itself,
-// else only a person at the computer can help. The caller holds g.mu.
+// else only a person can help: at the computer, or with a cable or the
+// phone's network once Pinky's restart did not bring it back. The caller
+// holds g.mu.
 func deviceServiceHelpLocked(d *device) string {
+	if restartInVainLocked(d) {
+		return "Pinky restarted the device service without a password, as the person allowed in Settings › Phones, but that did not bring the phone back, " +
+			"and Pinky will not restart it again by itself for this phone. Only a person can help now: by plugging the phone in with a cable, " +
+			"or by checking its network (the same Wi-Fi as this computer, no VPN in the way). " +
+			"If nobody is at the computer, as in a scheduled or unattended run, do not wait for it: release it with phone_release and use another phone, " +
+			"or end the task. Otherwise ask them with phone_handoff; it ends by itself once the phone is back."
+	}
 	if r := d.serviceRestarted; !r.IsZero() && time.Since(r) < quietRestartEvery {
 		return fmt.Sprintf("Pinky restarted the device service without a password %s ago, as the person allowed in Settings › Phones, but the phone is not back yet. "+
 			"It may take a minute: call phone_observe again in a little while. If it stays lost, release it with phone_release and use another phone, "+

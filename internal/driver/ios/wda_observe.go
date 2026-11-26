@@ -154,7 +154,9 @@ const (
 // tab bar, a toolbar, the status bar or the keyboard, which WDA counts as
 // visible. The texts are left out; covered elements too, unless a good part
 // of them shows, as on the iOS 27 path (unoccluded).
-func wdaScreenElements(root *wdaNode, scale float64, w, h int, appID string) ([]screen.Element, bool, screen.Rect) {
+//
+// app begins every element's path (wdaTreeApp).
+func wdaScreenElements(root *wdaNode, scale float64, w, h int, app string) ([]screen.Element, bool, screen.Rect) {
 	var out []screen.Element
 	var kb screen.Rect // the keyboard's frame
 	var over []occluder
@@ -219,8 +221,19 @@ func wdaScreenElements(root *wdaNode, scale float64, w, h int, appID string) ([]
 			walk(&n.Children[i], child, inKeyboard, inTabBar, said, depth+1)
 		}
 	}
-	walk(root, appID, false, false, "", 0)
+	walk(root, app, false, false, "", 0)
 	return unoccluded(out, over, int(math.Round(minVisiblePoints*scale))), keyboard, kb
+}
+
+// wdaTreeApp names the app a tree is of, from the tree alone, to begin its
+// elements' paths, which refs are keyed by: the label of its root, the
+// application element (empty for SpringBoard). Not the app GET
+// /wda/activeAppInfo names: WDA answers that request on its own, and while
+// apps switch it may name another app than the tree's, or fail, and every
+// ref of a screen that did not change would change with it (field report,
+// an iPad on iPadOS 26, 2026-11-26).
+func wdaTreeApp(root *wdaNode) string {
+	return "app:" + strings.TrimSpace(strOr(root.Label))
 }
 
 // isBar reports whether a node is a bar that content scrolls under: a

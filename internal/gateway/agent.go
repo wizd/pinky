@@ -145,6 +145,10 @@ type Result struct {
 	// unread: the action went out and its screen was left unread, as
 	// Call.unread asks.
 	unread bool
+	// unchanged: the step settled, but by the action's own check it did
+	// not take: a tap left its switch or checkbox as it was (unflipped).
+	// phone_batch stops there.
+	unchanged bool
 }
 
 // IsError reports whether the result is an error rather than a status.
@@ -821,6 +825,8 @@ func setupResultLocked(d *device, first string) *Result {
 		msg += " The person may be on a call: ask them with phone_handoff to end it or close that app when they can, saying why; the handoff ends by itself once the phone is ready."
 	case driver.SetupDeviceService:
 		msg += " " + deviceServiceHelpLocked(d)
+	case driver.SetupOwnHotspot:
+		msg += " " + ownHotspotHelp
 	default:
 		msg += " Ask the person to do it with phone_handoff, saying what to do; the handoff ends by itself once the phone is ready."
 	}
@@ -842,6 +848,15 @@ const deviceServiceHelp = "Only a person at this computer can fix it: they click
 	"or end the task saying the phone needs the device service restarted. " +
 	"Otherwise ask them with phone_handoff; it ends by itself once the phone is back. " +
 	"To have Pinky restart it by itself next time, without the password, they can turn on Restart device service without a password in Settings › Phones."
+
+// ownHotspotHelp is what an agent can do about a phone the computer's
+// device service does not reach because the computer is on the phone's own
+// Personal Hotspot (driver.SetupOwnHotspot): restarting the service does
+// not help, and only a person can bring the phone back.
+const ownHotspotHelp = "This computer is on the phone's own Personal Hotspot, where the computer's device service does not reach the phone, " +
+	"and restarting the service does not help. Ask the person with phone_handoff to plug the phone in with a cable, " +
+	"or to put the computer and the phone on the same other Wi-Fi network, saying why; the handoff ends by itself once the phone is ready. " +
+	"If nobody is at the computer, as in a scheduled or unattended run, do not wait for it: release it with phone_release and use another phone, or end the task."
 
 // connectStep is the history step of phone_connect. own says the task
 // left the background display the person chose for the phone's own
@@ -2103,7 +2118,10 @@ func (g *Gateway) handedBackResult(ctx context.Context, l *lease, note string) *
 }
 
 // Batch implements phone_batch: steps run in order and stop at the first
-// one that does not settle.
+// one that does not settle, or that settled but by its own check did not
+// take (Result.unchanged): the steps after it may count on it, and running
+// them would bury the step's note under their results, as a launch of
+// another app did in the field report of 2026-11-26.
 func (s *Session) Batch(ctx context.Context, req BatchRequest) *Result {
 	if len(req.Steps) == 0 {
 		return errResult(ErrInvalidArgument, "steps is empty.")
@@ -2127,6 +2145,10 @@ func (s *Session) Batch(ctx context.Context, req BatchRequest) *Result {
 	defer cancel()
 	out := &Result{Status: StatusSettled}
 	secrets := batchSecrets(g, l, req.Steps)
+	// The screen the agent took the steps' refs from (Action.seen).
+	g.mu.Lock()
+	seen := l.baseline
+	g.mu.Unlock()
 	// The longest step so far: the next step starts only while the call's
 	// budget has room for one like it (budget.go).
 	var longest time.Duration
@@ -2136,6 +2158,7 @@ func (s *Session) Batch(ctx context.Context, req BatchRequest) *Result {
 			outOfTime = true
 			break
 		}
+		a.seen = seen
 		c := Call{Device: req.Device, Intent: req.Intent, ApprovalID: a.ApprovalID, Progress: req.Progress, reuse: i > 0}
 		if a.Intent != "" {
 			c.Intent = a.Intent
@@ -2145,7 +2168,7 @@ func (s *Session) Batch(ctx context.Context, req BatchRequest) *Result {
 		r := g.finish(l, g.act(ctx, l, c, a))
 		longest = max(longest, time.Since(start))
 		out.Steps = append(out.Steps, r)
-		if r.IsError() || r.Status != StatusSettled {
+		if r.IsError() || r.Status != StatusSettled || r.unchanged {
 			break
 		}
 	}
@@ -2157,6 +2180,9 @@ func (s *Session) Batch(ctx context.Context, req BatchRequest) *Result {
 	case outOfTime:
 		out.Message = fmt.Sprintf("Ran %s of %d, then stopped: the phone is answering slowly and the call's %s were running out. Not done: %s; continue with it in a new call.",
 			stepSpan(1, n), total, human(g.opt.CallBudget), stepSpan(n+1, total))
+	case n < total && last.unchanged:
+		out.Message = fmt.Sprintf("Stopped at step %d of %d: the switch it tapped is as it was. Not done: %s.",
+			n, total, stepSpan(n+1, total))
 	case n < total:
 		out.Message = fmt.Sprintf("Stopped at step %d of %d.", n, total)
 	}

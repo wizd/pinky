@@ -132,6 +132,9 @@ func runUpdate(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if err := wordsUsageError(fs); err != nil {
+		return err
+	}
 	if !update.IsRelease(version) {
 		return fmt.Errorf("this is a development build (%s), which doesn't update itself", version)
 	}

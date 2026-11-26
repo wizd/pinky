@@ -35,7 +35,7 @@ type mirror struct {
 	gen     int
 	cancel  context.CancelFunc
 	player  *video.Player
-	bitmap  *mg.Bitmap
+	bitmap  *mg.Bitmap   // the picture at its own size
 	frame   *video.Frame // the picture the bitmap shows
 	state   string       // "connecting", "playing", "failed", "still" (held: no stream, the last picture kept)
 	opening bool         // a try to open the stream is under way
@@ -43,6 +43,10 @@ type mirror struct {
 	retry   time.Time
 	used    int
 	closed  bool
+
+	// halves are the picture halved, once and more, for the surfaces that
+	// show it at half its size or less (mirrorLevel), made as they draw.
+	halves halvings
 
 	// A mirror paints again while pictures come and stops a moment after
 	// the last (mirrorPaintFor): a still screen costs no frames. asleep
@@ -472,13 +476,16 @@ func (m *mirror) lastPicture() (pic *video.YUV, turn int) {
 	return m.frame.YUV.Clone(), m.turn
 }
 
-// drawTurned draws a picture into r turned turn quarter turns clockwise,
-// which puts a phone's picture the right way up when the phone sends its
-// display as mounted (an iPhone or iPad on iOS 27; driver.Packet.Turn).
-func drawTurned(pt *mg.Painter, bm *mg.Bitmap, r mg.Rect, turn int) {
+// drawTurned draws a picture into r, as large as it fits, turned turn
+// quarter turns clockwise, which puts a phone's picture the right way up
+// when the phone sends its display as mounted (an iPhone or iPad on iOS
+// 27; driver.Packet.Turn). src is the part of bm that holds the picture,
+// in bm's pixels, or empty for all of it: the picture halved (halvings)
+// takes up the last row or column of an odd size only in part.
+func drawTurned(pt *mg.Painter, bm *mg.Bitmap, src, r mg.Rect, turn int) {
 	turn &= 3
 	if turn == 0 {
-		pt.Image(bm, r, mg.Contain)
+		drawContained(pt, bm, src, r)
 		return
 	}
 	cx, cy := r.X+r.W/2, r.Y+r.H/2
@@ -487,7 +494,131 @@ func drawTurned(pt *mg.Painter, bm *mg.Bitmap, r mg.Rect, turn int) {
 		// Drawn sideways into the box turned the other way, then turned.
 		in = mg.Rect{X: cx - r.H/2, Y: cy - r.W/2, W: r.H, H: r.W}
 	}
-	pt.Transform(mg.Rotation(float32(90*turn)), cx, cy, func() { pt.Image(bm, in, mg.Contain) })
+	pt.Transform(mg.Rotation(float32(90*turn)), cx, cy, func() { drawContained(pt, bm, src, in) })
+}
+
+// drawContained draws the part src of bm, or all of it when src is empty,
+// as large as it fits in box, in the middle, as Painter.Image does with
+// Contain.
+func drawContained(pt *mg.Painter, bm *mg.Bitmap, src, box mg.Rect) {
+	if src.W <= 0 || src.H <= 0 {
+		pt.Image(bm, box, mg.Contain)
+		return
+	}
+	s := min(box.W/src.W, box.H/src.H)
+	w, h := src.W*s, src.H*s
+	// On the screen's pixels, as Image places a bitmap, which ImageRegion
+	// leaves to a transform.
+	scale := pt.Scale()
+	snap := func(v float32) float32 { return float32(math.Round(float64(v*scale))) / scale }
+	x0, y0 := snap(box.X+(box.W-w)/2), snap(box.Y+(box.H-h)/2)
+	x1, y1 := snap(box.X+(box.W+w)/2), snap(box.Y+(box.H+h)/2)
+	pt.ImageRegion(bm, src, mg.Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}, mg.ImageOptions{})
+}
+
+// mirrorHalvings is the most times a mirror, or the recording player,
+// halves its picture: 32 times smaller, as a 4K screen in a tile of All
+// phones.
+const mirrorHalvings = 5
+
+// mirrorLevel returns how many times to halve a w×h picture, which turn
+// quarter turns put the right way up, for a surface that shows it in a box
+// of bw×bh DIPs, as large as it fits, at scale pixels a DIP. MyGo's
+// renderers take one sample of a picture of video for each pixel they
+// draw, so a picture at half its size or less shows only some of its
+// pixels, and fine lines and text break up (#233). As MyGo halves a bitmap
+// it shows smaller: the most halvings that leave the picture no smaller
+// than it shows, whose pixels each average the 2×2 under them.
+func mirrorLevel(w, h, turn int, bw, bh, scale float32) int {
+	if turn&1 == 1 {
+		w, h = h, w
+	}
+	if w <= 0 || h <= 0 || bw <= 0 || bh <= 0 || scale <= 0 {
+		return 0
+	}
+	// The picture's pixels to one of the screen's.
+	shrink := 1 / (min(bw/float32(w), bh/float32(h)) * scale)
+	if shrink < 2 {
+		return 0
+	}
+	return min(int(math.Log2(float64(shrink))), mirrorHalvings)
+}
+
+// halvings are a picture of video halved once and more, for the surfaces
+// that show it at half its size or less (mirrorLevel): a mirror's, which
+// its surfaces share, and the recording player's. A level is made as the
+// first surface that shows it draws after a new picture, from the level
+// above: once a picture, none that no surface shows, and nothing between
+// pictures, however often the surfaces draw.
+type halvings struct {
+	pic    *video.YUV // the picture, as its own bitmap shows it; nil for none
+	n      uint64     // counts the pictures: pic is picture n
+	levels [mirrorHalvings]pictureHalf
+}
+
+// pictureHalf is the picture halved some times, and the bitmap that shows
+// it. A new picture is halved into the planes the bitmap does not show, as
+// MyGo reads those it shows until the bitmap's next picture; the two keep
+// their memory from one picture to the next.
+type pictureHalf struct {
+	planes [2]video.YUV
+	cur    int    // the planes of picture pic
+	pic    uint64 // the picture (halvings.n) planes[cur] holds, 0 for none
+	bitmap *mg.Bitmap
+	shows  int    // the planes the bitmap shows
+	shown  uint64 // the picture it shows, 0 for none
+}
+
+// next takes pic as the picture, a new one, which its own bitmap shows
+// from now on. Its planes must hold it until the next, as the bitmap's do:
+// the levels are made from them as the surfaces draw.
+func (h *halvings) next(pic *video.YUV) {
+	h.pic = pic
+	h.n++
+}
+
+// pictureFor returns the bitmap that shows the picture, which turn quarter
+// turns put the right way up, in a box of r's size at scale pixels a DIP,
+// and the part of it that holds the picture, in its pixels (empty for all
+// of it): full, the picture's own bitmap, or the picture halved as often
+// as the box's pixels need (mirrorLevel). The surfaces that show it at the
+// same level share its bitmap.
+func (h *halvings) pictureFor(full *mg.Bitmap, turn int, r mg.Rect, scale float32) (*mg.Bitmap, mg.Rect) {
+	pic := h.pic
+	if pic == nil {
+		return full, mg.Rect{}
+	}
+	k := mirrorLevel(pic.Width, pic.Height, turn, r.W, r.H, scale)
+	if k == 0 {
+		return full, mg.Rect{}
+	}
+	l := &h.levels[k-1]
+	if l.shown != h.n {
+		l.bitmap = showPlanes(l.bitmap, h.halved(k))
+		l.shows, l.shown = l.cur, h.n
+	}
+	n := float32(int(1) << k)
+	return l.bitmap, mg.Rect{W: float32(pic.Width) / n, H: float32(pic.Height) / n}
+}
+
+// halved returns the picture halved k times, made from the picture halved
+// k-1 times unless it is made already: once a picture for each level a
+// surface shows, and for those above it.
+func (h *halvings) halved(k int) *video.YUV {
+	if k == 0 {
+		return h.pic
+	}
+	l := &h.levels[k-1]
+	if l.pic != h.n {
+		src := h.halved(k - 1)
+		into := 0
+		if l.bitmap != nil {
+			into = 1 - l.shows
+		}
+		video.Halve(&l.planes[into], src)
+		l.cur, l.pic = into, h.n
+	}
+	return &l.planes[l.cur]
 }
 
 // toPicture turns a point of the upright picture back into the picture as
@@ -622,8 +753,15 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 					m.firstAt, m.holdDue = time.Now(), false
 					a.post(func() {})
 				}
+				// The bitmap of the picture's own size follows the
+				// player's pictures, whose planes it shows: those of the
+				// one before go back to the player, which writes them
+				// again. Showing NV12's costs nothing, nor does a bitmap
+				// no surface draws cost the GPU an upload. The halvings
+				// are made as surfaces draw them (halvings).
 				m.bitmap = showPlanes(m.bitmap, f.YUV)
 				m.frame = f
+				m.halves.next(f.YUV)
 				w, h := f.Width, f.Height
 				if f.Turn%2 == 1 {
 					w, h = h, w
@@ -644,9 +782,10 @@ func (a *app) mirrorView(c *mg.Context, m *mirror, d gateway.DeviceView, t *gate
 			}
 		}
 		// A still, or a still opening its stream again, shows the picture
-		// it holds.
+		// it holds: halved as often as this surface's pixels need.
 		if m.bitmap != nil && (m.state == "playing" || m.state == "still" || m.state == "connecting") {
-			pt.Clip(r, radius, func() { drawTurned(pt, m.bitmap, r, m.turn) })
+			bm, src := m.halves.pictureFor(m.bitmap, m.turn, r, pt.Scale())
+			pt.Clip(r, radius, func() { drawTurned(pt, bm, src, r, m.turn) })
 		}
 		if outline && !locked && m.picW > 0 {
 			// Clipped to the screen: targets are in screen pixels, which on

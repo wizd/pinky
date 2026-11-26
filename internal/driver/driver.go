@@ -160,6 +160,12 @@ const (
 	// no longer lists it, and will not for up to an hour. Restarting the
 	// service (DeviceServiceRestarter) brings it back.
 	SetupDeviceService = "device_service"
+	// SetupOwnHotspot: the computer is on the phone's own Personal Hotspot,
+	// where its device service (usbmuxd on a Mac) does not reach the phone
+	// over the network, though the phone is there. Restarting the service
+	// does not help: a cable brings the phone back, or the computer and the
+	// phone on the same other Wi-Fi network.
+	SetupOwnHotspot = "own_hotspot"
 	// SetupPhoneChanged: an Android phone reached over the network is not
 	// the phone Pinky set up under its id: it lacks the identity mark
 	// Pinky left on that phone (a phone that was reset, or another device

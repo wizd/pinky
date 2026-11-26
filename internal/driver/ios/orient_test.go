@@ -157,19 +157,22 @@ func withEXIF(t *testing.T, j []byte, orientation uint16, bo binary.ByteOrder) [
 
 func TestEXIFTurn(t *testing.T) {
 	j := jpegBytes(t, 8, 16, color.White)
-	if q := exifTurn(j); q != 0 {
-		t.Fatalf("no EXIF: turn %d", q)
+	if q, tagged := exifTurn(j); q != 0 || tagged {
+		t.Fatalf("no EXIF: turn %d, tagged %v", q, tagged)
 	}
 	for _, bo := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		for o, want := range map[uint16]quarter{1: 0, 3: 2, 6: 1, 8: 3, 2: 0, 5: 0} {
 			b := withEXIF(t, j, o, bo)
-			if q := exifTurn(b); q != want {
-				t.Errorf("%v orientation %d: turn %d, want %d", bo, o, q, want)
+			if q, tagged := exifTurn(b); q != want || !tagged {
+				t.Errorf("%v orientation %d: turn %d, tagged %v, want %d", bo, o, q, tagged, want)
 			}
 		}
+		if q, tagged := exifTurn(withEXIF(t, j, 0, bo)); q != 0 || tagged {
+			t.Errorf("%v orientation 0: turn %d, tagged %v", bo, q, tagged)
+		}
 	}
-	if q := exifTurn([]byte{0xFF, 0xD8, 0xFF, 0xE1, 0xFF}); q != 0 {
-		t.Fatalf("a cut-off segment: turn %d", q)
+	if q, tagged := exifTurn([]byte{0xFF, 0xD8, 0xFF, 0xE1, 0xFF}); q != 0 || tagged {
+		t.Fatalf("a cut-off segment: turn %d, tagged %v", q, tagged)
 	}
 	// The MJPEG reader carries the turn with the frame.
 	var s bytes.Buffer
@@ -177,8 +180,8 @@ func TestEXIFTurn(t *testing.T) {
 	fmt.Fprintf(&s, "--BoundaryString\r\nContent-type: image/jpeg\r\nContent-Length: %d\r\n\r\n", len(b))
 	s.Write(b)
 	f, err := newMJPEGReader(&s, nil).next(context.Background())
-	if err != nil || f.turn != 3 {
-		t.Fatalf("frame turn %d, %v", f.turn, err)
+	if err != nil || f.turn != 3 || !f.tagged {
+		t.Fatalf("frame turn %d, tagged %v, %v", f.turn, f.tagged, err)
 	}
 }
 

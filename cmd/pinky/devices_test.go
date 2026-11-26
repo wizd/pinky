@@ -79,3 +79,29 @@ func TestDevicesStatus(t *testing.T) {
 		}
 	}
 }
+
+// TestDevicesStrayWord: a word where `pinky devices` takes flags alone is a
+// usage error with the exit status of one, 2, not something to list phones
+// around. The flag package stops reading flags at the first word, so before
+// this `pinky devices pixel-9 --json` printed the table, exit 0: a script
+// that asked for JSON got text and no way to tell.
+func TestDevicesStrayWord(t *testing.T) {
+	for _, args := range [][]string{{"pixel-9", "--json"}, {"--json", "pixel-9"}, {"--fake", "pixel-9"}} {
+		if got := exitCode(runDevices(args)); got != 2 {
+			t.Errorf("pinky devices %q exits %d, want 2", args, got)
+		}
+	}
+}
+
+// TestDevicesBadFlag: a flag devices has not is a usage error too: the flag
+// package's reason once, and exit status 2 as `pinky task` gives one, not
+// the reason twice and 1.
+func TestDevicesBadFlag(t *testing.T) {
+	if got := exitCode(runDevices([]string{"--bogus"})); got != 2 {
+		t.Errorf("pinky devices --bogus exits %d, want 2", got)
+	}
+	// -h asked for the usage, which exits 0.
+	if got := exitCode(runDevices([]string{"-h"})); got != 0 {
+		t.Errorf("pinky devices -h exits %d, want 0", got)
+	}
+}

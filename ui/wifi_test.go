@@ -203,6 +203,9 @@ func TestWiFiScreenshots(t *testing.T) {
 		ta.found.asking, ta.found.askFor = true, id
 		shoot("wifi-lost-dialog", 1280, 820)
 		ta.found.asking, ta.found.askFor = false, ""
+		ta.api.LoseOnOwnHotspot(id)
+		ta.waitFor(t, "the iPad on its hotspot", func() bool { d := ta.device(id); return d != nil && onOwnHotspot(*d) })
+		shoot("wifi-hotspot-page", 1280, 820)
 	}
 }
 
@@ -367,6 +370,59 @@ func TestLostOnWiFiCard(t *testing.T) {
 	tt.Frame()
 	if hasText(tt, locales.LostRestart()) {
 		t.Errorf("the card repeats the page's restart: %q", tt.Texts())
+	}
+}
+
+// TestOwnHotspotPage: an iPhone this Mac does not reach because the Mac is
+// on the phone's own Personal Hotspot (#235) says so, and what brings it
+// back, on its page, in its status line and in Add phone › iPhone, in each
+// of the client's languages; none of them offers the restart of the device
+// service, which does not help there.
+func TestOwnHotspotPage(t *testing.T) {
+	defer func(os string) { guideOS = os }(guideOS)
+	guideOS = "darwin"
+	ta, id := foundApp(t, true)
+	ta.api.UseFoundPhone(id)
+	ta.api.LoseOnOwnHotspot(id)
+	ta.waitFor(t, "the iPad on its hotspot", func() bool { d := ta.device(id); return d != nil && onOwnHotspot(*d) })
+	ta.sel = id
+	tt := mg.NewTester(ta.view, 1280, 820)
+	noRestart := func(tt *mg.Tester, where string) {
+		t.Helper()
+		for _, s := range []string{locales.LostRestart(), locales.LostRestartNote(), locales.LostRestartNoteQuiet(), locales.LostManual(), "sudo killall usbmuxd"} {
+			if hasText(tt, s) {
+				t.Errorf("%s offers the restart, which does not help on the hotspot (%q): %q", where, s, tt.Texts())
+			}
+		}
+	}
+	tt.Frame()
+	mustHave(t, tt, "This Mac can't reach Sam's iPad on its Personal Hotspot", locales.LostHotspotDetail("Sam's iPad"),
+		"Lost on its hotspot") // the sidebar's status line
+	noRestart(tt, "the page")
+	if lostOnWiFi(*ta.device(id)) {
+		t.Error("the phone on its hotspot reads as lost on Wi-Fi")
+	}
+	for _, lang := range testLanguages() {
+		inLanguage(t, lang, tt)
+		tt.Frame()
+		mustHave(t, tt, locales.LostHotspotTitle("Sam's iPad"), locales.LostHotspotDetail("Sam's iPad"), locales.GwStatusLostOnHotspot())
+		noRestart(tt, lang+": the page")
+	}
+	inLanguage(t, "zh-Hans", tt)
+	tt.Frame()
+	mustHave(t, tt, "个人热点上找不到") // the gateway's status line, translated
+	inLanguage(t, "en", tt)
+
+	// Add phone › iPhone follows the phone, which waits at Pinky's step.
+	ta.page = pageAddPhone
+	ta.add.reset(ta.app)
+	ta.add.step = "iphone"
+	at := mg.NewTester(ta.view, 1280, 1100)
+	for _, lang := range testLanguages() {
+		inLanguage(t, lang, at)
+		at.Frame()
+		mustHave(t, at, locales.LostHotspotTitle("Sam's iPad"), locales.LostHotspotDetail("Sam's iPad"))
+		noRestart(at, lang+": Add phone")
 	}
 }
 

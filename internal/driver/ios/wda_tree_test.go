@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/png"
+	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -287,5 +290,55 @@ func TestTreeBy(t *testing.T) {
 	}
 	if got := in(4 * time.Second); got != 2*time.Second {
 		t.Errorf("4 s left: %v", got)
+	}
+}
+
+// The field report of 2026-11-26 (an iPad on iPadOS 26 over Wi-Fi): while
+// the screen stayed the same, the refs of Settings' elements changed from
+// one read to the next and back ([97], [145], [97]). Refs are keyed by the
+// elements' paths, which began with the app WDA named in a request of its
+// own (/wda/activeAppInfo): while apps switch its answer may name another
+// app than the tree's, and one that failed named none. The paths now begin
+// with the tree's own app, so the same tree gives the same refs.
+func TestWDAPathsFromTheTree(t *testing.T) {
+	f := &fakeWDA{}
+	answers := []string{
+		`{"value":{"bundleId":"com.apple.Preferences","name":"Settings","pid":8}}`,
+		"", // the request fails
+		`{"value":{"bundleId":"com.example.game","name":"Game","pid":9}}`,
+	}
+	var n atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/wda/activeAppInfo" {
+			f.ServeHTTP(w, r)
+			return
+		}
+		a := answers[int(n.Add(1)-1)%len(answers)]
+		if a == "" {
+			w.WriteHeader(500)
+			fmt.Fprint(w, `{"value":{"error":"unknown error","message":"no app"}}`)
+			return
+		}
+		fmt.Fprint(w, a)
+	}))
+	defer srv.Close()
+	d := &WDADevice{c: newWDAURL(srv.URL, ""), width: 100, height: 200, scale: 1}
+	defer d.trees.close()
+	refs := screen.NewRefs()
+	var pay []int
+	for i := range answers {
+		s, err := d.Observe(context.Background(), driver.ObserveOptions{})
+		if err != nil {
+			t.Fatalf("read %d: %v", i+1, err)
+		}
+		refs.Assign(s)
+		for _, e := range s.Elements {
+			if e.Label == "Pay" {
+				pay = append(pay, e.Ref)
+			}
+		}
+	}
+	if len(pay) != len(answers) || pay[1] != pay[0] || pay[2] != pay[0] {
+		t.Fatalf("the same tree read %d times: Pay's refs %v", len(answers), pay)
 	}
 }

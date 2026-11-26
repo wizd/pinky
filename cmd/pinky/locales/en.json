@@ -5816,6 +5816,10 @@
   "@gwStatusScreenOff": {
     "description": "A phone's status line: the phone is idle and its own screen is off without a lock screen, such as an Android TV in standby. Shown only in other languages; in English the gateway's own words show."
   },
+  "gwStatusLostOnHotspot": "Lost on its hotspot",
+  "@gwStatusLostOnHotspot": {
+    "description": "A phone's status line: this Mac is on the iPhone's own Personal Hotspot, where macOS's device service (usbmuxd) doesn't reach the iPhone over the network; a cable or another Wi-Fi network brings it back. Shown only in other languages; in English the gateway's own words show."
+  },
   "gwStatusLostOnWiFi": "Lost on Wi-Fi",
   "@gwStatusLostOnWiFi": {
     "description": "A phone's status line: the Mac's device service (usbmuxd) stopped listing an iPhone that is on the same Wi-Fi. Shown only in other languages; in English the gateway's own words show."
@@ -6815,6 +6819,26 @@
   "lostDetail": "{phone} is on the same Wi-Fi, but macOS's device service (usbmuxd) stopped listing it after its connection broke once, and may not list it again for up to an hour. Restarting the service makes it look again.",
   "@lostDetail": {
     "description": "Under lostTitle, and in Add phone and the checkup. phone is its name.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "DIYgod's iPhone"
+      }
+    }
+  },
+  "lostHotspotDetail": "This Mac is connected to {phone}'s own Personal Hotspot, where macOS's device service (usbmuxd) doesn't reach it over the network. Plug it in with a cable, or connect this Mac and {phone} to the same other Wi-Fi network. Restarting the device service doesn't help here.",
+  "@lostHotspotDetail": {
+    "description": "Under lostHotspotTitle, and in Add phone and the checkup. Personal Hotspot is Apple's name for the iPhone's feature that shares its internet connection (Settings › Personal Hotspot). phone is its name.",
+    "placeholders": {
+      "phone": {
+        "type": "String",
+        "example": "DIYgod's iPhone"
+      }
+    }
+  },
+  "lostHotspotTitle": "This Mac can't reach {phone} on its Personal Hotspot",
+  "@lostHotspotTitle": {
+    "description": "The page of an iPhone that macOS's device service doesn't reach because this Mac is connected to that iPhone's own Personal Hotspot (Apple's name for the feature). phone is its name.",
     "placeholders": {
       "phone": {
         "type": "String",

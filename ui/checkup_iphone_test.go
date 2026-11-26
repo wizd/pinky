@@ -102,10 +102,32 @@ func TestCheckupOfIPhoneWaitingForAStep(t *testing.T) {
 	}
 }
 
+// TestCheckupOfIPhoneOnOwnHotspot: an iPhone this Mac does not reach on its
+// own Personal Hotspot (#235) gets what brings it back as its step, without
+// the restart of the device service, which does not help there.
+func TestCheckupOfIPhoneOnOwnHotspot(t *testing.T) {
+	ta := newTestAppWith(t, fakeapi.Options{Scenario: fakeapi.OnePhone, Speed: 50, HoldSetup: true})
+	ta.api.ConnectIPhone()
+	ta.waitFor(t, "the iPhone", func() bool { return len(ta.devices) > 1 })
+	d := ta.iphoneView(t)
+	ta.api.LoseOnOwnHotspot(d.Info.ID)
+	ta.waitFor(t, "the iPhone on its hotspot", func() bool { v := ta.device(d.Info.ID); return v != nil && onOwnHotspot(*v) })
+	tt := mg.NewTester(ta.view, 1280, 820)
+	ta.openCheckup(ta.iphoneView(t))
+	ta.frameUntil(t, tt, "the checkup", func() bool { r := ta.checkupOf(d.Info.ID); return r != nil && r.have && !r.running })
+	mustHave(t, tt, locales.LostHotspotTitle(d.Info.Name), locales.LostHotspotDetail(d.Info.Name))
+	for _, s := range []string{locales.LostRestart(), locales.LostManual(), "sudo killall usbmuxd"} {
+		if hasText(tt, s) {
+			t.Errorf("the checkup offers the restart (%q): %q", s, tt.Texts())
+		}
+	}
+}
+
 func TestIPhoneSetupWords(t *testing.T) {
 	d := gateway.DeviceView{Info: driver.Info{Platform: driver.IOS, Name: "iPhone 8", OSVersion: "16.7"}}
 	for _, step := range []string{driver.SetupTrust, driver.SetupDeveloperMode, driver.SetupUnlock, driver.SetupPreparing,
-		driver.SetupNoDiskImage, driver.SetupDiskImage, driver.SetupDiskImageRefused, driver.SetupUpdate, driver.SetupInstallHelper} {
+		driver.SetupNoDiskImage, driver.SetupDiskImage, driver.SetupDiskImageRefused, driver.SetupUpdate, driver.SetupInstallHelper,
+		driver.SetupOwnHotspot} {
 		for _, here := range []bool{false, true} {
 			if title, text, _ := setupWords(d, step, here); title == "" || text == "" {
 				t.Errorf("no words for %q (here %v)", step, here)

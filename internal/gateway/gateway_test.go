@@ -562,6 +562,36 @@ func TestBatchStopsAtApproval(t *testing.T) {
 	}
 }
 
+// The field report of 2026-11-26 (an iPad on iPadOS 26 over Wi-Fi): a
+// phone_batch tapped the Bluetooth switch, the tap left it as it was ("is
+// still on after the tap"), and the batch went on to open another app, as
+// if the switch had turned. A step whose own check says it did not take
+// stops the batch.
+func TestBatchStopsAtUnchangedSwitch(t *testing.T) {
+	ctx := context.Background()
+	g, dev := newTestGateway(t, func(o *Options) {
+		// The default preset, payments only: the switch's tap does not ask.
+		if err := o.Policy.SetPreset(policy.PresetPayments); err != nil {
+			t.Fatal(err)
+		}
+	})
+	s, _ := connect(t, g, "Bluetooth")
+	res := s.Act(ctx, Call{}, Action{Tool: "launch", App: "Settings"})
+	mustStatus(t, res, StatusSettled)
+	res = s.Batch(ctx, BatchRequest{Steps: []Action{
+		{Tool: "tap", Ref: ref(t, res, "Bluetooth")}, // the demo's Bluetooth switch does not turn
+		{Tool: "key", Key: "home"},
+	}})
+	if len(res.Steps) != 1 || res.IsError() || res.Status != StatusSettled ||
+		!strings.Contains(res.Steps[0].Message, "is still off after the tap") ||
+		!strings.HasPrefix(res.Message, "Stopped at step 1 of 2") || !strings.Contains(res.Message, "switch") {
+		t.Fatalf("batch: %d steps, status %q, %q", len(res.Steps), res.Status, res.Message)
+	}
+	if got := dev.Current(); got != "settings" {
+		t.Fatalf("on %q: the batch ran past the switch", got)
+	}
+}
+
 // waitUntil polls cond until it holds. Tests wait for what they expect to
 // happen rather than for a fixed time, which a stalled goroutine could
 // outlast; the deadline only ends a test that would fail anyway.

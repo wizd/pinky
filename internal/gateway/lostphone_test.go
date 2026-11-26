@@ -125,3 +125,77 @@ func TestPendingHandoffWithoutLostPhone(t *testing.T) {
 		}
 	}
 }
+
+// TestOwnHotspotPhone: a phone out of reach because the computer is on the
+// phone's own Personal Hotspot (driver.SetupOwnHotspot) reads as such, and
+// its agent is told that restarting the device service does not help: it
+// asks the person for a cable or another Wi-Fi network with phone_handoff,
+// or does not wait with nobody at the computer. Pinky shows no card asking
+// for a restart, a pending handoff says so again, and the handoff ends once
+// the phone is back on its cable.
+func TestOwnHotspotPhone(t *testing.T) {
+	p := &stepProvider{dev: demo.NewDevice("iphone", "iPhone 17", driver.IOS)}
+	away := driver.Info{ID: "iphone", Platform: driver.IOS, Name: "iPhone 17", Model: "iPhone 17", Connection: "wifi",
+		State: driver.StateNeedsSetup, Setup: driver.SetupOwnHotspot,
+		Detail: "This Mac is on the iPhone's own Personal Hotspot, where macOS's device service (usbmuxd) does not reach the iPhone over the network."}
+	p.list(&away)
+	g, err := New(Options{Providers: []driver.Provider{p}, Policy: testPolicy(t), TrustNewAgents: true,
+		MaxBlock: 100 * time.Millisecond, ReconnectGrace: 50 * time.Millisecond, SettleMax: 200 * time.Millisecond,
+		PollInterval: 5 * time.Millisecond, DiscoverEvery: 20 * time.Millisecond, NoScreenshots: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { g.Close() })
+	viewUntil(t, g, "iphone", "listed", func(v DeviceView) bool {
+		return v.Status == DeviceNeedsSetup && v.StatusLine == "Lost on its hotspot"
+	})
+
+	ctx := context.Background()
+	s := g.OpenSession(AgentInfo{Name: "Claude Code"})
+	defer s.Close()
+	res := s.Connect(ctx, ConnectRequest{Task: "Check the weather"})
+	if res.Status != StatusNeedsSetup || res.Setup != driver.SetupOwnHotspot || res.Task == "" {
+		t.Fatalf("connecting: %+v", res)
+	}
+	for _, want := range []string{away.Detail, "restarting the service does not help", "plug the phone in with a cable",
+		"same other Wi-Fi network", "phone_handoff", "If nobody is at the computer", "do not wait", "phone_release"} {
+		if !strings.Contains(res.Message, want) {
+			t.Errorf("connecting: the message lacks %q: %s", want, res.Message)
+		}
+	}
+	for _, n := range g.Needs() {
+		if n.Kind == NeedSetup {
+			t.Errorf("a card for a phone on its own hotspot: %+v", n)
+		}
+	}
+
+	h := s.Handoff(ctx, HandoffRequest{Reason: "Please plug the iPhone in with a cable"})
+	if h.Status != StatusPending || h.ApprovalID == "" {
+		t.Fatalf("the handoff: %+v", h)
+	}
+	for _, want := range []string{"Still waiting", "own Personal Hotspot", "does not help", "stop waiting", "phone_release"} {
+		if !strings.Contains(h.Message, want) {
+			t.Errorf("the pending handoff lacks %q: %s", want, h.Message)
+		}
+	}
+	if strings.Contains(h.Message, "administrator") {
+		t.Errorf("the pending handoff asks for a restart: %s", h.Message)
+	}
+
+	// Plugged in: the phone is back on its cable, and the handoff ends.
+	done := make(chan *Result, 1)
+	go func() {
+		done <- s.Handoff(ctx, HandoffRequest{Call: Call{ApprovalID: h.ApprovalID}, Reason: "Please plug the iPhone in with a cable"})
+	}()
+	back := away
+	back.Connection, back.State, back.Setup, back.Detail = "usb", driver.StateOnline, "", ""
+	p.list(&back)
+	select {
+	case r := <-done:
+		if r.IsError() || r.Status == StatusPending {
+			t.Fatalf("the handoff once the phone was back: %+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the handoff did not end once the phone was back")
+	}
+}
